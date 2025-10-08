@@ -18,6 +18,7 @@ import { useLocalization, Language, Currency } from '../contexts/LocalizationCon
 import { useAuth } from '../contexts/AuthContext';
 import { useNavigation } from '@react-navigation/native';
 import { SyncSettingsModal } from '../components/SyncSettingsModal';
+import { notificationService } from '../services/notificationService';
 
 const MoreScreen = () => {
   const { theme, isDark, toggleTheme } = useTheme();
@@ -43,6 +44,20 @@ const MoreScreen = () => {
   const handleProfilePress = () => {
     if (isAuthenticated) {
       navigation.navigate('UserProfile' as never);
+    }
+  };
+
+  const handleTestNotification = async () => {
+    try {
+      await notificationService.scheduleLocalNotification(
+        '🎉 Test Notification',
+        'This is a test notification from FinTracker! Local notifications are working perfectly.',
+        { test: true, screen: 'MoreScreen' },
+        { seconds: 2 } as any // Trigger in 2 seconds
+      );
+      console.log('✅ Test notification scheduled successfully');
+    } catch (error) {
+      console.error('❌ Error sending test notification:', error);
     }
   };
 
@@ -128,7 +143,7 @@ const MoreScreen = () => {
         {
           id: 'notifications',
           title: 'Notifications',
-          subtitle: 'Manage alerts',
+          subtitle: 'Manage alerts • Tap to test',
           icon: 'notifications',
           color: '#5AC8FA',
         },
@@ -181,6 +196,9 @@ const MoreScreen = () => {
         } else if (item.id === 'reminders') {
           navigation.navigate('Reminders' as never);
         } else if (item.id === 'notifications') {
+          // Test notification functionality
+          handleTestNotification();
+          // Also navigate to notification center
           navigation.navigate('NotificationCenter' as never);
         }
         // Add other navigation handlers here as needed

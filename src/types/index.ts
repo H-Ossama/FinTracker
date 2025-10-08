@@ -43,6 +43,19 @@ export interface Reminder {
   isPaid: boolean;
 }
 
+export interface BorrowedMoney {
+  id: string;
+  personName: string;
+  amount: number;
+  reason: string;
+  borrowedDate: string;
+  dueDate: string;
+  isPaid: boolean;
+  notes?: string;
+  phoneNumber?: string;
+  email?: string;
+}
+
 export interface ApiResponse<T = any> {
   success: boolean;
   data?: T;

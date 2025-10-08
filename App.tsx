@@ -8,6 +8,7 @@ import { View, Text, ActivityIndicator, StyleSheet } from 'react-native';
 import SwipeableBottomTabNavigator from './src/components/SwipeableBottomTabNavigator';
 import AddIncomeScreen from './src/screens/AddIncomeScreen';
 import RemindersScreen from './src/screens/RemindersScreen';
+import BorrowedMoneyHistoryScreen from './src/screens/BorrowedMoneyHistoryScreen';
 import NotificationCenterScreen from './src/screens/NotificationCenterScreen';
 import SignUpScreen from './src/screens/SignUpScreen';
 import SignInScreen from './src/screens/SignInScreen';
@@ -47,6 +48,13 @@ const AppNavigator = () => {
                 headerStyle: { backgroundColor: isDark ? '#374151' : '#FFFFFF' },
                 headerTitleStyle: { color: isDark ? '#FFFFFF' : '#1F2937' },
                 headerTintColor: isDark ? '#FFFFFF' : '#1F2937',
+              }}
+            />
+            <Stack.Screen 
+              name="BorrowedMoneyHistory" 
+              component={BorrowedMoneyHistoryScreen}
+              options={{ 
+                headerShown: false,
               }}
             />
             <Stack.Screen 

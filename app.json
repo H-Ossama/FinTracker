@@ -16,9 +16,11 @@
       "**/*"
     ],
     "ios": {
+      "bundleIdentifier": "com.oussamaaaaa.fintracker",
       "supportsTablet": true
     },
     "android": {
+      "package": "com.oussamaaaaa.fintracker",
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#FFFFFF"
@@ -33,6 +35,7 @@
       "web"
     ],
     "plugins": [
+      "expo-dev-client",
       "expo-sqlite",
       [
         "expo-notifications",

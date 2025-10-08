@@ -9,12 +9,15 @@ import {
   ScrollView,
   Alert,
   ActivityIndicator,
+  BackHandler,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../contexts/ThemeContext';
 import { useLocalization } from '../contexts/LocalizationContext';
 import { hybridDataService } from '../services/hybridDataService';
 import { Wallet } from '../types';
+import useSafeAreaHelper from '../hooks/useSafeAreaHelper';
 
 interface HybridWallet {
   id: string;
@@ -32,7 +35,7 @@ interface HybridWallet {
 interface TransferModalProps {
   visible: boolean;
   onClose: () => void;
-  onTransfer: (success: boolean) => void;
+  onTransfer: (transfer: any) => void;
 }
 
 const TransferModal: React.FC<TransferModalProps> = ({
@@ -42,6 +45,7 @@ const TransferModal: React.FC<TransferModalProps> = ({
 }) => {
   const { theme } = useTheme();
   const { formatCurrency, currency } = useLocalization();
+  const { headerPadding } = useSafeAreaHelper();
   
   const getCurrencySymbol = () => {
     const symbols = { USD: '$', EUR: '€', MAD: 'MAD' };
@@ -61,6 +65,19 @@ const TransferModal: React.FC<TransferModalProps> = ({
   useEffect(() => {
     if (visible) {
       loadWallets();
+    }
+  }, [visible]);
+
+  // Handle Android back button
+  useEffect(() => {
+    if (visible) {
+      const backAction = () => {
+        handleClose();
+        return true;
+      };
+
+      const backHandler = BackHandler.addEventListener('hardwareBackPress', backAction);
+      return () => backHandler.remove();
     }
   }, [visible]);
 
@@ -141,12 +158,16 @@ const TransferModal: React.FC<TransferModalProps> = ({
       });
 
       Alert.alert('Success', 'Transfer completed successfully!');
-      onTransfer(true);
+      onTransfer({
+        fromWallet: fromWallet.name,
+        toWallet: toWallet.name,
+        amount: transferAmount,
+        note,
+      });
       handleClose();
     } catch (error) {
       console.error('Transfer error:', error);
       Alert.alert('Error', 'Transfer failed. Please try again.');
-      onTransfer(false);
     } finally {
       setTransferring(false);
     }
@@ -230,9 +251,9 @@ const TransferModal: React.FC<TransferModalProps> = ({
 
   return (
     <Modal visible={visible} animationType="slide" presentationStyle="pageSheet">
-      <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
+      <SafeAreaView style={[styles.container, { backgroundColor: theme.colors.background }]} edges={['top']}>
         {/* Header */}
-        <View style={[styles.header, { borderBottomColor: theme.colors.border }]}>
+        <View style={[styles.header, { borderBottomColor: theme.colors.border, paddingTop: headerPadding.paddingTop }]}>
           <TouchableOpacity onPress={handleClose}>
             <Text style={[styles.cancelButton, { color: theme.colors.primary }]}>Cancel</Text>
           </TouchableOpacity>
@@ -371,7 +392,7 @@ const TransferModal: React.FC<TransferModalProps> = ({
           )}
         </ScrollView>
         )}
-      </View>
+      </SafeAreaView>
     </Modal>
   );
 };

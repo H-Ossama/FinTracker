@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
 import { View, StyleSheet, Pressable, Dimensions, Text } from 'react-native';
-import { TabView, SceneMap } from 'react-native-tab-view';
+import { TabView } from 'react-native-tab-view';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useNavigation } from '@react-navigation/native';
 
 import HomeScreen from '../screens/HomeScreen';
 import InsightsScreen from '../screens/InsightsScreen';
@@ -11,13 +12,6 @@ import MoreScreen from '../screens/MoreScreen';
 import { useTheme } from '../contexts/ThemeContext';
 
 const initialLayout = { width: Dimensions.get('window').width };
-
-const renderScene = SceneMap({
-  home: HomeScreen,
-  insights: InsightsScreen,
-  wallet: WalletScreen,
-  more: MoreScreen,
-});
 
 const SwipeableBottomTabNavigator = () => {
   const { isDark } = useTheme();
@@ -29,6 +23,21 @@ const SwipeableBottomTabNavigator = () => {
     { key: 'wallet', title: 'Wallet' },
     { key: 'more', title: 'More' },
   ]);
+
+  const renderScene = ({ route }: { route: any }) => {
+    switch (route.key) {
+      case 'home':
+        return <HomeScreen />;
+      case 'insights':
+        return <InsightsScreen />;
+      case 'wallet':
+        return <WalletScreen />;
+      case 'more':
+        return <MoreScreen />;
+      default:
+        return null;
+    }
+  };
 
   const getIconName = (routeKey: string, focused: boolean) => {
     switch (routeKey) {

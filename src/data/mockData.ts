@@ -1,4 +1,4 @@
-import { Transaction, Wallet, SpendingCategory, Goal, Reminder } from '../types';
+import { Transaction, Wallet, SpendingCategory, Goal, Reminder, BorrowedMoney } from '../types';
 
 export const mockWallets: Wallet[] = [
   {
@@ -153,6 +153,53 @@ export const mockReminders: Reminder[] = [
   }
 ];
 
+export const mockBorrowedMoney: BorrowedMoney[] = [
+  {
+    id: '1',
+    personName: 'Ahmed Ali',
+    amount: 250.00,
+    reason: 'Emergency car repair',
+    borrowedDate: '2024-10-01',
+    dueDate: '2024-10-15',
+    isPaid: false,
+    notes: 'Promised to pay back by next Friday',
+    phoneNumber: '+1234567890',
+    email: 'ahmed.ali@email.com'
+  },
+  {
+    id: '2',
+    personName: 'Sarah Johnson',
+    amount: 100.00,
+    reason: 'Lunch money for conference',
+    borrowedDate: '2024-10-05',
+    dueDate: '2024-10-12',
+    isPaid: false,
+    notes: 'Work conference expenses',
+    phoneNumber: '+0987654321'
+  },
+  {
+    id: '3',
+    personName: 'Mike Chen',
+    amount: 50.00,
+    reason: 'Gas money',
+    borrowedDate: '2024-09-28',
+    dueDate: '2024-10-05',
+    isPaid: true,
+    notes: 'Paid back on time'
+  },
+  {
+    id: '4',
+    personName: 'Lisa Brown',
+    amount: 300.00,
+    reason: 'Medical bills',
+    borrowedDate: '2024-09-20',
+    dueDate: '2024-10-20',
+    isPaid: false,
+    notes: 'Will pay back in installments',
+    email: 'lisa.brown@email.com'
+  }
+];
+
 export const getTotalBalance = (): number => {
   return mockWallets.reduce((total, wallet) => total + wallet.balance, 0);
 };
@@ -165,4 +212,18 @@ export const getRecentTransactions = (limit: number = 5): Transaction[] => {
   return mockTransactions
     .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
     .slice(0, limit);
+};
+
+export const getUnpaidBorrowedMoney = (): BorrowedMoney[] => {
+  return mockBorrowedMoney.filter(item => !item.isPaid);
+};
+
+export const getAllBorrowedMoney = (): BorrowedMoney[] => {
+  return mockBorrowedMoney.sort((a, b) => new Date(b.borrowedDate).getTime() - new Date(a.borrowedDate).getTime());
+};
+
+export const getTotalBorrowedAmount = (): number => {
+  return mockBorrowedMoney
+    .filter(item => !item.isPaid)
+    .reduce((total, item) => total + item.amount, 0);
 };

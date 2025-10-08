@@ -3,16 +3,23 @@ import * as Device from 'expo-device';
 import { Platform } from 'react-native';
 import Constants from 'expo-constants';
 
-// Configure notification behavior
-Notifications.setNotificationHandler({
-  handleNotification: async () => ({
-    shouldShowAlert: true,
-    shouldPlaySound: true,
-    shouldSetBadge: true,
-    shouldShowBanner: true,
-    shouldShowList: true,
-  }),
-});
+// Check if we're in a development build (not Expo Go)
+const isExpoGo = Constants.appOwnership === 'expo';
+const isDevBuild = !isExpoGo;
+
+// Only configure notification handler if not in Expo Go or if in dev build
+if (isDevBuild || !isExpoGo) {
+  // Configure notification behavior
+  Notifications.setNotificationHandler({
+    handleNotification: async () => ({
+      shouldShowAlert: true,
+      shouldPlaySound: true,
+      shouldSetBadge: true,
+      shouldShowBanner: true,
+      shouldShowList: true,
+    }),
+  });
+}
 
 export interface NotificationPermissions {
   granted: boolean;
@@ -34,25 +41,31 @@ export class NotificationService {
    */
   static async initialize(): Promise<void> {
     try {
-      console.log('Initializing notification service...');
+      console.log('🔔 Initializing notification service...');
       
-      // Register for push notifications if device is physical
-      if (Device.isDevice) {
+      // Register for push notifications if device is physical and not in Expo Go
+      if (Device.isDevice && !isExpoGo) {
         try {
           await this.registerForPushNotifications();
         } catch (pushError) {
-          console.warn('Push notification registration failed (expected in Expo Go):', (pushError as Error).message);
+          console.warn('Push notification registration failed:', (pushError as Error).message);
         }
+      } else if (isExpoGo) {
+        console.log('📱 Running in Expo Go - local notifications available');
+        console.log('ℹ️  Push notifications require development build');
+        
+        // Still create notification channels for local notifications
+        await this.createNotificationChannels();
       } else {
-        console.log('Push notifications are not available on simulator/emulator');
+        console.log('📱 Push notifications not available on simulator/emulator');
       }
 
       // Set up notification listeners
       this.setupNotificationListeners();
       
-      console.log('Notification service initialized successfully');
+      console.log('✅ Notification service initialized successfully');
     } catch (error) {
-      console.error('Error initializing notification service:', error);
+      console.error('❌ Error initializing notification service:', error);
       // Don't throw error to prevent app crash
     }
   }
@@ -113,7 +126,15 @@ export class NotificationService {
   static async registerForPushNotifications(): Promise<string | null> {
     try {
       if (!Device.isDevice) {
-        console.log('Push notifications require a physical device');
+        console.log('📱 Push notifications require a physical device');
+        return null;
+      }
+
+      // Check if we're in Expo Go
+      if (isExpoGo) {
+        console.log('📱 Running in Expo Go - push notifications unavailable (this is normal)');
+        console.log('ℹ️  Local notifications are fully functional');
+        console.log('ℹ️  For push notifications, create a development build with: eas build --platform android --profile development');
         return null;
       }
 
@@ -121,7 +142,7 @@ export class NotificationService {
       const permissions = await this.requestPermissions();
       
       if (!permissions.granted) {
-        console.log('Push notification permissions not granted');
+        console.log('🔔 Push notification permissions not granted');
         return null;
       }
 
@@ -129,7 +150,7 @@ export class NotificationService {
       const projectId = Constants.expoConfig?.extra?.eas?.projectId;
       
       if (!projectId) {
-        console.warn('No valid project ID found. Push notifications require a development build with proper EAS project setup.');
+        console.warn('⚠️  No valid project ID found. Push notifications require a development build with proper EAS project setup.');
         return null;
       }
 
@@ -139,50 +160,74 @@ export class NotificationService {
       });
 
       this.pushToken = tokenData.data;
-      console.log('Push token obtained:', this.pushToken);
+      console.log('🎯 Push token obtained successfully');
 
-      // Configure notification channel for Android
-      if (Platform.OS === 'android') {
-        await Notifications.setNotificationChannelAsync('default', {
-          name: 'Default',
-          importance: Notifications.AndroidImportance.MAX,
-          vibrationPattern: [0, 250, 250, 250],
-          lightColor: '#FF231F7C',
-          sound: 'default',
-          enableVibrate: true,
-          showBadge: true,
-        });
-
-        // Create additional channels for different types
-        await Notifications.setNotificationChannelAsync('reminders', {
-          name: 'Reminders',
-          importance: Notifications.AndroidImportance.HIGH,
-          vibrationPattern: [0, 250, 250, 250],
-          lightColor: '#3B82F6',
-          sound: 'default',
-        });
-
-        await Notifications.setNotificationChannelAsync('budget-alerts', {
-          name: 'Budget Alerts',
-          importance: Notifications.AndroidImportance.HIGH,
-          vibrationPattern: [0, 500, 250, 500],
-          lightColor: '#EF4444',
-          sound: 'default',
-        });
-
-        await Notifications.setNotificationChannelAsync('goals', {
-          name: 'Goals & Achievements',
-          importance: Notifications.AndroidImportance.DEFAULT,
-          vibrationPattern: [0, 250],
-          lightColor: '#10B981',
-          sound: 'default',
-        });
-      }
+      // Configure notification channels
+      await this.createNotificationChannels();
 
       return this.pushToken;
     } catch (error) {
-      console.error('Error registering for push notifications:', error);
+      // More specific error handling for Firebase/FCM issues
+      const errorMessage = (error as Error).message;
+      
+      if (errorMessage.includes('FirebaseApp is not initialized')) {
+        console.log('ℹ️  Firebase not configured - this is expected in Expo Go');
+        console.log('ℹ️  Local notifications are working fine');
+      } else if (errorMessage.includes('FCM')) {
+        console.log('ℹ️  FCM (Firebase Cloud Messaging) not configured - normal for development');
+      } else {
+        console.warn('⚠️  Push notification setup issue:', errorMessage);
+      }
+      
       return null;
+    }
+  }
+
+  /**
+   * Create notification channels for Android
+   */
+  private static async createNotificationChannels(): Promise<void> {
+    if (Platform.OS !== 'android') return;
+
+    try {
+      await Notifications.setNotificationChannelAsync('default', {
+        name: 'Default',
+        importance: Notifications.AndroidImportance.MAX,
+        vibrationPattern: [0, 250, 250, 250],
+        lightColor: '#FF231F7C',
+        sound: 'default',
+        enableVibrate: true,
+        showBadge: true,
+      });
+
+      // Create additional channels for different types
+      await Notifications.setNotificationChannelAsync('reminders', {
+        name: 'Reminders',
+        importance: Notifications.AndroidImportance.HIGH,
+        vibrationPattern: [0, 250, 250, 250],
+        lightColor: '#3B82F6',
+        sound: 'default',
+      });
+
+      await Notifications.setNotificationChannelAsync('budget-alerts', {
+        name: 'Budget Alerts',
+        importance: Notifications.AndroidImportance.HIGH,
+        vibrationPattern: [0, 500, 250, 500],
+        lightColor: '#EF4444',
+        sound: 'default',
+      });
+
+      await Notifications.setNotificationChannelAsync('goals', {
+        name: 'Goals & Achievements',
+        importance: Notifications.AndroidImportance.DEFAULT,
+        vibrationPattern: [0, 250],
+        lightColor: '#10B981',
+        sound: 'default',
+      });
+
+      console.log('📋 Notification channels created successfully');
+    } catch (error) {
+      console.warn('⚠️  Error creating notification channels:', error);
     }
   }
 

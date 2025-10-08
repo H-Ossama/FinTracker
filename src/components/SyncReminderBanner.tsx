@@ -10,12 +10,14 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { hybridDataService } from '../services/hybridDataService';
+import { useTheme } from '../contexts/ThemeContext';
 
 interface SyncReminderProps {
   onSyncComplete?: () => void;
 }
 
 export const SyncReminderBanner: React.FC<SyncReminderProps> = ({ onSyncComplete }) => {
+  const { theme } = useTheme();
   const [visible, setVisible] = useState(false);
   const [unsyncedItems, setUnsyncedItems] = useState(0);
   const [isLoading, setIsLoading] = useState(false);
@@ -88,15 +90,15 @@ export const SyncReminderBanner: React.FC<SyncReminderProps> = ({ onSyncComplete
 
   return (
     <>
-      <Animated.View style={[styles.banner, { opacity: fadeAnim }]}>
+      <Animated.View style={[styles.banner, { opacity: fadeAnim, backgroundColor: theme.colors.surface, borderLeftColor: theme.colors.primary }]}>
         <View style={styles.bannerContent}>
-          <View style={styles.iconContainer}>
-            <Ionicons name="cloud-upload-outline" size={24} color="#007AFF" />
+          <View style={[styles.iconContainer, { backgroundColor: theme.isDark ? 'rgba(0, 122, 255, 0.2)' : '#f0f8ff' }]}>
+            <Ionicons name="cloud-upload-outline" size={24} color={theme.colors.primary} />
           </View>
           
           <View style={styles.textContainer}>
-            <Text style={styles.title}>Time to Sync!</Text>
-            <Text style={styles.description}>
+            <Text style={[styles.title, { color: theme.colors.text }]}>Time to Sync!</Text>
+            <Text style={[styles.description, { color: theme.colors.textSecondary }]}>
               {unsyncedItems > 0 
                 ? `You have ${unsyncedItems} unsynced items`
                 : 'Keep your data backed up and synced'
@@ -106,29 +108,29 @@ export const SyncReminderBanner: React.FC<SyncReminderProps> = ({ onSyncComplete
 
           <View style={styles.actionsContainer}>
             <TouchableOpacity
-              style={styles.actionButton}
+              style={[styles.actionButton, { backgroundColor: theme.colors.background }]}
               onPress={handleSyncNow}
               disabled={isLoading}
             >
               {isLoading ? (
-                <ActivityIndicator size="small" color="#007AFF" />
+                <ActivityIndicator size="small" color={theme.colors.primary} />
               ) : (
-                <Ionicons name="sync" size={20} color="#007AFF" />
+                <Ionicons name="sync" size={20} color={theme.colors.primary} />
               )}
             </TouchableOpacity>
 
             <TouchableOpacity
-              style={styles.actionButton}
+              style={[styles.actionButton, { backgroundColor: theme.colors.background }]}
               onPress={handleShowDetails}
             >
-              <Ionicons name="information-circle-outline" size={20} color="#666" />
+              <Ionicons name="information-circle-outline" size={20} color={theme.colors.textSecondary} />
             </TouchableOpacity>
 
             <TouchableOpacity
-              style={styles.actionButton}
+              style={[styles.actionButton, { backgroundColor: theme.colors.background }]}
               onPress={handleDismiss}
             >
-              <Ionicons name="close" size={20} color="#666" />
+              <Ionicons name="close" size={20} color={theme.colors.textSecondary} />
             </TouchableOpacity>
           </View>
         </View>
@@ -142,56 +144,56 @@ export const SyncReminderBanner: React.FC<SyncReminderProps> = ({ onSyncComplete
         onRequestClose={() => setShowModal(false)}
       >
         <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <View style={styles.modalHeader}>
-              <Ionicons name="cloud-upload" size={32} color="#007AFF" />
-              <Text style={styles.modalTitle}>Sync Reminder</Text>
+          <View style={[styles.modalContent, { backgroundColor: theme.colors.surface }]}>
+            <View style={[styles.modalHeader, { backgroundColor: theme.colors.background }]}>
+              <Ionicons name="cloud-upload" size={32} color={theme.colors.primary} />
+              <Text style={[styles.modalTitle, { color: theme.colors.text }]}>Sync Reminder</Text>
             </View>
 
             <View style={styles.modalBody}>
-              <Text style={styles.modalDescription}>
+              <Text style={[styles.modalDescription, { color: theme.colors.textSecondary }]}>
                 We recommend syncing your financial data regularly to:
               </Text>
 
               <View style={styles.benefitsList}>
                 <View style={styles.benefitItem}>
                   <Ionicons name="shield-checkmark" size={20} color="#4CAF50" />
-                  <Text style={styles.benefitText}>Keep your data safely backed up</Text>
+                  <Text style={[styles.benefitText, { color: theme.colors.textSecondary }]}>Keep your data safely backed up</Text>
                 </View>
                 <View style={styles.benefitItem}>
-                  <Ionicons name="sync" size={20} color="#007AFF" />
-                  <Text style={styles.benefitText}>Access from multiple devices</Text>
+                  <Ionicons name="sync" size={20} color={theme.colors.primary} />
+                  <Text style={[styles.benefitText, { color: theme.colors.textSecondary }]}>Access from multiple devices</Text>
                 </View>
                 <View style={styles.benefitItem}>
                   <Ionicons name="time" size={20} color="#FF9500" />
-                  <Text style={styles.benefitText}>Never lose your transaction history</Text>
+                  <Text style={[styles.benefitText, { color: theme.colors.textSecondary }]}>Never lose your transaction history</Text>
                 </View>
               </View>
 
               {unsyncedItems > 0 && (
-                <View style={styles.unsyncedWarning}>
+                <View style={[styles.unsyncedWarning, { backgroundColor: theme.isDark ? 'rgba(255, 107, 107, 0.1)' : '#fff5f5' }]}>
                   <Ionicons name="warning" size={20} color="#FF6B6B" />
-                  <Text style={styles.warningText}>
+                  <Text style={[styles.warningText, { color: '#FF6B6B' }]}>
                     You have {unsyncedItems} items that haven't been backed up yet.
                   </Text>
                 </View>
               )}
 
-              <Text style={styles.reminderNote}>
+              <Text style={[styles.reminderNote, { color: theme.colors.textSecondary }]}>
                 💡 You can disable these reminders in sync settings
               </Text>
             </View>
 
             <View style={styles.modalActions}>
               <TouchableOpacity
-                style={[styles.modalButton, styles.secondaryButton]}
+                style={[styles.modalButton, styles.secondaryButton, { borderColor: theme.colors.border }]}
                 onPress={() => setShowModal(false)}
               >
-                <Text style={styles.secondaryButtonText}>Maybe Later</Text>
+                <Text style={[styles.secondaryButtonText, { color: theme.colors.textSecondary }]}>Maybe Later</Text>
               </TouchableOpacity>
 
               <TouchableOpacity
-                style={[styles.modalButton, styles.primaryButton]}
+                style={[styles.modalButton, styles.primaryButton, { backgroundColor: theme.colors.primary }]}
                 onPress={() => {
                   setShowModal(false);
                   handleSyncNow();
@@ -248,7 +250,6 @@ export const useSyncReminder = () => {
 
 const styles = StyleSheet.create({
   banner: {
-    backgroundColor: 'white',
     borderRadius: 12,
     marginHorizontal: 16,
     marginVertical: 8,
@@ -258,7 +259,7 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 3,
     borderLeftWidth: 4,
-    borderLeftColor: '#007AFF',
+    // backgroundColor and borderLeftColor will be set dynamically
   },
   bannerContent: {
     flexDirection: 'row',
@@ -269,10 +270,10 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: '#f0f8ff',
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 12,
+    // backgroundColor will be set dynamically
   },
   textContainer: {
     flex: 1,
@@ -280,12 +281,12 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#1a1a1a',
     marginBottom: 2,
+    // color will be set dynamically
   },
   description: {
     fontSize: 14,
-    color: '#666',
+    // color will be set dynamically
   },
   actionsContainer: {
     flexDirection: 'row',
@@ -296,9 +297,9 @@ const styles = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: '#f8f9fa',
     justifyContent: 'center',
     alignItems: 'center',
+    // backgroundColor will be set dynamically
   },
   modalOverlay: {
     flex: 1,
@@ -308,31 +309,31 @@ const styles = StyleSheet.create({
     padding: 20,
   },
   modalContent: {
-    backgroundColor: 'white',
     borderRadius: 16,
     width: '100%',
     maxWidth: 400,
     overflow: 'hidden',
+    // backgroundColor will be set dynamically
   },
   modalHeader: {
     alignItems: 'center',
     padding: 24,
-    backgroundColor: '#f8f9fa',
+    // backgroundColor will be set dynamically
   },
   modalTitle: {
     fontSize: 20,
     fontWeight: '600',
-    color: '#1a1a1a',
     marginTop: 8,
+    // color will be set dynamically
   },
   modalBody: {
     padding: 24,
   },
   modalDescription: {
     fontSize: 16,
-    color: '#666',
     lineHeight: 24,
     marginBottom: 20,
+    // color will be set dynamically
   },
   benefitsList: {
     gap: 12,
@@ -344,29 +345,29 @@ const styles = StyleSheet.create({
   },
   benefitText: {
     fontSize: 14,
-    color: '#666',
     marginLeft: 12,
     flex: 1,
+    // color will be set dynamically
   },
   unsyncedWarning: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#fff5f5',
     padding: 12,
     borderRadius: 8,
     marginBottom: 16,
+    // backgroundColor will be set dynamically
   },
   warningText: {
     fontSize: 14,
-    color: '#FF6B6B',
     marginLeft: 8,
     flex: 1,
+    // color will be set dynamically
   },
   reminderNote: {
     fontSize: 12,
-    color: '#999',
     textAlign: 'center',
     fontStyle: 'italic',
+    // color will be set dynamically
   },
   modalActions: {
     flexDirection: 'row',
@@ -384,13 +385,13 @@ const styles = StyleSheet.create({
     minHeight: 44,
   },
   primaryButton: {
-    backgroundColor: '#007AFF',
     gap: 8,
+    // backgroundColor will be set dynamically
   },
   secondaryButton: {
     backgroundColor: 'transparent',
     borderWidth: 1,
-    borderColor: '#e1e5e9',
+    // borderColor will be set dynamically
   },
   primaryButtonText: {
     color: 'white',
@@ -398,9 +399,9 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   secondaryButtonText: {
-    color: '#666',
     fontSize: 16,
     fontWeight: '500',
+    // color will be set dynamically
   },
 });
 

@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {
   View,
   Text,
@@ -13,28 +13,60 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
-import { mockWallets, getTotalBalance, getRecentTransactions } from '../data/mockData';
+import { useNavigation } from '@react-navigation/native';
+import { mockWallets, getTotalBalance, getRecentTransactions, getUnpaidBorrowedMoney } from '../data/mockData';
+import { BorrowedMoney } from '../types';
 import AddExpenseModal from '../components/AddExpenseModal';
 import AddIncomeModal from '../components/AddIncomeModal';
 import TransferModal from '../components/TransferModal';
+import BorrowedMoneyDetailsModal from '../components/BorrowedMoneyDetailsModal';
+import AddBorrowedMoneyModal from '../components/AddBorrowedMoneyModal';
 import { useTheme } from '../contexts/ThemeContext';
 import { useLocalization } from '../contexts/LocalizationContext';
+import borrowedMoneyService from '../services/borrowedMoneyService';
+import useSafeAreaHelper from '../hooks/useSafeAreaHelper';
 
-const HomeScreen = ({ navigation }: any) => {
+const HomeScreen = () => {
+  const navigation = useNavigation();
   const { theme } = useTheme();
   const { t, formatCurrency: formatCurrencyLoc } = useLocalization();
+  const { headerPadding } = useSafeAreaHelper();
   const [isBalanceVisible, setIsBalanceVisible] = useState(true);
   const [showAddExpenseModal, setShowAddExpenseModal] = useState(false);
   const [showAddIncomeModal, setShowAddIncomeModal] = useState(false);
   const [showTransferModal, setShowTransferModal] = useState(false);
+  const [showBorrowedMoneyDetailsModal, setShowBorrowedMoneyDetailsModal] = useState(false);
+  const [showAddBorrowedMoneyModal, setShowAddBorrowedMoneyModal] = useState(false);
+  const [selectedBorrowedMoney, setSelectedBorrowedMoney] = useState<BorrowedMoney | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [currentWalletIndex, setCurrentWalletIndex] = useState(0);
+  const [borrowedMoneyList, setBorrowedMoneyList] = useState<BorrowedMoney[]>([]);
+  const [totalBorrowedAmount, setTotalBorrowedAmount] = useState(0);
   
   const totalBalance = getTotalBalance();
   const recentTransactions = getRecentTransactions(5);
   
   // Animation values for swipeable balance
   const scaleAnim = useRef(new Animated.Value(1)).current;
+
+  // Load borrowed money data
+  useEffect(() => {
+    loadBorrowedMoneyData();
+  }, []);
+
+  const loadBorrowedMoneyData = async () => {
+    try {
+      const unpaidBorrowedMoney = await borrowedMoneyService.getUnpaidBorrowedMoney();
+      const totalAmount = await borrowedMoneyService.getTotalBorrowedAmount();
+      setBorrowedMoneyList(unpaidBorrowedMoney);
+      setTotalBorrowedAmount(totalAmount);
+    } catch (error) {
+      console.error('Error loading borrowed money data:', error);
+      // Fallback to mock data
+      setBorrowedMoneyList(getUnpaidBorrowedMoney());
+      setTotalBorrowedAmount(getUnpaidBorrowedMoney().reduce((sum, item) => sum + item.amount, 0));
+    }
+  };
   
   // Get the three main wallets: pocket, bank, savings
   const walletTypes = ['cash', 'bank', 'savings'] as const;
@@ -138,38 +170,146 @@ const HomeScreen = ({ navigation }: any) => {
   const onRefresh = React.useCallback(() => {
     setRefreshing(true);
     // Simulate API call to refresh data
-    setTimeout(() => {
+    setTimeout(async () => {
+      await loadBorrowedMoneyData();
       setRefreshing(false);
       // In a real app, you would refresh the data from your data source
       console.log('Data refreshed');
     }, 2000);
   }, []);
 
+  const handleBorrowedMoneyPress = (item: BorrowedMoney) => {
+    setSelectedBorrowedMoney(item);
+    setShowBorrowedMoneyDetailsModal(true);
+  };
+
+  const handleMarkAsPaid = async (id: string) => {
+    try {
+      await borrowedMoneyService.markAsPaid(id);
+      await loadBorrowedMoneyData();
+      setShowBorrowedMoneyDetailsModal(false);
+    } catch (error) {
+      console.error('Error marking as paid:', error);
+    }
+  };
+
+  const handleEditBorrowedMoney = async (editedItem: BorrowedMoney) => {
+    try {
+      await borrowedMoneyService.updateBorrowedMoney(editedItem.id, editedItem);
+      await loadBorrowedMoneyData();
+    } catch (error) {
+      console.error('Error updating borrowed money:', error);
+    }
+  };
+
+  const handleDeleteBorrowedMoney = async (id: string) => {
+    try {
+      await borrowedMoneyService.deleteBorrowedMoney(id);
+      await loadBorrowedMoneyData();
+    } catch (error) {
+      console.error('Error deleting borrowed money:', error);
+    }
+  };
+
+  const handleAddBorrowedMoney = async (newItem: Omit<BorrowedMoney, 'id'>) => {
+    try {
+      await borrowedMoneyService.addBorrowedMoney(newItem);
+      await loadBorrowedMoneyData();
+    } catch (error) {
+      console.error('Error adding borrowed money:', error);
+    }
+  };
+
+  const handleAddBorrowedMoneyWithReminder = async (newItem: Omit<BorrowedMoney, 'id'>) => {
+    try {
+      const newBorrowedMoney = await borrowedMoneyService.addBorrowedMoney(newItem);
+      await loadBorrowedMoneyData();
+      
+      // Navigate to reminders screen to set up the reminder
+      (navigation as any).navigate('Reminders', { 
+        newReminder: {
+          title: `Payment due from ${newItem.personName}`,
+          amount: newItem.amount,
+          dueDate: newItem.dueDate,
+          type: 'borrowed_money',
+          relatedId: newBorrowedMoney.id,
+        }
+      });
+    } catch (error) {
+      console.error('Error adding borrowed money with reminder:', error);
+    }
+  };
+
+  const formatDate = (dateString: string) => {
+    if (!dateString) return 'No date';
+    const date = new Date(dateString);
+    return date.toLocaleDateString('en-US', {
+      month: 'short',
+      day: 'numeric',
+    });
+  };
+
   const formatCurrency = (amount: number) => {
     return formatCurrencyLoc(amount);
   };
 
-  const renderWalletCard = (wallet: any) => (
-    <View key={wallet.id} style={[styles.walletCard, { backgroundColor: theme.colors.surface }]}>
-      <View style={styles.walletHeader}>
-        <View style={[styles.walletIcon, { backgroundColor: wallet.color }]}>
-          <Ionicons 
-            name={wallet.type === 'bank' ? 'card' : wallet.type === 'cash' ? 'cash' : 'wallet'} 
-            size={20} 
-            color="white" 
-          />
-        </View>
-        <Text style={[styles.walletName, { color: theme.colors.textSecondary }]}>{wallet.name}</Text>
-      </View>
-      <Text style={[styles.walletBalance, { color: theme.colors.text }]}>{formatCurrency(wallet.balance)}</Text>
+  const isOverdue = (dueDate: string) => {
+    if (!dueDate) return false;
+    return new Date(dueDate) < new Date();
+  };
+
+  const renderBorrowedMoneyCard = (item: BorrowedMoney) => {
+    const overdue = isOverdue(item.dueDate);
+    
+    return (
       <TouchableOpacity 
-        style={[styles.transferButton, { backgroundColor: theme.isDark ? theme.colors.border : '#F2F2F7' }]}
-        onPress={() => setShowTransferModal(true)}
+        key={item.id} 
+        style={[styles.walletCard, { backgroundColor: theme.colors.surface }]}
+        onPress={() => handleBorrowedMoneyPress(item)}
       >
-        <Text style={[styles.transferButtonText, { color: theme.colors.primary }]}>Transfer</Text>
+        <View style={styles.walletHeader}>
+          <View style={[styles.walletIcon, { backgroundColor: overdue ? '#FF3B30' : '#FF9500' }]}>
+            <Ionicons 
+              name={overdue ? 'warning' : 'person'} 
+              size={20} 
+              color="white" 
+            />
+          </View>
+          <Text style={[styles.walletName, { color: theme.colors.textSecondary }]} numberOfLines={1}>
+            {item.personName}
+          </Text>
+        </View>
+        <Text style={[styles.walletBalance, { color: theme.colors.text }]}>
+          {formatCurrency(item.amount)}
+        </Text>
+        <View style={styles.borrowedMoneyInfo}>
+          <Text style={[styles.borrowedReason, { color: theme.colors.textSecondary }]} numberOfLines={1}>
+            {item.reason}
+          </Text>
+          <Text style={[
+            styles.borrowedDueDate, 
+            { color: overdue ? '#FF3B30' : theme.colors.textSecondary }
+          ]}>
+            Due: {formatDate(item.dueDate)}
+          </Text>
+        </View>
+        <TouchableOpacity 
+          style={[
+            styles.transferButton, 
+            { backgroundColor: overdue ? '#FF3B30' : theme.isDark ? theme.colors.border : '#F2F2F7' }
+          ]}
+          onPress={() => handleBorrowedMoneyPress(item)}
+        >
+          <Text style={[
+            styles.transferButtonText, 
+            { color: overdue ? 'white' : theme.colors.primary }
+          ]}>
+            {overdue ? 'Overdue' : 'Details'}
+          </Text>
+        </TouchableOpacity>
       </TouchableOpacity>
-    </View>
-  );
+    );
+  };
 
   const renderTransactionItem = (transaction: any) => (
     <View key={transaction.id} style={[styles.transactionItem, { borderBottomColor: theme.colors.border }]}>
@@ -289,17 +429,56 @@ const HomeScreen = ({ navigation }: any) => {
             </View>
           </Animated.View>
 
-          {/* Wallets Section */}
+          {/* Borrowed Money Section */}
           <View style={styles.section}>
             <View style={styles.sectionHeader}>
-              <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>{t('my_wallets')}</Text>
-              <TouchableOpacity>
+              <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>Borrowed Money</Text>
+              <TouchableOpacity onPress={() => (navigation as any).navigate('BorrowedMoneyHistory')}>
                 <Text style={styles.seeAllText}>See All</Text>
               </TouchableOpacity>
             </View>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.walletsScroll}>
-              {mockWallets.map(renderWalletCard)}
-            </ScrollView>
+            {borrowedMoneyList.length > 0 ? (
+              <>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.walletsScroll}>
+                  {borrowedMoneyList.slice(0, 5).map(renderBorrowedMoneyCard)}
+                </ScrollView>
+                <View style={[styles.totalBorrowedCard, { backgroundColor: theme.colors.surface }]}>
+                  <View style={styles.totalBorrowedHeader}>
+                    <Ionicons name="people" size={20} color={theme.colors.warning} />
+                    <Text style={[styles.totalBorrowedLabel, { color: theme.colors.textSecondary }]}>
+                      Total Amount Owed to You
+                    </Text>
+                  </View>
+                  <Text style={[styles.totalBorrowedAmount, { color: theme.colors.warning }]}>
+                    {formatCurrency(totalBorrowedAmount)}
+                  </Text>
+                  <TouchableOpacity 
+                    style={[styles.addBorrowedButton, { backgroundColor: theme.colors.primary }]}
+                    onPress={() => setShowAddBorrowedMoneyModal(true)}
+                  >
+                    <Ionicons name="add" size={16} color="white" />
+                    <Text style={styles.addBorrowedButtonText}>Add New</Text>
+                  </TouchableOpacity>
+                </View>
+              </>
+            ) : (
+              <View style={[styles.emptyBorrowedMoney, { backgroundColor: theme.colors.surface }]}>
+                <Ionicons name="people-outline" size={48} color={theme.colors.textSecondary} />
+                <Text style={[styles.emptyBorrowedTitle, { color: theme.colors.text }]}>
+                  No borrowed money records
+                </Text>
+                <Text style={[styles.emptyBorrowedSubtitle, { color: theme.colors.textSecondary }]}>
+                  Keep track of money you've lent to others
+                </Text>
+                <TouchableOpacity 
+                  style={[styles.addBorrowedButton, { backgroundColor: theme.colors.primary }]}
+                  onPress={() => setShowAddBorrowedMoneyModal(true)}
+                >
+                  <Ionicons name="add" size={16} color="white" />
+                  <Text style={styles.addBorrowedButtonText}>Add First Record</Text>
+                </TouchableOpacity>
+              </View>
+            )}
           </View>
 
           {/* Quick Actions */}
@@ -326,7 +505,7 @@ const HomeScreen = ({ navigation }: any) => {
               </TouchableOpacity>
               <TouchableOpacity 
                 style={styles.actionButton}
-                onPress={() => navigation.navigate('AddIncome')}
+                onPress={() => (navigation as any).navigate('AddIncome')}
               >
                 <View style={[styles.actionIcon, { backgroundColor: '#FF9500' }]}>
                   <Ionicons name="trending-up" size={24} color="white" />
@@ -383,6 +562,24 @@ const HomeScreen = ({ navigation }: any) => {
           visible={showAddIncomeModal}
           onClose={() => setShowAddIncomeModal(false)}
           onAddIncome={handleAddIncome}
+        />
+
+        {/* Borrowed Money Details Modal */}
+        <BorrowedMoneyDetailsModal
+          visible={showBorrowedMoneyDetailsModal}
+          onClose={() => setShowBorrowedMoneyDetailsModal(false)}
+          borrowedMoney={selectedBorrowedMoney}
+          onMarkAsPaid={handleMarkAsPaid}
+          onEdit={handleEditBorrowedMoney}
+          onDelete={handleDeleteBorrowedMoney}
+        />
+
+        {/* Add Borrowed Money Modal */}
+        <AddBorrowedMoneyModal
+          visible={showAddBorrowedMoneyModal}
+          onClose={() => setShowAddBorrowedMoneyModal(false)}
+          onAdd={handleAddBorrowedMoney}
+          onAddWithReminder={handleAddBorrowedMoneyWithReminder}
         />
       </LinearGradient>
     </SafeAreaView>
@@ -645,6 +842,66 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#8E8E93',
     lineHeight: 16,
+  },
+  borrowedMoneyInfo: {
+    marginBottom: 8,
+  },
+  borrowedReason: {
+    fontSize: 12,
+    marginBottom: 2,
+  },
+  borrowedDueDate: {
+    fontSize: 10,
+    fontWeight: '500',
+  },
+  totalBorrowedCard: {
+    padding: 16,
+    borderRadius: 12,
+    marginTop: 12,
+    alignItems: 'center',
+  },
+  totalBorrowedHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  totalBorrowedLabel: {
+    fontSize: 14,
+    marginLeft: 8,
+  },
+  totalBorrowedAmount: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    marginBottom: 12,
+  },
+  addBorrowedButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
+  },
+  addBorrowedButtonText: {
+    color: 'white',
+    fontSize: 12,
+    fontWeight: '600',
+    marginLeft: 4,
+  },
+  emptyBorrowedMoney: {
+    padding: 32,
+    borderRadius: 12,
+    alignItems: 'center',
+  },
+  emptyBorrowedTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    marginTop: 12,
+    marginBottom: 4,
+  },
+  emptyBorrowedSubtitle: {
+    fontSize: 14,
+    textAlign: 'center',
+    marginBottom: 16,
   },
 });
 
