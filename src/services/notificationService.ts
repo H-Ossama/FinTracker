@@ -9,6 +9,8 @@ Notifications.setNotificationHandler({
     shouldShowAlert: true,
     shouldPlaySound: true,
     shouldSetBadge: true,
+    shouldShowBanner: true,
+    shouldShowList: true,
   }),
 });
 
@@ -78,7 +80,7 @@ export class NotificationService {
       return {
         granted: false,
         canAskAgain: false,
-        status: 'denied',
+        status: 'denied' as Notifications.PermissionStatus,
       };
     }
   }
@@ -100,7 +102,7 @@ export class NotificationService {
       return {
         granted: false,
         canAskAgain: false,
-        status: 'denied',
+        status: 'denied' as Notifications.PermissionStatus,
       };
     }
   }
@@ -126,7 +128,7 @@ export class NotificationService {
       // Check if we have a valid project ID
       const projectId = Constants.expoConfig?.extra?.eas?.projectId;
       
-      if (!projectId || projectId === '12345678-1234-5678-9012-123456789012') {
+      if (!projectId) {
         console.warn('No valid project ID found. Push notifications require a development build with proper EAS project setup.');
         return null;
       }
