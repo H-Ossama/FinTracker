@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -9,11 +9,13 @@ import {
   ScrollView,
   Alert,
   Dimensions,
+  ActivityIndicator,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import DateTimePicker from '@react-native-community/datetimepicker';
-import { mockWallets, mockSpendingCategories } from '../data/mockData';
 import { useTheme } from '../contexts/ThemeContext';
+import { hybridDataService, HybridWallet } from '../services/hybridDataService';
+import { LocalCategory } from '../services/localStorageService';
 
 interface AddExpenseModalProps {
   visible: boolean;
@@ -49,21 +51,67 @@ const AddExpenseModal: React.FC<AddExpenseModalProps> = ({
   const { theme } = useTheme();
   const [title, setTitle] = useState('');
   const [amount, setAmount] = useState('');
-  const [selectedCategory, setSelectedCategory] = useState(categories[0]);
-  const [selectedWallet, setSelectedWallet] = useState(mockWallets[0]);
+  const [selectedCategory, setSelectedCategory] = useState('');
+  const [selectedWallet, setSelectedWallet] = useState('');
   const [description, setDescription] = useState('');
   const [date, setDate] = useState(new Date());
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [errors, setErrors] = useState<{ [key: string]: string }>({});
+  
+  // Real data state
+  const [wallets, setWallets] = useState<HybridWallet[]>([]);
+  const [categories, setCategories] = useState<LocalCategory[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  // Load real data
+  useEffect(() => {
+    if (visible) {
+      loadData();
+    }
+  }, [visible]);
+
+  const loadData = async () => {
+    try {
+      setLoading(true);
+      const [fetchedWallets, fetchedCategories] = await Promise.all([
+        hybridDataService.getWallets(),
+        hybridDataService.getCategories()
+      ]);
+      setWallets(fetchedWallets);
+      const expenseCategories = fetchedCategories.filter(c => 
+        !c.name.includes('Salary') && 
+        !c.name.includes('Business') && 
+        !c.name.includes('Investment')
+      );
+      setCategories(expenseCategories);
+      
+      // Set default selections
+      if (fetchedWallets.length > 0 && !selectedWallet) {
+        setSelectedWallet(fetchedWallets[0].id);
+      }
+      if (expenseCategories.length > 0 && !selectedCategory) {
+        setSelectedCategory(expenseCategories[0].id);
+      }
+    } catch (error) {
+      console.error('Error loading data for expense modal:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const resetForm = () => {
     setTitle('');
     setAmount('');
-    setSelectedCategory(categories[0]);
-    setSelectedWallet(mockWallets[0]);
     setDescription('');
     setDate(new Date());
     setErrors({});
+    // Reset to first available options
+    if (categories.length > 0) {
+      setSelectedCategory(categories[0].id);
+    }
+    if (wallets.length > 0) {
+      setSelectedWallet(wallets[0].id);
+    }
   };
 
   const validateForm = () => {
@@ -85,11 +133,13 @@ const AddExpenseModal: React.FC<AddExpenseModalProps> = ({
 
   const handleSubmit = () => {
     if (validateForm()) {
+      const selectedCategoryObj = categories.find(c => c.id === selectedCategory);
       const expense = {
         title: title.trim(),
         amount: parseFloat(amount),
-        category: selectedCategory.name,
-        walletId: selectedWallet.id,
+        category: selectedCategoryObj?.name || 'General',
+        categoryId: selectedCategory,
+        walletId: selectedWallet,
         date: date.toISOString().split('T')[0],
         description: description.trim() || undefined,
       };
@@ -140,7 +190,14 @@ const AddExpenseModal: React.FC<AddExpenseModalProps> = ({
         </View>
 
         <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
-          {/* Amount Input */}
+          {loading ? (
+            <View style={styles.loadingContainer}>
+              <ActivityIndicator size="large" color={theme.colors.primary} />
+              <Text style={[styles.loadingText, { color: theme.colors.text }]}>Loading...</Text>
+            </View>
+          ) : (
+            <>
+              {/* Amount Input */}
           <View style={styles.section}>
             <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>Amount</Text>
             <View style={[styles.amountContainer, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }, errors.amount && styles.inputError]}>
@@ -184,15 +241,15 @@ const AddExpenseModal: React.FC<AddExpenseModalProps> = ({
                   key={category.id}
                   style={[
                     styles.categoryItem,
-                    selectedCategory.id === category.id && { backgroundColor: theme.isDark ? theme.colors.card : '#F0F4FF' },
+                    selectedCategory === category.id && { backgroundColor: theme.isDark ? theme.colors.card : '#F0F4FF' },
                   ]}
-                  onPress={() => setSelectedCategory(category)}
+                  onPress={() => setSelectedCategory(category.id)}
                 >
                   <View
                     style={[
                       styles.categoryIcon,
                       { backgroundColor: category.color },
-                      selectedCategory.id === category.id && styles.categoryIconSelected,
+                      selectedCategory === category.id && styles.categoryIconSelected,
                     ]}
                   >
                     <Text style={styles.categoryEmoji}>{category.icon}</Text>
@@ -201,7 +258,7 @@ const AddExpenseModal: React.FC<AddExpenseModalProps> = ({
                     style={[
                       styles.categoryName,
                       { color: theme.colors.textSecondary },
-                      selectedCategory.id === category.id && { color: theme.colors.primary, fontWeight: '600' },
+                      selectedCategory === category.id && { color: theme.colors.primary, fontWeight: '600' },
                     ]}
                   >
                     {category.name}
@@ -215,23 +272,23 @@ const AddExpenseModal: React.FC<AddExpenseModalProps> = ({
           <View style={styles.section}>
             <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>Pay From</Text>
             <View style={[styles.walletsContainer, { backgroundColor: theme.colors.surface }]}>
-              {mockWallets.map((wallet) => (
+              {wallets.map((wallet) => (
                 <TouchableOpacity
                   key={wallet.id}
                   style={[
                     styles.walletItem,
                     { borderBottomColor: theme.colors.border },
-                    selectedWallet.id === wallet.id && { backgroundColor: theme.isDark ? theme.colors.card : '#F0F4FF' },
+                    selectedWallet === wallet.id && { backgroundColor: theme.isDark ? theme.colors.card : '#F0F4FF' },
                   ]}
-                  onPress={() => setSelectedWallet(wallet)}
+                  onPress={() => setSelectedWallet(wallet.id)}
                 >
                   <View style={styles.walletLeft}>
                     <View style={[styles.walletIcon, { backgroundColor: wallet.color }]}>
                       <Ionicons
                         name={
-                          wallet.type === 'bank'
+                          wallet.type === 'BANK'
                             ? 'card'
-                            : wallet.type === 'cash'
+                            : wallet.type === 'CASH'
                             ? 'cash'
                             : 'wallet'
                         }
@@ -244,7 +301,7 @@ const AddExpenseModal: React.FC<AddExpenseModalProps> = ({
                       <Text style={[styles.walletBalance, { color: theme.colors.textSecondary }]}>${wallet.balance.toFixed(2)}</Text>
                     </View>
                   </View>
-                  {selectedWallet.id === wallet.id && (
+                  {selectedWallet === wallet.id && (
                     <Ionicons name="checkmark-circle" size={20} color="#4A90E2" />
                   )}
                 </TouchableOpacity>
@@ -275,6 +332,8 @@ const AddExpenseModal: React.FC<AddExpenseModalProps> = ({
               numberOfLines={3}
             />
           </View>
+          </>
+          )}
         </ScrollView>
 
         {showDatePicker && (
@@ -469,6 +528,17 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#333',
     marginLeft: 12,
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: 50,
+  },
+  loadingText: {
+    marginTop: 16,
+    fontSize: 16,
+    textAlign: 'center',
   },
 });
 

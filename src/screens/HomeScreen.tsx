@@ -9,12 +9,12 @@ import {
   Dimensions,
   PanResponder,
   Animated,
+  ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
-import { mockWallets, getTotalBalance, getRecentTransactions, getUnpaidBorrowedMoney } from '../data/mockData';
 import { BorrowedMoney } from '../types';
 import AddExpenseModal from '../components/AddExpenseModal';
 import AddIncomeModal from '../components/AddIncomeModal';
@@ -25,6 +25,7 @@ import { useTheme } from '../contexts/ThemeContext';
 import { useLocalization } from '../contexts/LocalizationContext';
 import borrowedMoneyService from '../services/borrowedMoneyService';
 import useSafeAreaHelper from '../hooks/useSafeAreaHelper';
+import { hybridDataService, HybridWallet, HybridTransaction } from '../services/hybridDataService';
 
 const HomeScreen = () => {
   const navigation = useNavigation();
@@ -42,17 +43,53 @@ const HomeScreen = () => {
   const [currentWalletIndex, setCurrentWalletIndex] = useState(0);
   const [borrowedMoneyList, setBorrowedMoneyList] = useState<BorrowedMoney[]>([]);
   const [totalBorrowedAmount, setTotalBorrowedAmount] = useState(0);
-  
-  const totalBalance = getTotalBalance();
-  const recentTransactions = getRecentTransactions(5);
+  const [wallets, setWallets] = useState<HybridWallet[]>([]);
+  const [totalBalance, setTotalBalance] = useState(0);
+  const [recentTransactions, setRecentTransactions] = useState<HybridTransaction[]>([]);
+  const [loadingData, setLoadingData] = useState(true);
   
   // Animation values for swipeable balance
   const scaleAnim = useRef(new Animated.Value(1)).current;
 
-  // Load borrowed money data
+  // Load all data
   useEffect(() => {
-    loadBorrowedMoneyData();
+    loadAllData();
   }, []);
+
+  const loadAllData = async () => {
+    try {
+      setLoadingData(true);
+      await Promise.all([
+        loadWalletData(),
+        loadTransactionData(),
+        loadBorrowedMoneyData()
+      ]);
+    } catch (error) {
+      console.error('Error loading data:', error);
+    } finally {
+      setLoadingData(false);
+    }
+  };
+
+  const loadWalletData = async () => {
+    try {
+      const fetchedWallets = await hybridDataService.getWallets();
+      setWallets(fetchedWallets);
+      const balance = await hybridDataService.getWalletBalance();
+      setTotalBalance(balance);
+    } catch (error) {
+      console.error('Error loading wallet data:', error);
+    }
+  };
+
+  const loadTransactionData = async () => {
+    try {
+      const transactions = await hybridDataService.getRecentTransactions(5);
+      setRecentTransactions(transactions);
+    } catch (error) {
+      console.error('Error loading transaction data:', error);
+    }
+  };
 
   const loadBorrowedMoneyData = async () => {
     try {
@@ -62,32 +99,32 @@ const HomeScreen = () => {
       setTotalBorrowedAmount(totalAmount);
     } catch (error) {
       console.error('Error loading borrowed money data:', error);
-      // Fallback to mock data
-      setBorrowedMoneyList(getUnpaidBorrowedMoney());
-      setTotalBorrowedAmount(getUnpaidBorrowedMoney().reduce((sum, item) => sum + item.amount, 0));
+      // Fallback to empty data
+      setBorrowedMoneyList([]);
+      setTotalBorrowedAmount(0);
     }
   };
   
-  // Get the three main wallets: pocket, bank, savings
-  const walletTypes = ['cash', 'bank', 'savings'] as const;
+  // Get the three main wallets: cash, bank, savings - convert types to lowercase for compatibility
+  const walletTypes = ['CASH', 'BANK', 'SAVINGS'] as const;
   const sortedWallets = walletTypes.map(type => 
-    mockWallets.find(wallet => wallet.type === type)
+    wallets.find(wallet => wallet.type === type)
   ).filter(Boolean);
   
   const getWalletDisplayName = (type: string) => {
-    switch (type) {
-      case 'cash': return 'Pocket Money';
-      case 'bank': return 'Bank Account';
-      case 'savings': return 'Savings';
+    switch (type.toUpperCase()) {
+      case 'CASH': return 'Pocket Money';
+      case 'BANK': return 'Bank Account';
+      case 'SAVINGS': return 'Savings';
       default: return 'Total Balance';
     }
   };
   
   const getWalletIcon = (type: string) => {
-    switch (type) {
-      case 'cash': return 'wallet-outline';
-      case 'bank': return 'card-outline';
-      case 'savings': return 'shield-checkmark-outline';
+    switch (type.toUpperCase()) {
+      case 'CASH': return 'wallet-outline';
+      case 'BANK': return 'card-outline';
+      case 'SAVINGS': return 'shield-checkmark-outline';
       default: return 'cash-outline';
     }
   };
@@ -97,7 +134,8 @@ const HomeScreen = () => {
   };
   
   const switchToWallet = (index: number) => {
-    setCurrentWalletIndex(index);
+    const safeIndex = Math.min(index, displayWallets.length - 1);
+    setCurrentWalletIndex(safeIndex);
     // Animate the scale back to normal
     Animated.spring(scaleAnim, {
       toValue: 1,
@@ -131,7 +169,7 @@ const HomeScreen = () => {
           switchToWallet(prevIndex);
         } else if (dx < 0 || vx < -velocityThreshold) {
           // Swipe left - next wallet
-          const nextIndex = Math.min(currentWalletIndex + 1, sortedWallets.length - 1);
+          const nextIndex = Math.min(currentWalletIndex + 1, displayWallets.length - 1);
           switchToWallet(nextIndex);
         }
       } else {
@@ -146,36 +184,66 @@ const HomeScreen = () => {
     },
   });
 
-  
-  const currentWallet = sortedWallets[currentWalletIndex];
+  // Ensure we have at least one wallet to display
+  const displayWallets = sortedWallets.length > 0 ? sortedWallets : wallets.slice(0, 3);
+  const currentWallet = displayWallets[currentWalletIndex] || displayWallets[0];
 
-  const handleAddExpense = (expense: any) => {
-    // In a real app, this would add the expense to the data store
-    console.log('Adding expense:', expense);
-    // You could also show a success message here
+  const handleAddExpense = async (expense: any) => {
+    try {
+      await hybridDataService.createTransaction({
+        amount: expense.amount,
+        description: expense.title || expense.description,
+        type: 'EXPENSE',
+        walletId: expense.walletId,
+        date: expense.date,
+        notes: expense.notes,
+        categoryId: expense.categoryId
+      });
+      
+      // Refresh data after adding expense
+      await loadAllData();
+      console.log('Expense added successfully');
+    } catch (error) {
+      console.error('Error adding expense:', error);
+    }
   };
 
-  const handleTransfer = (transfer: any) => {
-    // In a real app, this would process the transfer between wallets
-    console.log('Processing transfer:', transfer);
-    // You could also show a success message here
+  const handleTransfer = async (success: boolean) => {
+    if (success) {
+      // Refresh data after successful transfer
+      await loadAllData();
+      console.log('Transfer completed successfully');
+    }
   };
 
-  const handleAddIncome = (income: any) => {
-    // In a real app, this would add the income to the data store
-    console.log('Adding income:', income);
-    // You could also show a success message here
+  const handleAddIncome = async (income: any) => {
+    try {
+      await hybridDataService.createTransaction({
+        amount: income.amount,
+        description: income.title || income.description,
+        type: 'INCOME',
+        walletId: income.walletId,
+        date: income.date,
+        notes: income.notes
+      });
+      
+      // Refresh data after adding income
+      await loadAllData();
+      console.log('Income added successfully');
+    } catch (error) {
+      console.error('Error adding income:', error);
+    }
   };
 
   const onRefresh = React.useCallback(() => {
     setRefreshing(true);
-    // Simulate API call to refresh data
-    setTimeout(async () => {
-      await loadBorrowedMoneyData();
+    loadAllData().then(() => {
       setRefreshing(false);
-      // In a real app, you would refresh the data from your data source
-      console.log('Data refreshed');
-    }, 2000);
+      console.log('All data refreshed');
+    }).catch((error) => {
+      console.error('Error refreshing data:', error);
+      setRefreshing(false);
+    });
   }, []);
 
   const handleBorrowedMoneyPress = (item: BorrowedMoney) => {
@@ -311,30 +379,59 @@ const HomeScreen = () => {
     );
   };
 
-  const renderTransactionItem = (transaction: any) => (
-    <View key={transaction.id} style={[styles.transactionItem, { borderBottomColor: theme.colors.border }]}>
-      <View style={styles.transactionLeft}>
-        <View style={[styles.transactionIcon, { backgroundColor: theme.colors.background }]}>
-          <Text style={styles.transactionEmoji}>
-            {transaction.category === 'Food' ? '🍔' : 
-             transaction.category === 'Utilities' ? '💡' : 
-             transaction.category === 'Subscriptions' ? '📱' : 
-             transaction.category === 'Income' ? '💰' : '💳'}
-          </Text>
+  const renderTransactionItem = (transaction: HybridTransaction) => {
+    // Get transaction emoji based on type or description
+    const getTransactionEmoji = (type: string, description?: string) => {
+      if (type === 'INCOME') return '💰';
+      if (type === 'TRANSFER') return '🔄';
+      
+      // For expenses, try to guess based on description
+      const desc = description?.toLowerCase() || '';
+      if (desc.includes('food') || desc.includes('restaurant') || desc.includes('grocery')) return '🍔';
+      if (desc.includes('gas') || desc.includes('fuel') || desc.includes('electricity') || desc.includes('utility')) return '💡';
+      if (desc.includes('netflix') || desc.includes('subscription') || desc.includes('spotify')) return '📱';
+      if (desc.includes('transport') || desc.includes('uber') || desc.includes('taxi')) return '🚗';
+      return '💳';
+    };
+
+    const formatTransactionDate = (dateStr: string) => {
+      const date = new Date(dateStr);
+      const today = new Date();
+      const diffTime = Math.abs(today.getTime() - date.getTime());
+      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+      
+      if (diffDays === 1) return 'Today';
+      if (diffDays === 2) return 'Yesterday';
+      if (diffDays <= 7) return `${diffDays} days ago`;
+      return date.toLocaleDateString();
+    };
+
+    return (
+      <View key={transaction.id} style={[styles.transactionItem, { borderBottomColor: theme.colors.border }]}>
+        <View style={styles.transactionLeft}>
+          <View style={[styles.transactionIcon, { backgroundColor: theme.colors.background }]}>
+            <Text style={styles.transactionEmoji}>
+              {getTransactionEmoji(transaction.type, transaction.description)}
+            </Text>
+          </View>
+          <View>
+            <Text style={[styles.transactionTitle, { color: theme.colors.text }]}>
+              {transaction.description || `${transaction.type.toLowerCase()} transaction`}
+            </Text>
+            <Text style={[styles.transactionCategory, { color: theme.colors.textSecondary }]}>
+              {formatTransactionDate(transaction.date)}
+            </Text>
+          </View>
         </View>
-        <View>
-          <Text style={[styles.transactionTitle, { color: theme.colors.text }]}>{transaction.title}</Text>
-          <Text style={[styles.transactionCategory, { color: theme.colors.textSecondary }]}>{transaction.category}</Text>
-        </View>
+        <Text style={[
+          styles.transactionAmount,
+          { color: transaction.type === 'INCOME' ? theme.colors.success : '#FF3B30' }
+        ]}>
+          {transaction.type === 'INCOME' ? '+' : transaction.type === 'TRANSFER' ? '↔' : ''}{formatCurrency(transaction.amount)}
+        </Text>
       </View>
-      <Text style={[
-        styles.transactionAmount,
-        { color: transaction.type === 'income' ? theme.colors.success : '#FF3B30' }
-      ]}>
-        {transaction.type === 'income' ? '+' : ''}{formatCurrency(transaction.amount)}
-      </Text>
-    </View>
-  );
+    );
+  };
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: theme.colors.background }]}>
@@ -342,18 +439,24 @@ const HomeScreen = () => {
         colors={[theme.colors.gradientStart, theme.colors.gradientEnd]}
         style={styles.gradient}
       >
-        <ScrollView 
-          style={styles.scrollView} 
-          showsVerticalScrollIndicator={false}
-          refreshControl={
-            <RefreshControl
-              refreshing={refreshing}
-              onRefresh={onRefresh}
-              colors={[theme.colors.primary]} // Android
-              tintColor={theme.colors.primary} // iOS
-            />
-          }
-        >
+        {loadingData ? (
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator size="large" color={theme.colors.primary} />
+            <Text style={[styles.loadingText, { color: theme.colors.text }]}>Loading your data...</Text>
+          </View>
+        ) : (
+          <ScrollView 
+            style={styles.scrollView} 
+            showsVerticalScrollIndicator={false}
+            refreshControl={
+              <RefreshControl
+                refreshing={refreshing}
+                onRefresh={onRefresh}
+                colors={[theme.colors.primary]} // Android
+                tintColor={theme.colors.primary} // iOS
+              />
+            }
+          >
           {/* Header */}
           <View style={styles.header}>
             <Text style={[styles.greeting, { color: theme.colors.text }]}>{t('good_morning')}</Text>
@@ -383,7 +486,7 @@ const HomeScreen = () => {
                 </Text>
               </View>
               <View style={styles.walletIndicators}>
-                {sortedWallets.map((wallet, index) => (
+                {displayWallets.map((wallet, index) => (
                   <TouchableOpacity
                     key={index}
                     onPress={() => switchToWallet(index)}
@@ -540,8 +643,9 @@ const HomeScreen = () => {
               <Text style={[styles.tipTitle, { color: theme.colors.text }]}>{t('smart_tip')}</Text>
               <Text style={[styles.tipText, { color: theme.colors.textSecondary }]}>You spent 20% less this week than last week. Keep it up!</Text>
             </View>
-          </View>
-        </ScrollView>
+            </View>
+          </ScrollView>
+        )}
 
         {/* Add Expense Modal */}
         <AddExpenseModal
@@ -902,6 +1006,17 @@ const styles = StyleSheet.create({
     fontSize: 14,
     textAlign: 'center',
     marginBottom: 16,
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: 50,
+  },
+  loadingText: {
+    marginTop: 16,
+    fontSize: 16,
+    textAlign: 'center',
   },
 });
 

@@ -34,6 +34,18 @@ class HybridDataService {
         await localStorageService.seedDefaultCategories();
       }
 
+      // Seed default wallets if needed
+      const wallets = await localStorageService.getWallets();
+      if (wallets.length === 0) {
+        await this.seedDefaultWallets();
+      }
+
+      // Seed sample transactions if needed (only for demo purposes)
+      const transactions = await localStorageService.getTransactions();
+      if (transactions.length === 0) {
+        await this.seedSampleTransactions();
+      }
+
       // Check sync status
       const syncStatus = await cloudSyncService.getSyncStatus();
       
@@ -403,6 +415,115 @@ class HybridDataService {
       ...walletData,
       syncStatus: syncStatus as any,
     };
+  }
+
+  private async seedSampleTransactions(): Promise<void> {
+    try {
+      // Get the wallets first
+      const wallets = await localStorageService.getWallets();
+      if (wallets.length === 0) return;
+
+      // Get categories for more realistic transactions
+      const categories = await localStorageService.getCategories();
+      const foodCategory = categories.find(c => c.name.includes('Food') || c.name.includes('Dining'));
+      const shoppingCategory = categories.find(c => c.name.includes('Shopping'));
+      const salaryCategory = categories.find(c => c.name.includes('Salary'));
+
+      const bankWallet = wallets.find(w => w.type === 'BANK');
+      const cashWallet = wallets.find(w => w.type === 'CASH');
+
+      if (!bankWallet || !cashWallet) return;
+
+      const sampleTransactions = [
+        {
+          amount: 3500,
+          description: 'Monthly Salary',
+          type: 'INCOME' as const,
+          date: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString(), // 5 days ago
+          walletId: bankWallet.id,
+          categoryId: salaryCategory?.id,
+        },
+        {
+          amount: 85.50,
+          description: 'Grocery Shopping',
+          type: 'EXPENSE' as const,
+          date: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(), // 2 days ago
+          walletId: bankWallet.id,
+          categoryId: foodCategory?.id,
+        },
+        {
+          amount: 15.75,
+          description: 'Coffee & Pastry',
+          type: 'EXPENSE' as const,
+          date: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000).toISOString(), // 1 day ago
+          walletId: cashWallet.id,
+          categoryId: foodCategory?.id,
+        },
+        {
+          amount: 120.00,
+          description: 'Online Shopping',
+          type: 'EXPENSE' as const,
+          date: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString(), // 3 days ago
+          walletId: bankWallet.id,
+          categoryId: shoppingCategory?.id,
+        },
+        {
+          amount: 200.00,
+          description: 'Transfer from Bank to Cash',
+          type: 'TRANSFER' as const,
+          date: new Date(Date.now() - 4 * 24 * 60 * 60 * 1000).toISOString(), // 4 days ago
+          walletId: cashWallet.id,
+        },
+      ];
+
+      for (const transactionData of sampleTransactions) {
+        await localStorageService.createTransaction(transactionData);
+      }
+
+      console.log('✅ Sample transactions seeded');
+    } catch (error) {
+      console.error('Error seeding sample transactions:', error);
+      throw error;
+    }
+  }
+
+  private async seedDefaultWallets(): Promise<void> {
+    const defaultWallets = [
+      {
+        name: 'Pocket Money',
+        type: 'CASH' as const,
+        balance: 100,
+        color: '#7ED321',
+        icon: 'wallet',
+        isActive: true,
+      },
+      {
+        name: 'Bank Account',
+        type: 'BANK' as const,
+        balance: 2500,
+        color: '#4A90E2',
+        icon: 'card',
+        isActive: true,
+      },
+      {
+        name: 'Savings',
+        type: 'SAVINGS' as const,
+        balance: 1000,
+        color: '#9013FE',
+        icon: 'shield-checkmark',
+        isActive: true,
+      },
+    ];
+
+    try {
+      for (const walletData of defaultWallets) {
+        await localStorageService.createWallet(walletData);
+      }
+      console.log('✅ Default wallets seeded');
+    } catch (error) {
+      console.error('Error seeding default wallets:', error);
+      throw error;
+    }
   }
 
   private convertTransactionToHybrid(transaction: LocalTransaction): HybridTransaction {

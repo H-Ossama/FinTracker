@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -6,35 +6,56 @@ import {
   ScrollView,
   TouchableOpacity,
   RefreshControl,
+  ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { BorrowedMoney } from '../types';
-import { getAllBorrowedMoney, getTotalBorrowedAmount } from '../data/mockData';
 import { useTheme } from '../contexts/ThemeContext';
 import { useLocalization } from '../contexts/LocalizationContext';
 import BorrowedMoneyDetailsModal from '../components/BorrowedMoneyDetailsModal';
 import AddBorrowedMoneyModal from '../components/AddBorrowedMoneyModal';
 import useSafeAreaHelper from '../hooks/useSafeAreaHelper';
+import borrowedMoneyService from '../services/borrowedMoneyService';
 
 const BorrowedMoneyHistoryScreen = ({ navigation }: any) => {
   const { theme } = useTheme();
   const { formatCurrency } = useLocalization();
   const { headerPadding } = useSafeAreaHelper();
-  const [borrowedMoneyList, setBorrowedMoneyList] = useState<BorrowedMoney[]>(getAllBorrowedMoney());
+  const [borrowedMoneyList, setBorrowedMoneyList] = useState<BorrowedMoney[]>([]);
+  const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [selectedBorrowedMoney, setSelectedBorrowedMoney] = useState<BorrowedMoney | null>(null);
   const [showDetailsModal, setShowDetailsModal] = useState(false);
   const [showAddModal, setShowAddModal] = useState(false);
   const [filter, setFilter] = useState<'all' | 'pending' | 'paid'>('all');
 
+  // Load data on component mount
+  useEffect(() => {
+    loadBorrowedMoneyData();
+  }, []);
+
+  const loadBorrowedMoneyData = async () => {
+    try {
+      setLoading(true);
+      const allBorrowedMoney = await borrowedMoneyService.getAllBorrowedMoney();
+      setBorrowedMoneyList(allBorrowedMoney);
+    } catch (error) {
+      console.error('Error loading borrowed money data:', error);
+      setBorrowedMoneyList([]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const onRefresh = React.useCallback(() => {
     setRefreshing(true);
-    // Simulate API call to refresh data
-    setTimeout(() => {
-      setBorrowedMoneyList(getAllBorrowedMoney());
+    loadBorrowedMoneyData().then(() => {
       setRefreshing(false);
-    }, 1000);
+    }).catch((error) => {
+      console.error('Error refreshing data:', error);
+      setRefreshing(false);
+    });
   }, []);
 
   const handleItemPress = (item: BorrowedMoney) => {
@@ -42,52 +63,61 @@ const BorrowedMoneyHistoryScreen = ({ navigation }: any) => {
     setShowDetailsModal(true);
   };
 
-  const handleMarkAsPaid = (id: string) => {
-    setBorrowedMoneyList(prev => 
-      prev.map(item => 
-        item.id === id ? { ...item, isPaid: true } : item
-      )
-    );
-    setShowDetailsModal(false);
+  const handleMarkAsPaid = async (id: string) => {
+    try {
+      await borrowedMoneyService.markAsPaid(id);
+      await loadBorrowedMoneyData(); // Reload data
+      setShowDetailsModal(false);
+    } catch (error) {
+      console.error('Error marking as paid:', error);
+    }
   };
 
-  const handleEdit = (editedItem: BorrowedMoney) => {
-    setBorrowedMoneyList(prev => 
-      prev.map(item => 
-        item.id === editedItem.id ? editedItem : item
-      )
-    );
+  const handleEdit = async (editedItem: BorrowedMoney) => {
+    try {
+      await borrowedMoneyService.updateBorrowedMoney(editedItem.id, editedItem);
+      await loadBorrowedMoneyData(); // Reload data
+    } catch (error) {
+      console.error('Error updating borrowed money:', error);
+    }
   };
 
-  const handleDelete = (id: string) => {
-    setBorrowedMoneyList(prev => prev.filter(item => item.id !== id));
+  const handleDelete = async (id: string) => {
+    try {
+      await borrowedMoneyService.deleteBorrowedMoney(id);
+      await loadBorrowedMoneyData(); // Reload data
+    } catch (error) {
+      console.error('Error deleting borrowed money:', error);
+    }
   };
 
-  const handleAdd = (newItem: Omit<BorrowedMoney, 'id'>) => {
-    const newBorrowedMoney: BorrowedMoney = {
-      ...newItem,
-      id: Date.now().toString(),
-    };
-    setBorrowedMoneyList(prev => [newBorrowedMoney, ...prev]);
+  const handleAdd = async (newItem: Omit<BorrowedMoney, 'id'>) => {
+    try {
+      await borrowedMoneyService.addBorrowedMoney(newItem);
+      await loadBorrowedMoneyData(); // Reload data
+    } catch (error) {
+      console.error('Error adding borrowed money:', error);
+    }
   };
 
   const handleAddWithReminder = async (newItem: Omit<BorrowedMoney, 'id'>) => {
-    const newBorrowedMoney: BorrowedMoney = {
-      ...newItem,
-      id: Date.now().toString(),
-    };
-    setBorrowedMoneyList(prev => [newBorrowedMoney, ...prev]);
-    
-    // Navigate to reminders screen to set up the reminder
-    navigation.navigate('Reminders', { 
-      newReminder: {
-        title: `Payment due from ${newItem.personName}`,
-        amount: newItem.amount,
-        dueDate: newItem.dueDate,
-        type: 'borrowed_money',
-        relatedId: newBorrowedMoney.id,
-      }
-    });
+    try {
+      const newBorrowedMoney = await borrowedMoneyService.addBorrowedMoney(newItem);
+      await loadBorrowedMoneyData(); // Reload data
+      
+      // Navigate to reminders screen to set up the reminder
+      navigation.navigate('Reminders', { 
+        newReminder: {
+          title: `Payment due from ${newItem.personName}`,
+          amount: newItem.amount,
+          dueDate: newItem.dueDate,
+          type: 'borrowed_money',
+          relatedId: newBorrowedMoney.id,
+        }
+      });
+    } catch (error) {
+      console.error('Error adding borrowed money with reminder:', error);
+    }
   };
 
   const filteredList = borrowedMoneyList.filter(item => {
@@ -262,38 +292,45 @@ const BorrowedMoneyHistoryScreen = ({ navigation }: any) => {
       </View>
 
       {/* List */}
-      <ScrollView 
-        style={styles.listContainer}
-        refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={onRefresh}
-            colors={[theme.colors.primary]}
-            tintColor={theme.colors.primary}
-          />
-        }
-      >
-        {filteredList.length > 0 ? (
-          filteredList.map(renderBorrowedMoneyItem)
-        ) : (
-          <View style={styles.emptyState}>
-            <Ionicons 
-              name="people-outline" 
-              size={64} 
-              color={theme.colors.textSecondary} 
+      {loading ? (
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={theme.colors.primary} />
+          <Text style={[styles.loadingText, { color: theme.colors.text }]}>Loading borrowed money records...</Text>
+        </View>
+      ) : (
+        <ScrollView 
+          style={styles.listContainer}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              colors={[theme.colors.primary]}
+              tintColor={theme.colors.primary}
             />
-            <Text style={[styles.emptyStateTitle, { color: theme.colors.text }]}>
-              No borrowed money records
-            </Text>
-            <Text style={[styles.emptyStateSubtitle, { color: theme.colors.textSecondary }]}>
-              {filter === 'all' 
-                ? 'Add your first borrowed money record'
-                : `No ${filter} records found`
-              }
-            </Text>
-          </View>
-        )}
-      </ScrollView>
+          }
+        >
+          {filteredList.length > 0 ? (
+            filteredList.map(renderBorrowedMoneyItem)
+          ) : (
+            <View style={styles.emptyState}>
+              <Ionicons 
+                name="people-outline" 
+                size={64} 
+                color={theme.colors.textSecondary} 
+              />
+              <Text style={[styles.emptyStateTitle, { color: theme.colors.text }]}>
+                No borrowed money records
+              </Text>
+              <Text style={[styles.emptyStateSubtitle, { color: theme.colors.textSecondary }]}>
+                {filter === 'all' 
+                  ? 'Add your first borrowed money record'
+                  : `No ${filter} records found`
+                }
+              </Text>
+            </View>
+          )}
+        </ScrollView>
+      )}
 
       {/* Details Modal */}
       <BorrowedMoneyDetailsModal
@@ -445,6 +482,17 @@ const styles = StyleSheet.create({
   },
   emptyStateSubtitle: {
     fontSize: 14,
+    textAlign: 'center',
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: 50,
+  },
+  loadingText: {
+    marginTop: 16,
+    fontSize: 16,
     textAlign: 'center',
   },
 });
