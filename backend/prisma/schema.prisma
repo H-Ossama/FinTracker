@@ -1,0 +1,450 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum WalletType {
+  BANK
+  CASH
+  SAVINGS
+  CREDIT_CARD
+  INVESTMENT
+  OTHER
+}
+
+enum TransactionType {
+  INCOME
+  EXPENSE
+  TRANSFER
+}
+
+enum Currency {
+  USD
+  EUR
+  MAD
+}
+
+enum Language {
+  EN
+  DE
+  AR
+}
+
+enum ReminderFrequency {
+  DAILY
+  WEEKLY
+  MONTHLY
+  QUARTERLY
+  YEARLY
+  CUSTOM
+}
+
+enum NotificationType {
+  REMINDER
+  GOAL_ACHIEVED
+  GOAL_MILESTONE
+  BUDGET_WARNING
+  BUDGET_EXCEEDED
+  UNUSUAL_SPENDING
+  SPENDING_ALERT
+  PAYMENT_DUE
+  RECURRING_TRANSACTION
+  TIP
+  ACHIEVEMENT
+  SYNC_REMINDER
+}
+
+enum ReminderStatus {
+  PENDING
+  COMPLETED
+  OVERDUE
+  CANCELLED
+}
+
+enum NotificationPriority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
+
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  password  String
+  firstName String
+  lastName  String
+  language  Language @default(EN)
+  currency  Currency @default(USD)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  lastLogin DateTime?
+
+  // User preferences
+  emailVerified    Boolean @default(false)
+  emailVerifiedAt  DateTime?
+  resetTokenHash   String?
+  resetTokenExpiry DateTime?
+
+  // Relationships
+  wallets       Wallet[]
+  transactions  Transaction[]
+  categories    Category[]
+  reminders     Reminder[]
+  goals         Goal[]
+  notifications Notification[]
+  sessions      Session[]
+  notificationPreferences NotificationPreferences?
+  pushTokens    PushToken[]
+  recurringTransactions RecurringTransaction[]
+
+  @@map("users")
+}
+
+model Session {
+  id        String   @id @default(cuid())
+  userId    String
+  token     String   @unique
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  isActive  Boolean  @default(true)
+
+  // Relationships
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("sessions")
+}
+
+model Wallet {
+  id       String     @id @default(cuid())
+  name     String
+  type     WalletType
+  balance  Decimal    @default(0) @db.Decimal(12, 2)
+  color    String     @default("#3B82F6")
+  icon     String     @default("wallet")
+  isActive Boolean    @default(true)
+  userId   String
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relationships
+  user              User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  transactions      Transaction[]
+  transfersFrom     Transfer[]    @relation("TransferFrom")
+  transfersTo       Transfer[]    @relation("TransferTo")
+  balanceHistories  BalanceHistory[]
+  reminders         Reminder[]
+  recurringTransactions RecurringTransaction[]
+
+  @@map("wallets")
+}
+
+model Category {
+  id       String  @id @default(cuid())
+  name     String
+  icon     String
+  color    String
+  isCustom Boolean @default(false)
+  userId   String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relationships
+  user         User?         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  transactions Transaction[]
+  budgets      Budget[]
+  reminders    Reminder[]
+  recurringTransactions RecurringTransaction[]
+
+  @@map("categories")
+}
+
+model Transaction {
+  id          String          @id @default(cuid())
+  amount      Decimal         @db.Decimal(12, 2)
+  description String?
+  type        TransactionType
+  date        DateTime        @default(now())
+  receipt     String? // File path for receipt image
+  notes       String?
+
+  userId     String
+  walletId   String
+  categoryId String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relationships
+  user     User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  wallet   Wallet    @relation(fields: [walletId], references: [id], onDelete: Cascade)
+  category Category? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+
+  @@map("transactions")
+}
+
+model Transfer {
+  id          String  @id @default(cuid())
+  amount      Decimal @db.Decimal(12, 2)
+  description String?
+  fee         Decimal @default(0) @db.Decimal(8, 2)
+
+  fromWalletId String
+  toWalletId   String
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relationships
+  fromWallet Wallet @relation("TransferFrom", fields: [fromWalletId], references: [id], onDelete: Cascade)
+  toWallet   Wallet @relation("TransferTo", fields: [toWalletId], references: [id], onDelete: Cascade)
+
+  @@map("transfers")
+}
+
+model Reminder {
+  id            String            @id @default(cuid())
+  title         String
+  description   String?
+  amount        Decimal?          @db.Decimal(12, 2)
+  dueDate       DateTime
+  frequency     ReminderFrequency
+  status        ReminderStatus    @default(PENDING)
+  isActive      Boolean           @default(true)
+  isRecurring   Boolean           @default(false)
+  
+  // Recurring transaction settings
+  autoCreateTransaction Boolean @default(false)
+  transactionType       TransactionType?
+  walletId             String?
+  
+  // Notification settings
+  notifyBefore         Int?              // Minutes before due date
+  enablePushNotification Boolean        @default(true)
+  enableEmailNotification Boolean       @default(false)
+  
+  // Tracking
+  completedCount       Int               @default(0)
+  lastCompleted        DateTime?
+  nextDue              DateTime?
+  snoozeUntil          DateTime?
+
+  userId     String
+  categoryId String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relationships
+  user     User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  category Category? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  wallet   Wallet?   @relation(fields: [walletId], references: [id], onDelete: SetNull)
+  recurringTransactions RecurringTransaction[]
+
+  @@map("reminders")
+}
+
+model Goal {
+  id             String   @id @default(cuid())
+  title          String
+  description    String?
+  targetAmount   Decimal  @db.Decimal(12, 2)
+  currentAmount  Decimal  @default(0) @db.Decimal(12, 2)
+  targetDate     DateTime
+  isAchieved     Boolean  @default(false)
+  achievedAt     DateTime?
+
+  userId String
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relationships
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("goals")
+}
+
+model Budget {
+  id        String  @id @default(cuid())
+  amount    Decimal @db.Decimal(12, 2)
+  spent     Decimal @default(0) @db.Decimal(12, 2)
+  month     Int
+  year      Int
+  isActive  Boolean @default(true)
+
+  categoryId String
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relationships
+  category Category @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+
+  @@unique([categoryId, month, year])
+  @@map("budgets")
+}
+
+model Notification {
+  id       String               @id @default(cuid())
+  title    String
+  message  String
+  type     NotificationType
+  priority NotificationPriority @default(MEDIUM)
+  isRead   Boolean              @default(false)
+  readAt   DateTime?
+  
+  // Notification data
+  data     Json?                // Additional data for the notification
+  actionUrl String?             // Deep link or action URL
+  
+  // Delivery tracking
+  sentAt   DateTime?
+  deliveredAt DateTime?
+  clickedAt DateTime?
+  
+  // Related entities
+  relatedEntityType String?     // "transaction", "reminder", "goal", etc.
+  relatedEntityId   String?     // ID of the related entity
+
+  userId String
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relationships
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("notifications")
+}
+
+model BalanceHistory {
+  id      String  @id @default(cuid())
+  balance Decimal @db.Decimal(12, 2)
+  date    DateTime @default(now())
+
+  walletId String
+
+  // Relationships
+  wallet Wallet @relation(fields: [walletId], references: [id], onDelete: Cascade)
+
+  @@map("balance_histories")
+}
+
+model CurrencyRate {
+  id         String   @id @default(cuid())
+  baseCurrency Currency
+  targetCurrency Currency
+  rate       Decimal  @db.Decimal(10, 6)
+  date       DateTime @default(now())
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([baseCurrency, targetCurrency, date])
+  @@map("currency_rates")
+}
+
+model RecurringTransaction {
+  id          String          @id @default(cuid())
+  amount      Decimal         @db.Decimal(12, 2)
+  description String
+  type        TransactionType
+  frequency   ReminderFrequency
+  
+  // Scheduling
+  nextExecutionDate DateTime
+  lastExecutionDate DateTime?
+  executionCount    Int       @default(0)
+  maxExecutions     Int?      // Null means infinite
+  
+  // Settings
+  isActive    Boolean @default(true)
+  endDate     DateTime?
+  
+  // Related entities
+  userId      String
+  walletId    String
+  categoryId  String?
+  reminderId  String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relationships
+  user     User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  wallet   Wallet    @relation(fields: [walletId], references: [id], onDelete: Cascade)
+  category Category? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  reminder Reminder? @relation(fields: [reminderId], references: [id], onDelete: SetNull)
+
+  @@map("recurring_transactions")
+}
+
+model NotificationPreferences {
+  id     String @id @default(cuid())
+  userId String @unique
+
+  // Push notification settings
+  enablePushNotifications     Boolean @default(true)
+  enableReminders            Boolean @default(true)
+  enableBudgetAlerts         Boolean @default(true)
+  enableGoalNotifications    Boolean @default(true)
+  enableSpendingAlerts       Boolean @default(true)
+  enableTips                 Boolean @default(true)
+  enableSyncReminders        Boolean @default(true)
+  
+  // Email notification settings
+  enableEmailNotifications   Boolean @default(false)
+  enableEmailWeeklyReport    Boolean @default(false)
+  enableEmailMonthlyReport   Boolean @default(false)
+  
+  // Quiet hours
+  enableQuietHours           Boolean @default(false)
+  quietHoursStart            String? // "22:00"
+  quietHoursEnd              String? // "08:00"
+  
+  // Frequency settings
+  reminderFrequencyMinutes   Int     @default(60)  // How often to check for reminders
+  spendingAlertThreshold     Decimal @default(100) @db.Decimal(12, 2) // Alert when spending exceeds this amount per day
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relationships
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("notification_preferences")
+}
+
+model PushToken {
+  id     String @id @default(cuid())
+  token  String @unique
+  userId String
+  
+  // Device info
+  deviceId   String?
+  platform   String? // "ios", "android", "web"
+  appVersion String?
+  
+  // Status
+  isActive   Boolean  @default(true)
+  lastUsed   DateTime @default(now())
+  expiresAt  DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relationships
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("push_tokens")
+}
