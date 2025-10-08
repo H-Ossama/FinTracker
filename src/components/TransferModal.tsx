@@ -10,6 +10,8 @@ import {
   Alert,
   ActivityIndicator,
   BackHandler,
+  KeyboardAvoidingView,
+  Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -273,7 +275,17 @@ const TransferModal: React.FC<TransferModalProps> = ({
             <Text style={[styles.loadingText, { color: theme.colors.text }]}>Loading wallets...</Text>
           </View>
         ) : (
-          <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+          <KeyboardAvoidingView
+            style={styles.keyboardAvoidingView}
+            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+            keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
+          >
+            <ScrollView 
+              style={styles.content} 
+              showsVerticalScrollIndicator={false}
+              keyboardShouldPersistTaps="handled"
+              contentContainerStyle={{ paddingBottom: 20 }}
+            >
           {/* Transfer Direction Indicator */}
           <View style={styles.transferFlow}>
             <View style={styles.flowStep}>
@@ -391,6 +403,7 @@ const TransferModal: React.FC<TransferModalProps> = ({
             </View>
           )}
         </ScrollView>
+        </KeyboardAvoidingView>
         )}
       </SafeAreaView>
     </Modal>
@@ -401,6 +414,9 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#F8F9FA',
+  },
+  keyboardAvoidingView: {
+    flex: 1,
   },
   loadingContainer: {
     flex: 1,

@@ -9,6 +9,9 @@ import {
   ActivityIndicator,
   Image,
   Switch,
+  Alert,
+  KeyboardAvoidingView,
+  Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useForm, Controller } from 'react-hook-form';
@@ -125,12 +128,17 @@ const UserProfileScreen: React.FC<UserProfileScreenProps> = ({ navigation }) => 
 
       if (result.success) {
         setIsEditing(false);
-        Alert.alert('Success', 'Your profile has been updated successfully.');
+        // Reset form with updated values
+        profileForm.reset({
+          name: data.name,
+          email: data.email,
+        });
+        showSuccess('Profile Updated', 'Your profile has been updated successfully.');
       } else {
-        Alert.alert('Update Failed', result.error || 'Failed to update profile');
+        showError('Update Failed', result.error || 'Failed to update profile');
       }
     } catch (error) {
-      Alert.alert('Error', 'An unexpected error occurred. Please try again.');
+      showError('Error', 'An unexpected error occurred. Please try again.');
     } finally {
       setIsLoading(false);
     }
@@ -273,11 +281,17 @@ const UserProfileScreen: React.FC<UserProfileScreenProps> = ({ navigation }) => 
         </TouchableOpacity>
       </View>
 
-      <ScrollView 
-        contentContainerStyle={styles.scrollContent} 
-        showsVerticalScrollIndicator={false}
-        bounces={false}
+      <KeyboardAvoidingView
+        style={styles.keyboardAvoidingView}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
       >
+        <ScrollView 
+          contentContainerStyle={styles.scrollContent} 
+          showsVerticalScrollIndicator={false}
+          bounces={false}
+          keyboardShouldPersistTaps="handled"
+        >
         {/* Profile Hero Card */}
         <View style={[styles.heroCard, { backgroundColor: theme.colors.surface }]}>
           <View style={styles.profileHeader}>
@@ -488,6 +502,7 @@ const UserProfileScreen: React.FC<UserProfileScreenProps> = ({ navigation }) => 
           </View>
         </View>
       </ScrollView>
+      </KeyboardAvoidingView>
       
       <CustomAlert
         visible={alertState.visible}
@@ -504,6 +519,9 @@ const UserProfileScreen: React.FC<UserProfileScreenProps> = ({ navigation }) => 
 
 const createStyles = (theme: any) => StyleSheet.create({
   container: {
+    flex: 1,
+  },
+  keyboardAvoidingView: {
     flex: 1,
   },
   header: {
@@ -766,69 +784,7 @@ const createStyles = (theme: any) => StyleSheet.create({
     color: '#EF4444',
     marginLeft: 12,
   },
-  // New design styles
-  heroCard: {
-    margin: 16,
-    borderRadius: 20,
-    padding: 24,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 12,
-    elevation: 8,
-  },
-  profileHeader: {
-    alignItems: 'center',
-    marginBottom: 24,
-  },
-  avatarWrapper: {
-    position: 'relative',
-    marginBottom: 16,
-  },
-  cameraButton: {
-    position: 'absolute',
-    bottom: 4,
-    right: 4,
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: '#3B82F6',
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 3,
-    borderColor: '#FFF',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 4,
-    elevation: 5,
-  },
-  userDetails: {
-    alignItems: 'center',
-  },
-  displayName: {
-    fontSize: 24,
-    fontWeight: '700',
-    marginBottom: 4,
-  },
-  emailAddress: {
-    fontSize: 16,
-    marginBottom: 12,
-  },
-  verificationBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#F0FDF4',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 20,
-  },
-  verifiedText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#10B981',
-    marginLeft: 6,
-  },
+  // Additional styles for new design
   statsRow: {
     flexDirection: 'row',
     backgroundColor: theme.colors.background,
@@ -944,10 +900,6 @@ const createStyles = (theme: any) => StyleSheet.create({
   dangerSettingLabel: {
     fontSize: 16,
     fontWeight: '600',
-  },
-  headerAction: {
-    padding: 8,
-    borderRadius: 8,
   },
 });
 

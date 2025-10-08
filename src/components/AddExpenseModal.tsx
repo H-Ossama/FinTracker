@@ -10,6 +10,8 @@ import {
   Alert,
   Dimensions,
   ActivityIndicator,
+  KeyboardAvoidingView,
+  Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import DateTimePicker from '@react-native-community/datetimepicker';
@@ -73,27 +75,47 @@ const AddExpenseModal: React.FC<AddExpenseModalProps> = ({
   const loadData = async () => {
     try {
       setLoading(true);
-      const [fetchedWallets, fetchedCategories] = await Promise.all([
-        hybridDataService.getWallets(),
-        hybridDataService.getCategories()
-      ]);
+      // Only fetch wallets, use local categories with emojis
+      const fetchedWallets = await hybridDataService.getWallets();
       setWallets(fetchedWallets);
-      const expenseCategories = fetchedCategories.filter(c => 
-        !c.name.includes('Salary') && 
-        !c.name.includes('Business') && 
-        !c.name.includes('Investment')
-      );
-      setCategories(expenseCategories);
+      
+      // Use local categories with emojis instead of fetching from service
+      const localCategories: LocalCategory[] = [
+        { id: 'food', name: 'Food', icon: '🍔', color: '#9013FE', isCustom: false, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
+        { id: 'utilities', name: 'Utilities', icon: '💡', color: '#F5A623', isCustom: false, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
+        { id: 'transport', name: 'Transport', icon: '🚗', color: '#4A90E2', isCustom: false, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
+        { id: 'shopping', name: 'Shopping', icon: '🛍️', color: '#D0021B', isCustom: false, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
+        { id: 'entertainment', name: 'Entertainment', icon: '🎬', color: '#7ED321', isCustom: false, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
+        { id: 'healthcare', name: 'Healthcare', icon: '🏥', color: '#BD10E0', isCustom: false, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
+        { id: 'subscriptions', name: 'Subscriptions', icon: '📱', color: '#B8E986', isCustom: false, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
+        { id: 'other', name: 'Other', icon: '📄', color: '#8E8E93', isCustom: false, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
+      ];
+      setCategories(localCategories);
       
       // Set default selections
       if (fetchedWallets.length > 0 && !selectedWallet) {
         setSelectedWallet(fetchedWallets[0].id);
       }
-      if (expenseCategories.length > 0 && !selectedCategory) {
-        setSelectedCategory(expenseCategories[0].id);
+      if (localCategories.length > 0 && !selectedCategory) {
+        setSelectedCategory(localCategories[0].id);
       }
     } catch (error) {
       console.error('Error loading data for expense modal:', error);
+      // Fallback to local categories even if wallet fetch fails
+      const localCategories: LocalCategory[] = [
+        { id: 'food', name: 'Food', icon: '🍔', color: '#9013FE', isCustom: false, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
+        { id: 'utilities', name: 'Utilities', icon: '💡', color: '#F5A623', isCustom: false, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
+        { id: 'transport', name: 'Transport', icon: '🚗', color: '#4A90E2', isCustom: false, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
+        { id: 'shopping', name: 'Shopping', icon: '🛍️', color: '#D0021B', isCustom: false, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
+        { id: 'entertainment', name: 'Entertainment', icon: '🎬', color: '#7ED321', isCustom: false, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
+        { id: 'healthcare', name: 'Healthcare', icon: '🏥', color: '#BD10E0', isCustom: false, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
+        { id: 'subscriptions', name: 'Subscriptions', icon: '📱', color: '#B8E986', isCustom: false, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
+        { id: 'other', name: 'Other', icon: '📄', color: '#8E8E93', isCustom: false, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
+      ];
+      setCategories(localCategories);
+      if (localCategories.length > 0 && !selectedCategory) {
+        setSelectedCategory(localCategories[0].id);
+      }
     } finally {
       setLoading(false);
     }
@@ -189,7 +211,17 @@ const AddExpenseModal: React.FC<AddExpenseModalProps> = ({
           </TouchableOpacity>
         </View>
 
-        <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+        <KeyboardAvoidingView
+          style={styles.keyboardAvoidingView}
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
+        >
+          <ScrollView 
+            style={styles.content} 
+            showsVerticalScrollIndicator={false}
+            keyboardShouldPersistTaps="handled"
+            contentContainerStyle={{ paddingBottom: 20 }}
+          >
           {loading ? (
             <View style={styles.loadingContainer}>
               <ActivityIndicator size="large" color={theme.colors.primary} />
@@ -335,6 +367,7 @@ const AddExpenseModal: React.FC<AddExpenseModalProps> = ({
           </>
           )}
         </ScrollView>
+        </KeyboardAvoidingView>
 
         {showDatePicker && (
           <DateTimePicker
@@ -352,7 +385,10 @@ const AddExpenseModal: React.FC<AddExpenseModalProps> = ({
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F8F9FA',
+    backgroundColor: '#FFFFFF',
+  },
+  keyboardAvoidingView: {
+    flex: 1,
   },
   header: {
     flexDirection: 'row',

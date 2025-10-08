@@ -42,6 +42,7 @@ type NotificationAction =
   | { type: 'SET_PERMISSIONS'; payload: NotificationState['permissions'] }
   | { type: 'ADD_NOTIFICATION'; payload: InAppNotification }
   | { type: 'MARK_AS_READ'; payload: string }
+  | { type: 'MARK_AS_UNREAD'; payload: string }
   | { type: 'MARK_ALL_AS_READ' }
   | { type: 'REMOVE_NOTIFICATION'; payload: string }
   | { type: 'SET_NOTIFICATIONS'; payload: InAppNotification[] }
@@ -87,7 +88,10 @@ function notificationReducer(state: NotificationState, action: NotificationActio
         unreadCount: state.unreadCount + (action.payload.read ? 0 : 1),
       };
     
-    case 'MARK_AS_READ':
+    case 'MARK_AS_READ': {
+      const targetNotification = state.inAppNotifications.find(n => n.id === action.payload);
+      const wasUnread = targetNotification && !targetNotification.read;
+      
       return {
         ...state,
         inAppNotifications: state.inAppNotifications.map(notification =>
@@ -95,8 +99,24 @@ function notificationReducer(state: NotificationState, action: NotificationActio
             ? { ...notification, read: true }
             : notification
         ),
-        unreadCount: Math.max(0, state.unreadCount - 1),
+        unreadCount: wasUnread ? Math.max(0, state.unreadCount - 1) : state.unreadCount,
       };
+    }
+    
+    case 'MARK_AS_UNREAD': {
+      const targetNotification = state.inAppNotifications.find(n => n.id === action.payload);
+      const wasRead = targetNotification && targetNotification.read;
+      
+      return {
+        ...state,
+        inAppNotifications: state.inAppNotifications.map(notification =>
+          notification.id === action.payload
+            ? { ...notification, read: false }
+            : notification
+        ),
+        unreadCount: wasRead ? state.unreadCount + 1 : state.unreadCount,
+      };
+    }
     
     case 'MARK_ALL_AS_READ':
       return {
@@ -151,6 +171,7 @@ interface NotificationContextType {
   // In-app notification methods
   addNotification: (notification: Omit<InAppNotification, 'id' | 'timestamp'>) => void;
   markAsRead: (id: string) => void;
+  markAsUnread: (id: string) => void;
   markAllAsRead: () => void;
   removeNotification: (id: string) => void;
   
@@ -260,6 +281,10 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
     dispatch({ type: 'MARK_AS_READ', payload: id });
   };
 
+  const markAsUnread = (id: string) => {
+    dispatch({ type: 'MARK_AS_UNREAD', payload: id });
+  };
+
   const markAllAsRead = () => {
     dispatch({ type: 'MARK_ALL_AS_READ' });
   };
@@ -365,6 +390,7 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
     registerPushToken,
     addNotification,
     markAsRead,
+    markAsUnread,
     markAllAsRead,
     removeNotification,
     updatePreferences,

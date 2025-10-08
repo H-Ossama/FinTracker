@@ -23,6 +23,7 @@ import BorrowedMoneyDetailsModal from '../components/BorrowedMoneyDetailsModal';
 import AddBorrowedMoneyModal from '../components/AddBorrowedMoneyModal';
 import { useTheme } from '../contexts/ThemeContext';
 import { useLocalization } from '../contexts/LocalizationContext';
+import { useNotification } from '../contexts/NotificationContext';
 import borrowedMoneyService from '../services/borrowedMoneyService';
 import useSafeAreaHelper from '../hooks/useSafeAreaHelper';
 import { hybridDataService, HybridWallet, HybridTransaction } from '../services/hybridDataService';
@@ -31,6 +32,7 @@ const HomeScreen = () => {
   const navigation = useNavigation();
   const { theme } = useTheme();
   const { t, formatCurrency: formatCurrencyLoc } = useLocalization();
+  const { state: notificationState, addNotification } = useNotification();
   const { headerPadding } = useSafeAreaHelper();
   const [isBalanceVisible, setIsBalanceVisible] = useState(true);
   const [showAddExpenseModal, setShowAddExpenseModal] = useState(false);
@@ -54,7 +56,42 @@ const HomeScreen = () => {
   // Load all data
   useEffect(() => {
     loadAllData();
+    addSampleNotifications();
   }, []);
+
+  const addSampleNotifications = () => {
+    // Only add sample notifications if there are no existing notifications
+    if (notificationState.inAppNotifications.length === 0) {
+      // Add a test notification first
+      setTimeout(() => {
+        addNotification({
+          title: 'Testing',
+          message: 'This is a test notification to verify functionality works correctly.',
+          type: 'info',
+          read: false,
+        });
+      }, 500);
+
+      // Add other sample notifications
+      setTimeout(() => {
+        addNotification({
+          title: 'Welcome to FinTracker!',
+          message: 'Start tracking your finances and achieve your goals.',
+          type: 'success',
+          read: false,
+        });
+      }, 1000);
+
+      setTimeout(() => {
+        addNotification({
+          title: 'Budget Alert',
+          message: 'You have spent 80% of your dining budget this month.',
+          type: 'warning',
+          read: false,
+        });
+      }, 1500);
+    }
+  };
 
   const loadAllData = async () => {
     try {
@@ -407,7 +444,11 @@ const HomeScreen = () => {
     };
 
     return (
-      <View key={transaction.id} style={[styles.transactionItem, { borderBottomColor: theme.colors.border }]}>
+      <TouchableOpacity 
+        key={transaction.id} 
+        style={[styles.transactionItem, { borderBottomColor: theme.colors.border }]}
+        onPress={() => (navigation as any).navigate('TransactionsHistory')}
+      >
         <View style={styles.transactionLeft}>
           <View style={[styles.transactionIcon, { backgroundColor: theme.colors.background }]}>
             <Text style={styles.transactionEmoji}>
@@ -429,7 +470,7 @@ const HomeScreen = () => {
         ]}>
           {transaction.type === 'INCOME' ? '+' : transaction.type === 'TRANSFER' ? '↔' : ''}{formatCurrency(transaction.amount)}
         </Text>
-      </View>
+      </TouchableOpacity>
     );
   };
 
@@ -460,8 +501,18 @@ const HomeScreen = () => {
           {/* Header */}
           <View style={styles.header}>
             <Text style={[styles.greeting, { color: theme.colors.text }]}>{t('good_morning')}</Text>
-            <TouchableOpacity>
-              <Ionicons name="notifications-outline" size={24} color={theme.colors.text} />
+            <TouchableOpacity onPress={() => (navigation as any).navigate('NotificationCenter')}>
+              <View style={styles.notificationIconContainer}>
+                <Ionicons name="notifications-outline" size={24} color={theme.colors.text} />
+                {/* Show badge only if there are unread notifications */}
+                {notificationState.unreadCount > 0 && (
+                  <View style={[styles.notificationBadge, { backgroundColor: theme.colors.error }]}>
+                    <Text style={styles.notificationBadgeText}>
+                      {notificationState.unreadCount > 99 ? '99+' : notificationState.unreadCount.toString()}
+                    </Text>
+                  </View>
+                )}
+              </View>
             </TouchableOpacity>
           </View>
 
@@ -622,7 +673,7 @@ const HomeScreen = () => {
           <View style={styles.section}>
             <View style={styles.sectionHeader}>
               <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>{t('recent_transactions')}</Text>
-              <TouchableOpacity>
+              <TouchableOpacity onPress={() => (navigation as any).navigate('TransactionsHistory')}>
                 <Text style={styles.seeAllText}>See All</Text>
               </TouchableOpacity>
             </View>
@@ -713,6 +764,27 @@ const styles = StyleSheet.create({
     fontSize: 24,
     fontWeight: 'bold',
     color: '#333',
+  },
+  notificationIconContainer: {
+    position: 'relative',
+  },
+  notificationBadge: {
+    position: 'absolute',
+    top: -6,
+    right: -6,
+    backgroundColor: '#FF3B30',
+    borderRadius: 10,
+    minWidth: 20,
+    height: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: 'white',
+  },
+  notificationBadgeText: {
+    color: 'white',
+    fontSize: 12,
+    fontWeight: '600',
   },
   balanceCard: {
     backgroundColor: 'white',

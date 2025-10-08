@@ -9,6 +9,7 @@ import {
   TextInput,
   Alert,
   Platform,
+  KeyboardAvoidingView,
 } from 'react-native';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { Ionicons } from '@expo/vector-icons';
@@ -140,7 +141,16 @@ const AddBorrowedMoneyModal: React.FC<AddBorrowedMoneyModalProps> = ({
           </TouchableOpacity>
         </View>
 
-        <ScrollView style={styles.content}>
+        <KeyboardAvoidingView
+          style={styles.keyboardAvoidingView}
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
+        >
+          <ScrollView 
+            style={styles.content}
+            keyboardShouldPersistTaps="handled"
+            contentContainerStyle={{ paddingBottom: 20 }}
+          >
           {/* Person Details Section */}
           <View style={[styles.section, { backgroundColor: theme.colors.surface }]}>
             <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>
@@ -322,6 +332,7 @@ const AddBorrowedMoneyModal: React.FC<AddBorrowedMoneyModalProps> = ({
             </TouchableOpacity>
           </View>
         </ScrollView>
+        </KeyboardAvoidingView>
       </View>
     </Modal>
   );
@@ -329,6 +340,9 @@ const AddBorrowedMoneyModal: React.FC<AddBorrowedMoneyModalProps> = ({
 
 const styles = StyleSheet.create({
   container: {
+    flex: 1,
+  },
+  keyboardAvoidingView: {
     flex: 1,
   },
   header: {

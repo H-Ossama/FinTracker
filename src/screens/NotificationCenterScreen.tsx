@@ -9,6 +9,9 @@ import {
   RefreshControl,
   Switch,
   TextInput,
+  ScrollView,
+  KeyboardAvoidingView,
+  Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -56,8 +59,7 @@ interface NotificationPreferences {
 
 export default function NotificationCenterScreen() {
   const { isDark } = useTheme();
-  const { addNotification } = useNotification();
-  const [notifications, setNotifications] = useState<NotificationItem[]>([]);
+  const { state: notificationState, addNotification, markAsRead, markAsUnread, markAllAsRead, removeNotification } = useNotification();
   const [preferences, setPreferences] = useState<NotificationPreferences>({
     enablePushNotifications: true,
     enableEmailNotifications: false,
@@ -81,92 +83,21 @@ export default function NotificationCenterScreen() {
     testNotifications: true,
   });
   
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [activeTab, setActiveTab] = useState<'notifications' | 'preferences'>('notifications');
-  const [filterCategory, setFilterCategory] = useState<'all' | NotificationItem['category']>('all');
-  const [testNotificationText, setTestNotificationText] = useState('Test notification message');
+  const [filterCategory, setFilterCategory] = useState<'all' | 'info' | 'success' | 'warning' | 'error'>('all');
+  const [testNotificationText, setTestNotificationText] = useState('This is a test notification');
 
   const styles = createStyles(isDark);
 
+  // Use actual notifications from context
+  const notifications = notificationState.inAppNotifications;
+  const unreadCount = notificationState.unreadCount;
+
   useEffect(() => {
-    loadNotifications();
     loadPreferences();
   }, []);
-
-  const loadNotifications = async () => {
-    try {
-      setIsLoading(true);
-      // In a real app, this would load from backend
-      const mockNotifications: NotificationItem[] = [
-        {
-          id: '1',
-          title: 'Reminder: Monthly Budget Review',
-          message: 'Time to review your monthly spending and adjust budgets',
-          type: 'reminder',
-          timestamp: new Date(Date.now() - 2 * 60 * 60 * 1000), // 2 hours ago
-          isRead: false,
-          priority: 'high',
-          category: 'reminder',
-          actionData: { type: 'open_budget', id: 'budget_1' },
-        },
-        {
-          id: '2',
-          title: 'Smart Alert: High Spending',
-          message: 'You\'ve spent 80% of your dining budget this month',
-          type: 'warning',
-          timestamp: new Date(Date.now() - 6 * 60 * 60 * 1000), // 6 hours ago
-          isRead: true,
-          priority: 'medium',
-          category: 'budget',
-          actionData: { type: 'open_transaction', id: 'category_dining' },
-        },
-        {
-          id: '3',
-          title: 'Goal Achieved!',
-          message: 'Congratulations! You\'ve reached your emergency fund goal',
-          type: 'success',
-          timestamp: new Date(Date.now() - 24 * 60 * 60 * 1000), // 1 day ago
-          isRead: true,
-          priority: 'medium',
-          category: 'goal',
-          actionData: { type: 'open_goal', id: 'goal_emergency' },
-        },
-        {
-          id: '4',
-          title: 'New Transaction Added',
-          message: 'Groceries purchase of $45.67 added to Checking Account',
-          type: 'info',
-          timestamp: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000), // 2 days ago
-          isRead: true,
-          priority: 'low',
-          category: 'transaction',
-          actionData: { type: 'open_transaction', id: 'trans_123' },
-        },
-        {
-          id: '5',
-          title: 'Weekly Report Ready',
-          message: 'Your weekly financial summary is now available',
-          type: 'info',
-          timestamp: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000), // 3 days ago
-          isRead: false,
-          priority: 'low',
-          category: 'system',
-        },
-      ];
-      setNotifications(mockNotifications);
-    } catch (error) {
-      console.error('Error loading notifications:', error);
-      addNotification({
-        title: 'Error',
-        message: 'Failed to load notifications',
-        type: 'error',
-        read: false,
-      });
-    } finally {
-      setIsLoading(false);
-    }
-  };
 
   const loadPreferences = async () => {
     try {
@@ -179,27 +110,19 @@ export default function NotificationCenterScreen() {
 
   const onRefresh = async () => {
     setRefreshing(true);
-    await loadNotifications();
+    // Refresh notifications from context
     setRefreshing(false);
   };
 
-  const markAsRead = (notificationId: string) => {
-    setNotifications(prev =>
-      prev.map(notification =>
-        notification.id === notificationId
-          ? { ...notification, isRead: true }
-          : notification
-      )
-    );
+  const handleMarkAsRead = (notificationId: string) => {
+    markAsRead(notificationId);
   };
 
-  const markAllAsRead = () => {
-    setNotifications(prev =>
-      prev.map(notification => ({ ...notification, isRead: true }))
-    );
+  const handleMarkAllAsRead = () => {
+    markAllAsRead();
   };
 
-  const deleteNotification = (notificationId: string) => {
+  const handleDeleteNotification = (notificationId: string) => {
     Alert.alert(
       'Delete Notification',
       'Are you sure you want to delete this notification?',
@@ -209,9 +132,7 @@ export default function NotificationCenterScreen() {
           text: 'Delete',
           style: 'destructive',
           onPress: () => {
-            setNotifications(prev =>
-              prev.filter(notification => notification.id !== notificationId)
-            );
+            removeNotification(notificationId);
           },
         },
       ]
@@ -228,7 +149,10 @@ export default function NotificationCenterScreen() {
           text: 'Clear All',
           style: 'destructive',
           onPress: () => {
-            setNotifications([]);
+            // Clear all notifications using context
+            notifications.forEach(notification => {
+              removeNotification(notification.id);
+            });
           },
         },
       ]
@@ -238,11 +162,10 @@ export default function NotificationCenterScreen() {
   const sendTestNotification = async () => {
     try {
       const testNotification = {
-        title: 'Test Notification',
+        title: 'Testing',
         message: testNotificationText || 'This is a test notification',
         type: 'info' as const,
-        priority: 'medium' as const,
-        category: 'system' as const,
+        read: false,
       };
 
       // Send push notification
@@ -252,23 +175,8 @@ export default function NotificationCenterScreen() {
         { type: 'test' }
       );
 
-      // Add to in-app notifications
-      addNotification({
-        title: testNotification.title,
-        message: testNotification.message,
-        type: testNotification.type,
-        read: false,
-      });
-
-      // Add to notification list
-      const newNotification: NotificationItem = {
-        id: Date.now().toString(),
-        ...testNotification,
-        timestamp: new Date(),
-        isRead: false,
-      };
-
-      setNotifications(prev => [newNotification, ...prev]);
+      // Add to in-app notifications using context
+      addNotification(testNotification);
     } catch (error) {
       console.error('Error sending test notification:', error);
       addNotification({
@@ -334,12 +242,8 @@ export default function NotificationCenterScreen() {
     }
   };
 
-  const getNotificationIcon = (type: NotificationItem['type']): keyof typeof Ionicons.glyphMap => {
+  const getNotificationIcon = (type: typeof notifications[0]['type']): keyof typeof Ionicons.glyphMap => {
     switch (type) {
-      case 'reminder':
-        return 'time-outline';
-      case 'alert':
-        return 'warning-outline';
       case 'info':
         return 'information-circle-outline';
       case 'success':
@@ -353,12 +257,8 @@ export default function NotificationCenterScreen() {
     }
   };
 
-  const getNotificationColor = (type: NotificationItem['type']): string => {
+  const getNotificationColor = (type: typeof notifications[0]['type']): string => {
     switch (type) {
-      case 'reminder':
-        return '#3B82F6';
-      case 'alert':
-        return '#F59E0B';
       case 'info':
         return '#6B7280';
       case 'success':
@@ -372,31 +272,14 @@ export default function NotificationCenterScreen() {
     }
   };
 
-  const getPriorityColor = (priority: NotificationItem['priority']): string => {
-    switch (priority) {
-      case 'urgent':
-        return '#DC2626';
-      case 'high':
-        return '#EA580C';
-      case 'medium':
-        return '#CA8A04';
-      case 'low':
-        return '#65A30D';
-      default:
-        return '#6B7280';
-    }
-  };
-
   const filteredNotifications = notifications.filter(notification =>
-    filterCategory === 'all' || notification.category === filterCategory
+    filterCategory === 'all' || notification.type === filterCategory
   );
 
-  const unreadCount = notifications.filter(n => !n.isRead).length;
-
-  const renderNotificationItem = ({ item }: { item: NotificationItem }) => (
+  const renderNotificationItem = ({ item }: { item: typeof notifications[0] }) => (
     <TouchableOpacity
-      style={[styles.notificationItem, !item.isRead && styles.unreadNotification]}
-      onPress={() => markAsRead(item.id)}
+      style={[styles.notificationItem, !item.read && styles.unreadNotification]}
+      onPress={() => handleMarkAsRead(item.id)}
     >
       <View style={styles.notificationHeader}>
         <View style={styles.notificationIconContainer}>
@@ -412,14 +295,6 @@ export default function NotificationCenterScreen() {
               color={getNotificationColor(item.type)}
             />
           </View>
-          {item.priority === 'high' || item.priority === 'urgent' ? (
-            <View
-              style={[
-                styles.priorityDot,
-                { backgroundColor: getPriorityColor(item.priority) }
-              ]}
-            />
-          ) : null}
         </View>
 
         <View style={styles.notificationContent}>
@@ -435,21 +310,35 @@ export default function NotificationCenterScreen() {
             </Text>
             <View style={styles.notificationCategory}>
               <Text style={styles.categoryText}>
-                {item.category}
+                {item.type}
               </Text>
             </View>
           </View>
         </View>
 
         <View style={styles.notificationActions}>
-          {!item.isRead && (
+          {!item.read && (
             <View style={styles.unreadDot} />
           )}
           <TouchableOpacity
-            style={styles.deleteButton}
-            onPress={() => deleteNotification(item.id)}
+            style={styles.actionButton}
+            onPress={() => item.read ? markAsUnread(item.id) : markAsRead(item.id)}
           >
-            <Ionicons name="close" size={18} color={styles.deleteIcon.color} />
+            <Ionicons
+              name={item.read ? 'mail-outline' : 'mail-open-outline'}
+              size={16}
+              color={styles.actionIcon.color}
+            />
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.actionButton}
+            onPress={() => removeNotification(item.id)}
+          >
+            <Ionicons
+              name="trash-outline"
+              size={16}
+              color={styles.actionIcon.color}
+            />
           </TouchableOpacity>
         </View>
       </View>
@@ -461,26 +350,44 @@ export default function NotificationCenterScreen() {
       {/* Header */}
       <View style={styles.notificationsHeader}>
         <View style={styles.headerRow}>
-          <Text style={styles.sectionTitle}>
-            Notifications {unreadCount > 0 && `(${unreadCount} unread)`}
-          </Text>
-          
           <View style={styles.headerActions}>
-            {unreadCount > 0 && (
-              <TouchableOpacity
-                style={styles.headerButton}
-                onPress={markAllAsRead}
+            <TouchableOpacity
+              style={[styles.headerActionButton, styles.markAllButton]}
+              onPress={handleMarkAllAsRead}
+              disabled={unreadCount === 0}
+            >
+              <Ionicons
+                name="checkmark-done-outline"
+                size={16}
+                color={unreadCount === 0 ? (isDark ? '#6B7280' : '#9CA3AF') : '#10B981'}
+              />
+              <Text
+                style={[
+                  styles.headerActionText,
+                  { color: unreadCount === 0 ? (isDark ? '#6B7280' : '#9CA3AF') : '#10B981' },
+                ]}
               >
-                <Text style={styles.headerButtonText}>Mark all read</Text>
-              </TouchableOpacity>
-            )}
+                Mark All Read
+              </Text>
+            </TouchableOpacity>
             
             <TouchableOpacity
-              style={styles.headerButton}
+              style={[styles.headerActionButton, styles.clearAllButton]}
               onPress={clearAllNotificationsLocal}
+              disabled={filteredNotifications.length === 0}
             >
-              <Text style={[styles.headerButtonText, { color: '#EF4444' }]}>
-                Clear all
+              <Ionicons
+                name="trash-outline"
+                size={16}
+                color={filteredNotifications.length === 0 ? (isDark ? '#6B7280' : '#9CA3AF') : '#EF4444'}
+              />
+              <Text
+                style={[
+                  styles.headerActionText,
+                  { color: filteredNotifications.length === 0 ? (isDark ? '#6B7280' : '#9CA3AF') : '#EF4444' },
+                ]}
+              >
+                Clear All
               </Text>
             </TouchableOpacity>
           </View>
@@ -493,11 +400,10 @@ export default function NotificationCenterScreen() {
             showsHorizontalScrollIndicator={false}
             data={[
               { key: 'all', label: 'All' },
-              { key: 'transaction', label: 'Transactions' },
-              { key: 'budget', label: 'Budgets' },
-              { key: 'goal', label: 'Goals' },
-              { key: 'reminder', label: 'Reminders' },
-              { key: 'system', label: 'System' },
+              { key: 'info', label: 'Info' },
+              { key: 'success', label: 'Success' },
+              { key: 'warning', label: 'Warning' },
+              { key: 'error', label: 'Error' },
             ]}
             renderItem={({ item }) => (
               <TouchableOpacity
@@ -552,7 +458,11 @@ export default function NotificationCenterScreen() {
   );
 
   const renderPreferencesTab = () => (
-    <View style={styles.tabContent}>
+    <ScrollView 
+      style={styles.tabContent}
+      showsVerticalScrollIndicator={false}
+      contentContainerStyle={{ paddingBottom: 20 }}
+    >
       <Text style={styles.sectionTitle}>Notification Preferences</Text>
 
       <View style={styles.preferencesContainer}>
@@ -658,14 +568,16 @@ export default function NotificationCenterScreen() {
           </View>
         </View>
       </View>
-    </View>
+    </ScrollView>
   );
 
   return (
     <SafeAreaView style={styles.container}>
       {/* Header */}
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>Notifications</Text>
+        <Text style={styles.headerTitle}>
+          Notifications {unreadCount > 0 && `(${unreadCount})`}
+        </Text>
       </View>
 
       {/* Tab Navigation */}
@@ -723,7 +635,13 @@ export default function NotificationCenterScreen() {
       </View>
 
       {/* Content */}
-      {activeTab === 'notifications' ? renderNotificationsTab() : renderPreferencesTab()}
+      <KeyboardAvoidingView
+        style={styles.keyboardAvoidingView}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
+      >
+        {activeTab === 'notifications' ? renderNotificationsTab() : renderPreferencesTab()}
+      </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }
@@ -733,6 +651,9 @@ function createStyles(isDark: boolean) {
     container: {
       flex: 1,
       backgroundColor: isDark ? '#1F2937' : '#F9FAFB',
+    },
+    keyboardAvoidingView: {
+      flex: 1,
     },
     header: {
       paddingHorizontal: 20,
@@ -806,9 +727,10 @@ function createStyles(isDark: boolean) {
     },
     headerRow: {
       flexDirection: 'row',
-      justifyContent: 'space-between',
+      justifyContent: 'center',
       alignItems: 'center',
-      marginBottom: 12,
+      marginBottom: 16,
+      paddingHorizontal: 4,
     },
     sectionTitle: {
       fontSize: 18,
@@ -818,6 +740,32 @@ function createStyles(isDark: boolean) {
     headerActions: {
       flexDirection: 'row',
       gap: 12,
+      justifyContent: 'center',
+      width: '100%',
+    },
+    headerActionButton: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      paddingHorizontal: 16,
+      paddingVertical: 8,
+      borderRadius: 20,
+      backgroundColor: isDark ? '#4B5563' : '#F3F4F6',
+      minWidth: 100,
+      justifyContent: 'center',
+    },
+    markAllButton: {
+      maxWidth: 140,
+    },
+    clearAllButton: {
+      maxWidth: 120,
+    },
+    headerActionText: {
+      fontSize: 13,
+      fontWeight: '500',
+      marginLeft: 6,
+      color: isDark ? '#D1D5DB' : '#6B7280',
+      textAlign: 'center',
+      flexShrink: 1,
     },
     headerButton: {
       paddingHorizontal: 12,
@@ -1045,7 +993,16 @@ function createStyles(isDark: boolean) {
     testButtonText: {
       color: '#FFFFFF',
       fontSize: 14,
-      fontWeight: '600',
+      fontWeight: '500',
+    },
+    actionButton: {
+      padding: 8,
+      borderRadius: 16,
+      backgroundColor: isDark ? '#4B5563' : '#F3F4F6',
+      marginLeft: 8,
+    },
+    actionIcon: {
+      color: isDark ? '#9CA3AF' : '#6B7280',
     },
   });
 }

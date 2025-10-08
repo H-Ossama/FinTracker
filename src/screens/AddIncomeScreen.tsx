@@ -7,6 +7,8 @@ import {
   TouchableOpacity,
   TextInput,
   Alert,
+  KeyboardAvoidingView,
+  Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -124,7 +126,17 @@ const AddIncomeScreen: React.FC<AddIncomeScreenProps> = ({ navigation }) => {
           </TouchableOpacity>
         </View>
 
-        <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+        <KeyboardAvoidingView
+          style={styles.keyboardAvoidingView}
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
+        >
+          <ScrollView 
+            style={styles.content} 
+            showsVerticalScrollIndicator={false}
+            keyboardShouldPersistTaps="handled"
+            contentContainerStyle={{ paddingBottom: 20 }}
+          >
           {/* Amount Input */}
           <View style={styles.section}>
             <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>Amount</Text>
@@ -321,6 +333,7 @@ const AddIncomeScreen: React.FC<AddIncomeScreenProps> = ({ navigation }) => {
             </View>
           </View>
         </ScrollView>
+        </KeyboardAvoidingView>
 
         {showDatePicker && (
           <DateTimePicker
@@ -338,7 +351,10 @@ const AddIncomeScreen: React.FC<AddIncomeScreenProps> = ({ navigation }) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F8F9FA',
+    backgroundColor: '#F5F7FA',
+  },
+  keyboardAvoidingView: {
+    flex: 1,
   },
   gradient: {
     flex: 1,

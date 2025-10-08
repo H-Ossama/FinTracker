@@ -8,6 +8,8 @@ import {
   TextInput,
   ScrollView,
   Dimensions,
+  KeyboardAvoidingView,
+  Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import DateTimePicker from '@react-native-community/datetimepicker';
@@ -138,7 +140,17 @@ const AddIncomeModal: React.FC<AddIncomeModalProps> = ({
           </TouchableOpacity>
         </View>
 
-        <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+        <KeyboardAvoidingView
+          style={styles.keyboardAvoidingView}
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
+        >
+          <ScrollView 
+            style={styles.content} 
+            showsVerticalScrollIndicator={false}
+            keyboardShouldPersistTaps="handled"
+            contentContainerStyle={{ paddingBottom: 20 }}
+          >
           {/* Amount Input */}
           <View style={styles.section}>
             <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>Amount</Text>
@@ -275,6 +287,7 @@ const AddIncomeModal: React.FC<AddIncomeModalProps> = ({
             />
           </View>
         </ScrollView>
+        </KeyboardAvoidingView>
 
         {showDatePicker && (
           <DateTimePicker
@@ -292,7 +305,10 @@ const AddIncomeModal: React.FC<AddIncomeModalProps> = ({
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F8F9FA',
+    backgroundColor: '#FFFFFF',
+  },
+  keyboardAvoidingView: {
+    flex: 1,
   },
   header: {
     flexDirection: 'row',

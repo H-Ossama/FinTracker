@@ -10,6 +10,7 @@ import {
   Switch,
   StyleSheet,
   Platform,
+  KeyboardAvoidingView,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import DateTimePicker from '@react-native-community/datetimepicker';
@@ -206,7 +207,17 @@ export default function AddReminderModal({
           </TouchableOpacity>
         </View>
 
-        <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+        <KeyboardAvoidingView
+          style={styles.keyboardAvoidingView}
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
+        >
+          <ScrollView 
+            style={styles.content} 
+            showsVerticalScrollIndicator={false}
+            keyboardShouldPersistTaps="handled"
+            contentContainerStyle={{ paddingBottom: 20 }}
+          >
           {/* Title */}
           <View style={styles.section}>
             <Text style={styles.label}>Title *</Text>
@@ -409,6 +420,7 @@ export default function AddReminderModal({
             </Text>
           </View>
         </ScrollView>
+        </KeyboardAvoidingView>
 
         {/* Date/Time Pickers */}
         {(showDatePicker || showTimePicker) && (
@@ -429,6 +441,9 @@ function createStyles(isDark: boolean) {
     container: {
       flex: 1,
       backgroundColor: isDark ? '#1F2937' : '#F9FAFB',
+    },
+    keyboardAvoidingView: {
+      flex: 1,
     },
     header: {
       flexDirection: 'row',

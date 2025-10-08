@@ -13,7 +13,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import AddWalletModal from '../components/AddWalletModal';
-import AddIncomeModal from '../components/AddIncomeModal';
+import AddMoneyModal from '../components/AddMoneyModal';
 import TransferModal from '../components/TransferModal';
 import { useTheme } from '../contexts/ThemeContext';
 import { useLocalization } from '../contexts/LocalizationContext';
@@ -91,18 +91,27 @@ const WalletScreen = () => {
     }
   };
 
-  const handleAddMoney = async (incomeData: any) => {
+  const handleAddMoney = async (moneyData: any) => {
     try {
-      console.log('Adding money to wallet:', selectedWalletForMoney?.id, incomeData);
+      // Use the walletId from moneyData if available, otherwise fall back to selectedWalletForMoney
+      const targetWalletId = moneyData.walletId || selectedWalletForMoney?.id;
+      const targetWallet = wallets.find(w => w.id === targetWalletId) || selectedWalletForMoney;
+      
+      if (!targetWalletId || !targetWallet) {
+        Alert.alert('Error', 'Please select a wallet to add money to.');
+        return;
+      }
+
+      console.log('Adding money to wallet:', targetWalletId, moneyData);
       
       // Add income transaction and update wallet balance
       await hybridDataService.createTransaction({
-        description: incomeData.title,
-        amount: incomeData.amount,
+        description: moneyData.title,
+        amount: moneyData.amount,
         type: 'INCOME',
-        walletId: selectedWalletForMoney?.id,
-        date: incomeData.date,
-        notes: incomeData.description || ''
+        walletId: targetWalletId,
+        date: moneyData.date,
+        notes: moneyData.description || ''
       });
 
       console.log('Money added successfully');
@@ -112,7 +121,7 @@ const WalletScreen = () => {
       // Refresh the wallet list to show updated balance
       await loadWallets();
       
-      Alert.alert('Success', `${formatCurrency(incomeData.amount)} added to ${selectedWalletForMoney?.name}!`);
+      Alert.alert('Success', `${formatCurrency(moneyData.amount)} added to ${targetWallet.name}!`);
     } catch (error) {
       console.error('Error adding money:', error);
       Alert.alert('Error', 'Failed to add money. Please try again.');
@@ -299,7 +308,18 @@ const WalletScreen = () => {
                 </View>
                 <Text style={[styles.quickActionText, { color: theme.colors.text }]}>Transfer</Text>
               </TouchableOpacity>
-              <TouchableOpacity style={styles.quickActionButton}>
+              <TouchableOpacity 
+                style={styles.quickActionButton}
+                onPress={() => {
+                  if (wallets.length === 0) {
+                    Alert.alert('No Wallets', 'Please create a wallet first before adding money.');
+                  } else {
+                    // Always allow wallet selection for quick action
+                    setSelectedWalletForMoney(null); // No pre-selection
+                    setShowAddMoneyModal(true);
+                  }
+                }}
+              >
                 <View style={[styles.quickActionIcon, { backgroundColor: '#7ED321' }]}>
                   <Ionicons name="add" size={20} color="white" />
                 </View>
@@ -350,14 +370,17 @@ const WalletScreen = () => {
           onAddWallet={handleAddWallet}
         />
 
-        {/* Add Income Modal for Adding Money */}
-        <AddIncomeModal
+        {/* Add Money Modal */}
+        <AddMoneyModal
           visible={showAddMoneyModal}
           onClose={() => {
             setShowAddMoneyModal(false);
             setSelectedWalletForMoney(null);
           }}
-          onAddIncome={handleAddMoney}
+          onAddMoney={handleAddMoney}
+          selectedWallet={selectedWalletForMoney}
+          availableWallets={wallets}
+          allowWalletSelection={!selectedWalletForMoney}
         />
       </LinearGradient>
     </SafeAreaView>

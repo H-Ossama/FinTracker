@@ -91,14 +91,29 @@ const API = {
       throw new Error('Invalid email or password');
     }
     
-    // Mock successful login
-    const user: User = {
+    // Try to get existing user data from storage
+    let existingUser: User | null = null;
+    try {
+      const userData = await AsyncStorage.getItem(STORAGE_KEYS.USER_DATA);
+      if (userData) {
+        existingUser = JSON.parse(userData);
+      }
+    } catch (error) {
+      console.log('No existing user data found');
+    }
+    
+    // Mock successful login - use existing user data if available, otherwise create default
+    const user: User = existingUser || {
       id: 'user123',
       email,
-      name: 'John Doe',
+      name: 'John Doe', // Default name only for new users
       createdAt: '2024-01-01T00:00:00Z',
       lastLogin: new Date().toISOString(),
     };
+    
+    // Always update the last login time
+    user.lastLogin = new Date().toISOString();
+    user.email = email; // Update email in case it changed
     
     return {
       user,

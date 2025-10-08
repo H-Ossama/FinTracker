@@ -9,6 +9,7 @@ import SwipeableBottomTabNavigator from './src/components/SwipeableBottomTabNavi
 import AddIncomeScreen from './src/screens/AddIncomeScreen';
 import RemindersScreen from './src/screens/RemindersScreen';
 import BorrowedMoneyHistoryScreen from './src/screens/BorrowedMoneyHistoryScreen';
+import TransactionsHistoryScreen from './src/screens/TransactionsHistoryScreen';
 import NotificationCenterScreen from './src/screens/NotificationCenterScreen';
 import SignUpScreen from './src/screens/SignUpScreen';
 import SignInScreen from './src/screens/SignInScreen';
@@ -53,6 +54,13 @@ const AppNavigator = () => {
             <Stack.Screen 
               name="BorrowedMoneyHistory" 
               component={BorrowedMoneyHistoryScreen}
+              options={{ 
+                headerShown: false,
+              }}
+            />
+            <Stack.Screen 
+              name="TransactionsHistory" 
+              component={TransactionsHistoryScreen}
               options={{ 
                 headerShown: false,
               }}
