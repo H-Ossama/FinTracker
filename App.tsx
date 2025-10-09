@@ -14,6 +14,9 @@ import NotificationCenterScreen from './src/screens/NotificationCenterScreen';
 import SignUpScreen from './src/screens/SignUpScreen';
 import SignInScreen from './src/screens/SignInScreen';
 import UserProfileScreen from './src/screens/UserProfileScreen';
+import SavingsGoalsScreen from './src/screens/SavingsGoalsScreen';
+import QuickSettingsScreen from './src/screens/QuickSettingsScreen';
+import AppLockSettingsScreen from './src/screens/AppLockSettingsScreen';
 import { ThemeProvider, useTheme } from './src/contexts/ThemeContext';
 import { LocalizationProvider } from './src/contexts/LocalizationContext';
 import { AuthProvider, useAuth } from './src/contexts/AuthContext';
@@ -76,6 +79,29 @@ const AppNavigator = () => {
             <Stack.Screen 
               name="UserProfile" 
               component={UserProfileScreen}
+              options={{ 
+                headerShown: false,
+                presentation: 'modal',
+              }}
+            />
+            <Stack.Screen 
+              name="SavingsGoals" 
+              component={SavingsGoalsScreen}
+              options={{ 
+                headerShown: false,
+              }}
+            />
+            <Stack.Screen 
+              name="QuickSettings" 
+              component={QuickSettingsScreen}
+              options={{ 
+                headerShown: false,
+                presentation: 'modal',
+              }}
+            />
+            <Stack.Screen 
+              name="AppLockSettings" 
+              component={AppLockSettingsScreen}
               options={{ 
                 headerShown: false,
                 presentation: 'modal',

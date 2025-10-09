@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -6,31 +6,163 @@ import {
   ScrollView,
   TouchableOpacity,
   Switch,
-  Modal,
   Image,
+  Alert,
+  ActionSheetIOS,
+  Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
-import { mockGoals, mockReminders } from '../data/mockData';
+import { mockReminders } from '../data/mockData';
 import { useTheme } from '../contexts/ThemeContext';
-import { useLocalization, Language, Currency } from '../contexts/LocalizationContext';
+import { useLocalization } from '../contexts/LocalizationContext';
 import { useAuth } from '../contexts/AuthContext';
 import { useNavigation } from '@react-navigation/native';
 import { SyncSettingsModal } from '../components/SyncSettingsModal';
 import { notificationService } from '../services/notificationService';
+import { GoalsService } from '../services/goalsService';
+import { reminderService } from '../services/reminderService';
+import { Goal } from '../types';
+import { Reminder } from './RemindersScreen';
 
 const MoreScreen = () => {
-  const { theme, isDark, toggleTheme } = useTheme();
-  const { language, currency, setLanguage, setCurrency, t, formatCurrency } = useLocalization();
+  const { theme } = useTheme();
+  const { formatCurrency } = useLocalization();
   const { user, isAuthenticated, biometricEnabled } = useAuth();
   const navigation = useNavigation();
   const [isBalanceMasked, setIsBalanceMasked] = useState(false);
-  const [showLanguageModal, setShowLanguageModal] = useState(false);
-  const [showCurrencyModal, setShowCurrencyModal] = useState(false);
   const [showSyncModal, setShowSyncModal] = useState(false);
+  const [goals, setGoals] = useState<Goal[]>([]);
+  const [goalsLoading, setGoalsLoading] = useState(true);
+  const [enhancedReminders, setEnhancedReminders] = useState<Reminder[]>([]);
+  const [remindersLoading, setRemindersLoading] = useState(true);
 
   const styles = createStyles(theme);
+
+  useEffect(() => {
+    loadGoals();
+    loadReminders();
+  }, []);
+
+  const loadGoals = async () => {
+    try {
+      setGoalsLoading(true);
+      const goalsData = await GoalsService.getAllGoals();
+      setGoals(goalsData);
+    } catch (error) {
+      console.error('Error loading goals:', error);
+    } finally {
+      setGoalsLoading(false);
+    }
+  };
+
+  const loadReminders = async () => {
+    try {
+      setRemindersLoading(true);
+      // Mock enhanced reminders data for demo
+      const mockEnhancedReminders: Reminder[] = [
+        {
+          id: '1',
+          title: 'Monthly Rent',
+          description: 'Pay monthly rent',
+          amount: 1200,
+          dueDate: new Date(2025, 9, 15),
+          frequency: 'MONTHLY',
+          status: 'PENDING',
+          isActive: true,
+          isRecurring: true,
+          autoCreateTransaction: true,
+          transactionType: 'EXPENSE',
+          walletId: 'wallet1',
+          categoryId: 'category1',
+          notifyBefore: 60,
+          enablePushNotification: true,
+          enableEmailNotification: false,
+          completedCount: 8,
+          nextDue: new Date(2025, 10, 15),
+          category: {
+            id: 'category1',
+            name: 'Housing',
+            icon: 'home',
+            color: '#3B82F6',
+          },
+        },
+        {
+          id: '2',
+          title: 'Gym Membership',
+          description: 'Monthly gym payment',
+          amount: 45,
+          dueDate: new Date(2025, 9, 20),
+          frequency: 'MONTHLY',
+          status: 'OVERDUE',
+          isActive: true,
+          isRecurring: true,
+          autoCreateTransaction: false,
+          notifyBefore: 120,
+          enablePushNotification: true,
+          enableEmailNotification: false,
+          completedCount: 3,
+          category: {
+            id: 'category2',
+            name: 'Health & Fitness',
+            icon: 'fitness',
+            color: '#10B981',
+          },
+        },
+        {
+          id: '3',
+          title: 'Weekly Groceries',
+          description: 'Grocery shopping reminder',
+          dueDate: new Date(2025, 9, 12),
+          frequency: 'WEEKLY',
+          status: 'PENDING',
+          isActive: true,
+          isRecurring: true,
+          autoCreateTransaction: false,
+          notifyBefore: 30,
+          enablePushNotification: true,
+          enableEmailNotification: false,
+          completedCount: 15,
+          nextDue: new Date(2025, 9, 19),
+          category: {
+            id: 'category3',
+            name: 'Groceries',
+            icon: 'basket',
+            color: '#F59E0B',
+          },
+        },
+        {
+          id: '4',
+          title: 'Quarterly Insurance',
+          description: 'Car insurance payment',
+          amount: 350,
+          dueDate: new Date(2025, 11, 1),
+          frequency: 'QUARTERLY',
+          status: 'PENDING',
+          isActive: true,
+          isRecurring: true,
+          autoCreateTransaction: true,
+          transactionType: 'EXPENSE',
+          notifyBefore: 7 * 24 * 60, // 7 days before
+          enablePushNotification: true,
+          enableEmailNotification: true,
+          completedCount: 2,
+          category: {
+            id: 'category4',
+            name: 'Insurance',
+            icon: 'shield-checkmark',
+            color: '#8B5CF6',
+          },
+        },
+      ];
+      setEnhancedReminders(mockEnhancedReminders);
+    } catch (error) {
+      console.error('Error loading reminders:', error);
+    } finally {
+      setRemindersLoading(false);
+    }
+  };
 
   const getInitials = (name: string) => {
     return name
@@ -47,17 +179,51 @@ const MoreScreen = () => {
     }
   };
 
-  const handleTestNotification = async () => {
-    try {
-      await notificationService.scheduleLocalNotification(
-        '🎉 Test Notification',
-        'This is a test notification from FinTracker! Local notifications are working perfectly.',
-        { test: true, screen: 'MoreScreen' },
-        { seconds: 2 } as any // Trigger in 2 seconds
+  const handleSettingsPress = () => {
+    navigation.navigate('QuickSettings' as never);
+  };
+
+  const handleManageReminders = () => {
+    const options = [
+      'View All Reminders',
+      'Add New Reminder',
+      'Reminder Settings',
+      'Cancel'
+    ];
+    
+    const actions = [
+      () => navigation.navigate('Reminders' as never),
+      () => navigation.navigate('Reminders' as never), // Will trigger add modal
+      () => navigation.navigate('NotificationCenter' as never),
+      () => {}, // Cancel
+    ];
+
+    if (Platform.OS === 'ios') {
+      ActionSheetIOS.showActionSheetWithOptions(
+        {
+          options,
+          cancelButtonIndex: options.length - 1,
+          title: 'Manage Reminders',
+          message: 'Choose an action for your reminders',
+        },
+        (buttonIndex) => {
+          if (buttonIndex < actions.length - 1) {
+            actions[buttonIndex]();
+          }
+        }
       );
-      console.log('✅ Test notification scheduled successfully');
-    } catch (error) {
-      console.error('❌ Error sending test notification:', error);
+    } else {
+      // Android Alert fallback
+      Alert.alert(
+        'Manage Reminders',
+        'Choose an action',
+        [
+          { text: 'View All', onPress: actions[0] },
+          { text: 'Add New', onPress: actions[1] },
+          { text: 'Settings', onPress: actions[2] },
+          { text: 'Cancel', style: 'cancel' },
+        ]
+      );
     }
   };
 
@@ -68,18 +234,18 @@ const MoreScreen = () => {
         {
           id: 'goals',
           title: 'Savings Goals',
-          subtitle: `${mockGoals.length} active goals`,
+          subtitle: `${goals.length} active goals`,
           icon: 'flag',
           color: '#4A90E2',
-          badge: mockGoals.length.toString(),
+          badge: goals.length.toString(),
         },
         {
           id: 'reminders',
           title: 'Payment Reminders',
-          subtitle: `${mockReminders.filter(r => !r.isPaid).length} upcoming`,
+          subtitle: `${enhancedReminders.filter(r => r.status === 'PENDING' || r.status === 'OVERDUE').length} upcoming`,
           icon: 'alarm',
           color: '#FF9500',
-          badge: mockReminders.filter(r => !r.isPaid).length.toString(),
+          badge: enhancedReminders.filter(r => r.status === 'PENDING' || r.status === 'OVERDUE').length.toString(),
         },
         {
           id: 'bills',
@@ -123,65 +289,6 @@ const MoreScreen = () => {
         },
       ],
     },
-    {
-      title: 'Account & Settings',
-      items: [
-        {
-          id: 'account',
-          title: 'Account Settings',
-          subtitle: 'Profile, security, privacy',
-          icon: 'person-circle',
-          color: '#007AFF',
-        },
-        {
-          id: 'privacy',
-          title: 'Privacy & Security',
-          subtitle: 'App lock, biometrics',
-          icon: 'shield-checkmark',
-          color: '#FF3B30',
-        },
-        {
-          id: 'notifications',
-          title: 'Notifications',
-          subtitle: 'Manage alerts • Tap to test',
-          icon: 'notifications',
-          color: '#5AC8FA',
-        },
-        {
-          id: 'appearance',
-          title: 'Appearance',
-          subtitle: 'Theme settings',
-          icon: 'color-palette',
-          color: '#AF52DE',
-        },
-      ],
-    },
-    {
-      title: 'Support',
-      items: [
-        {
-          id: 'help',
-          title: 'Help Center',
-          subtitle: 'FAQs and guides',
-          icon: 'help-circle',
-          color: '#8E8E93',
-        },
-        {
-          id: 'contact',
-          title: 'Contact Support',
-          subtitle: 'Get help from our team',
-          icon: 'mail',
-          color: '#007AFF',
-        },
-        {
-          id: 'about',
-          title: 'About FinTracker',
-          subtitle: 'Version 1.0.0',
-          icon: 'information-circle',
-          color: '#6D6D70',
-        },
-      ],
-    },
   ];
 
   const renderMenuItem = (item: any) => (
@@ -189,17 +296,12 @@ const MoreScreen = () => {
       key={item.id} 
       style={styles.menuItem}
       onPress={() => {
-        if (item.id === 'account') {
-          handleProfilePress();
-        } else if (item.id === 'backup') {
+        if (item.id === 'backup') {
           setShowSyncModal(true);
         } else if (item.id === 'reminders') {
           navigation.navigate('Reminders' as never);
-        } else if (item.id === 'notifications') {
-          // Test notification functionality
-          handleTestNotification();
-          // Also navigate to notification center
-          navigation.navigate('NotificationCenter' as never);
+        } else if (item.id === 'goals') {
+          navigation.navigate('SavingsGoals' as never);
         }
         // Add other navigation handlers here as needed
       }}
@@ -224,55 +326,150 @@ const MoreScreen = () => {
     </TouchableOpacity>
   );
 
-  const renderGoalCard = (goal: any) => {
-    const progress = (goal.currentAmount / goal.targetAmount) * 100;
+  const renderGoalCard = (goal: Goal) => {
+    const progress = Math.min((goal.currentAmount / goal.targetAmount) * 100, 100);
+    const isCompleted = goal.currentAmount >= goal.targetAmount;
     
     return (
-      <View key={goal.id} style={styles.goalCard}>
+      <TouchableOpacity 
+        key={goal.id} 
+        style={styles.goalCard}
+        onPress={() => navigation.navigate('SavingsGoals' as never)}
+      >
         <View style={styles.goalHeader}>
-          <Text style={styles.goalTitle}>{goal.title}</Text>
-          <Text style={styles.goalProgress}>{progress.toFixed(0)}%</Text>
+          <Text style={styles.goalTitle} numberOfLines={2} ellipsizeMode="tail">
+            {goal.title}
+          </Text>
+          <Text style={[styles.goalProgress, { 
+            color: isCompleted ? '#34C759' : '#4A90E2' 
+          }]}>
+            {progress.toFixed(0)}%
+          </Text>
         </View>
         <View style={styles.goalAmounts}>
-          <Text style={[styles.goalCurrent, { color: theme.colors.text }]}>{formatCurrency(goal.currentAmount)}</Text>
-          <Text style={[styles.goalTarget, { color: theme.colors.textSecondary }]}>of {formatCurrency(goal.targetAmount)}</Text>
+          <Text style={[styles.goalCurrent, { color: theme.colors.text }]} numberOfLines={1}>
+            {formatCurrency(goal.currentAmount)}
+          </Text>
+          <Text style={[styles.goalTarget, { color: theme.colors.textSecondary }]} numberOfLines={1}>
+            of {formatCurrency(goal.targetAmount)}
+          </Text>
         </View>
         <View style={styles.progressBar}>
-          <View style={[styles.progressFill, { width: `${progress}%` }]} />
+          <View style={[styles.progressFill, { 
+            width: `${progress}%`,
+            backgroundColor: isCompleted ? '#34C759' : '#4A90E2'
+          }]} />
         </View>
-        <Text style={[styles.goalDate, { color: theme.colors.textSecondary }]}>Target: {goal.targetDate}</Text>
-      </View>
+        <View style={styles.goalFooter}>
+          <Text style={[styles.goalDate, { color: theme.colors.textSecondary }]} numberOfLines={1} adjustsFontSizeToFit>
+            Target: {goal.targetDate}
+          </Text>
+          <Text style={[styles.goalCategory, { color: '#4A90E2' }]} numberOfLines={1} adjustsFontSizeToFit>
+            {goal.category}
+          </Text>
+        </View>
+        {isCompleted && (
+          <View style={styles.completedIndicator}>
+            <Ionicons name="checkmark-circle" size={12} color="#34C759" />
+            <Text style={styles.completedText}>Completed</Text>
+          </View>
+        )}
+      </TouchableOpacity>
     );
   };
 
-  const renderReminderCard = (reminder: any) => (
-    <View key={reminder.id} style={styles.reminderCard}>
-      <View style={styles.reminderLeft}>
-        <View style={[styles.reminderIcon, { backgroundColor: reminder.isPaid ? '#7ED321' : '#FF9500' }]}>
-          <Ionicons 
-            name={reminder.isPaid ? 'checkmark' : 'time'} 
-            size={16} 
-            color="white" 
-          />
+  const renderEnhancedReminderCard = (reminder: Reminder, index: number) => {
+    const isOverdue = reminder.status === 'OVERDUE' || 
+      (reminder.status === 'PENDING' && new Date(reminder.dueDate) < new Date());
+    const isPending = reminder.status === 'PENDING';
+    const isCompleted = reminder.status === 'COMPLETED';
+    
+    const formatDateDistance = (date: Date): string => {
+      const now = new Date();
+      const diffTime = date.getTime() - now.getTime();
+      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+      
+      if (diffDays === 0) return 'Today';
+      if (diffDays === 1) return 'Tomorrow';
+      if (diffDays === -1) return 'Yesterday';
+      if (diffDays > 1) return `In ${diffDays} days`;
+      return `${Math.abs(diffDays)} days ago`;
+    };
+    
+    const getStatusColor = () => {
+      if (isOverdue) return '#EF4444';
+      if (isPending) return '#F59E0B';
+      if (isCompleted) return '#10B981';
+      return '#6B7280';
+    };
+    
+    const getStatusIcon = () => {
+      if (isOverdue) return 'warning';
+      if (isPending) return 'time';
+      if (isCompleted) return 'checkmark-circle';
+      return 'time';
+    };
+    
+    return (
+      <TouchableOpacity 
+        key={reminder.id} 
+        style={[styles.enhancedReminderCard, { borderLeftColor: getStatusColor() }]}
+        onPress={() => navigation.navigate('Reminders' as never)}
+      >
+        <View style={styles.reminderCardHeader}>
+          <View style={styles.reminderTitleContainer}>
+            <View style={[styles.reminderStatusIcon, { backgroundColor: getStatusColor() }]}>
+              <Ionicons name={getStatusIcon() as any} size={14} color="white" />
+            </View>
+            <View style={styles.reminderTitleContent}>
+              <Text style={[styles.enhancedReminderTitle, { color: theme.colors.text }]} numberOfLines={1}>
+                {reminder.title}
+              </Text>
+              <Text style={[styles.reminderFrequency, { color: theme.colors.textSecondary }]}>
+                {reminder.frequency.toLowerCase()} • {formatDateDistance(new Date(reminder.dueDate))}
+              </Text>
+            </View>
+          </View>
+          {reminder.amount && (
+            <Text style={[styles.enhancedReminderAmount, { color: theme.colors.text }]}>
+              {formatCurrency(reminder.amount)}
+            </Text>
+          )}
         </View>
-        <View>
-          <Text style={[styles.reminderTitle, { color: theme.colors.text }]}>{reminder.title}</Text>
-          <Text style={[styles.reminderDate, { color: theme.colors.textSecondary }]}>Due: {reminder.nextDue}</Text>
-        </View>
-      </View>
-      <View style={styles.reminderRight}>
-        <Text style={[styles.reminderAmount, { color: theme.colors.text }]}>{formatCurrency(reminder.amount)}</Text>
-        <Text style={[styles.reminderStatus, { 
-          color: reminder.isPaid ? '#7ED321' : '#FF9500' 
-        }]}>
-          {reminder.isPaid ? 'Paid' : 'Pending'}
-        </Text>
-      </View>
-    </View>
-  );
+        
+        {reminder.category && (
+          <View style={styles.reminderCategoryContainer}>
+            <View style={[styles.reminderCategoryIcon, { backgroundColor: reminder.category.color + '20' }]}>
+              <Ionicons 
+                name={reminder.category.icon as any} 
+                size={12} 
+                color={reminder.category.color} 
+              />
+            </View>
+            <Text style={[styles.reminderCategoryName, { color: theme.colors.textSecondary }]}>
+              {reminder.category.name}
+            </Text>
+            {reminder.isRecurring && (
+              <View style={styles.recurringBadge}>
+                <Ionicons name="repeat" size={10} color="#8B5CF6" />
+                <Text style={styles.recurringText}>Recurring</Text>
+              </View>
+            )}
+          </View>
+        )}
+        
+        {isOverdue && (
+          <View style={styles.overdueIndicator}>
+            <Ionicons name="warning" size={12} color="#EF4444" />
+            <Text style={styles.overdueText}>Overdue</Text>
+          </View>
+        )}
+      </TouchableOpacity>
+    );
+  };
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: theme.colors.background }]}>
+    <SafeAreaView style={[styles.container, { backgroundColor: theme.colors.background }]} edges={['top', 'bottom']}>
       <LinearGradient
         colors={[theme.colors.gradientStart, theme.colors.gradientEnd]}
         style={styles.gradient}
@@ -281,7 +478,7 @@ const MoreScreen = () => {
           {/* Header */}
           <View style={styles.header}>
             <Text style={[styles.title, { color: theme.colors.text }]}>More</Text>
-            <TouchableOpacity onPress={handleProfilePress}>
+            <TouchableOpacity onPress={handleSettingsPress}>
               <Ionicons name="settings" size={24} color={theme.colors.text} />
             </TouchableOpacity>
           </View>
@@ -317,11 +514,11 @@ const MoreScreen = () => {
           <View style={styles.overviewSection}>
             <View style={styles.overviewCard}>
               <Text style={styles.overviewTitle}>Active Goals</Text>
-              <Text style={styles.overviewValue}>{mockGoals.length}</Text>
+              <Text style={styles.overviewValue}>{goals.length}</Text>
             </View>
             <View style={styles.overviewCard}>
               <Text style={styles.overviewTitle}>Pending Bills</Text>
-              <Text style={styles.overviewValue}>{mockReminders.filter(r => !r.isPaid).length}</Text>
+              <Text style={styles.overviewValue}>{enhancedReminders.filter(r => r.status === 'PENDING' || r.status === 'OVERDUE').length}</Text>
             </View>
           </View>
 
@@ -329,12 +526,28 @@ const MoreScreen = () => {
           <View style={styles.section}>
             <View style={styles.sectionHeader}>
               <Text style={styles.sectionTitle}>Savings Goals</Text>
-              <TouchableOpacity>
+              <TouchableOpacity onPress={() => navigation.navigate('SavingsGoals' as never)}>
                 <Text style={styles.seeAllText}>See All</Text>
               </TouchableOpacity>
             </View>
             <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-              {mockGoals.map(renderGoalCard)}
+              {goalsLoading ? (
+                <View style={styles.loadingContainer}>
+                  <Text style={[styles.loadingText, { color: theme.colors.textSecondary }]}>Loading goals...</Text>
+                </View>
+              ) : goals.length === 0 ? (
+                <View style={styles.emptyGoalsContainer}>
+                  <Text style={[styles.emptyGoalsText, { color: theme.colors.textSecondary }]}>No goals yet</Text>
+                  <TouchableOpacity 
+                    style={styles.addGoalButton}
+                    onPress={() => navigation.navigate('SavingsGoals' as never)}
+                  >
+                    <Text style={styles.addGoalButtonText}>Add Goal</Text>
+                  </TouchableOpacity>
+                </View>
+              ) : (
+                goals.slice(0, 5).map(renderGoalCard)
+              )}
             </ScrollView>
           </View>
 
@@ -342,78 +555,87 @@ const MoreScreen = () => {
           <View style={styles.section}>
             <View style={styles.sectionHeader}>
               <Text style={styles.sectionTitle}>Upcoming Reminders</Text>
-              <TouchableOpacity>
-                <Text style={styles.seeAllText}>Manage</Text>
+              <TouchableOpacity 
+                style={styles.manageButton}
+                onPress={handleManageReminders}
+              >
+                <Ionicons name="settings-outline" size={16} color="#4A90E2" />
+                <Text style={styles.manageButtonText}>Manage</Text>
               </TouchableOpacity>
             </View>
-            <View style={styles.remindersContainer}>
-              {mockReminders.slice(0, 3).map(renderReminderCard)}
-            </View>
-          </View>
-
-          {/* Settings Toggle */}
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Quick Settings</Text>
-            <View style={styles.settingsCard}>
-              <View style={styles.settingItem}>
-                <View style={styles.settingLeft}>
-                  <Ionicons name="eye-off" size={20} color="#8E8E93" />
-                  <Text style={[styles.settingText, { color: theme.colors.text }]}>Hide Balance</Text>
-                </View>
-                <Switch
-                  value={isBalanceMasked}
-                  onValueChange={setIsBalanceMasked}
-                  trackColor={{ false: '#E5E5EA', true: '#4A90E2' }}
-                  thumbColor={isBalanceMasked ? '#FFFFFF' : '#FFFFFF'}
-                />
-              </View>
-              <View style={styles.settingItem}>
-                <View style={styles.settingLeft}>
-                  <Ionicons name="finger-print" size={20} color="#8E8E93" />
-                  <Text style={[styles.settingText, { color: theme.colors.text }]}>Biometric Lock</Text>
-                </View>
-                <Switch
-                  value={biometricEnabled}
-                  onValueChange={() => {}} // Read-only - managed in profile
-                  trackColor={{ false: '#E5E5EA', true: '#4A90E2' }}
-                  thumbColor={biometricEnabled ? '#FFFFFF' : '#FFFFFF'}
-                />
-              </View>
-              <View style={styles.settingItem}>
-                <View style={styles.settingLeft}>
-                  <Ionicons name="moon" size={20} color="#8E8E93" />
-                  <Text style={[styles.settingText, { color: theme.colors.text }]}>Dark Mode</Text>
-                </View>
-                <Switch
-                  value={isDark}
-                  onValueChange={toggleTheme}
-                  trackColor={{ false: '#E5E5EA', true: '#4A90E2' }}
-                  thumbColor={isDark ? '#FFFFFF' : '#FFFFFF'}
-                />
-              </View>
-              <TouchableOpacity style={styles.settingItem} onPress={() => setShowLanguageModal(true)}>
-                <View style={styles.settingLeft}>
-                  <Ionicons name="language" size={20} color="#8E8E93" />
-                  <Text style={[styles.settingText, { color: theme.colors.text }]}>Language</Text>
-                </View>
-                <View style={styles.settingRight}>
-                  <Text style={styles.settingValue}>
-                    {language === 'en' ? 'English' : language === 'de' ? 'Deutsch' : 'العربية'}
+            
+            {/* Quick Stats */}
+            {!remindersLoading && enhancedReminders.length > 0 && (
+              <View style={styles.reminderStatsContainer}>
+                <View style={styles.reminderStat}>
+                  <Text style={[styles.reminderStatValue, { color: '#F59E0B' }]}>
+                    {enhancedReminders.filter(r => r.status === 'PENDING').length}
                   </Text>
-                  <Ionicons name="chevron-forward" size={16} color="#8E8E93" />
+                  <Text style={[styles.reminderStatLabel, { color: theme.colors.textSecondary }]}>Pending</Text>
                 </View>
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.settingItem} onPress={() => setShowCurrencyModal(true)}>
-                <View style={styles.settingLeft}>
-                  <Ionicons name="card" size={20} color="#8E8E93" />
-                  <Text style={[styles.settingText, { color: theme.colors.text }]}>Currency</Text>
+                <View style={styles.reminderStat}>
+                  <Text style={[styles.reminderStatValue, { color: '#EF4444' }]}>
+                    {enhancedReminders.filter(r => r.status === 'OVERDUE').length}
+                  </Text>
+                  <Text style={[styles.reminderStatLabel, { color: theme.colors.textSecondary }]}>Overdue</Text>
                 </View>
-                <View style={styles.settingRight}>
-                  <Text style={[styles.settingValue, { color: theme.colors.textSecondary }]}>{currency}</Text>
-                  <Ionicons name="chevron-forward" size={16} color="#8E8E93" />
+                <View style={styles.reminderStat}>
+                  <Text style={[styles.reminderStatValue, { color: '#10B981' }]}>
+                    {enhancedReminders.filter(r => r.status === 'COMPLETED').length}
+                  </Text>
+                  <Text style={[styles.reminderStatLabel, { color: theme.colors.textSecondary }]}>Completed</Text>
                 </View>
-              </TouchableOpacity>
-            </View>
+                <View style={styles.reminderStat}>
+                  <Text style={[styles.reminderStatValue, { color: '#8B5CF6' }]}>
+                    {enhancedReminders.filter(r => r.isRecurring).length}
+                  </Text>
+                  <Text style={[styles.reminderStatLabel, { color: theme.colors.textSecondary }]}>Recurring</Text>
+                </View>
+              </View>
+            )}
+            
+            {remindersLoading ? (
+              <View style={styles.loadingContainer}>
+                <Text style={[styles.loadingText, { color: theme.colors.textSecondary }]}>Loading reminders...</Text>
+              </View>
+            ) : enhancedReminders.length === 0 ? (
+              <View style={styles.emptyRemindersContainer}>
+                <Ionicons name="alarm-outline" size={48} color={theme.colors.textSecondary} />
+                <Text style={[styles.emptyRemindersText, { color: theme.colors.textSecondary }]}>No reminders set</Text>
+                <TouchableOpacity 
+                  style={styles.addReminderButton}
+                  onPress={() => navigation.navigate('Reminders' as never)}
+                >
+                  <Ionicons name="add" size={16} color="white" />
+                  <Text style={styles.addReminderButtonText}>Add Reminder</Text>
+                </TouchableOpacity>
+              </View>
+            ) : (
+              <View style={styles.enhancedRemindersContainer}>
+                {enhancedReminders
+                  .filter(r => r.status === 'PENDING' || r.status === 'OVERDUE')
+                  .sort((a, b) => {
+                    // Sort by status (overdue first) then by due date
+                    if (a.status === 'OVERDUE' && b.status !== 'OVERDUE') return -1;
+                    if (b.status === 'OVERDUE' && a.status !== 'OVERDUE') return 1;
+                    return new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime();
+                  })
+                  .slice(0, 4)
+                  .map(renderEnhancedReminderCard)}
+                
+                {enhancedReminders.filter(r => r.status === 'PENDING' || r.status === 'OVERDUE').length > 4 && (
+                  <TouchableOpacity 
+                    style={styles.showMoreReminders}
+                    onPress={() => navigation.navigate('Reminders' as never)}
+                  >
+                    <Text style={styles.showMoreText}>
+                      +{enhancedReminders.filter(r => r.status === 'PENDING' || r.status === 'OVERDUE').length - 4} more reminders
+                    </Text>
+                    <Ionicons name="chevron-forward" size={16} color="#4A90E2" />
+                  </TouchableOpacity>
+                )}
+              </View>
+            )}
           </View>
 
           {/* Menu Sections */}
@@ -427,84 +649,6 @@ const MoreScreen = () => {
           ))}
         </ScrollView>
       </LinearGradient>
-
-      {/* Language Selection Modal */}
-      <Modal
-        visible={showLanguageModal}
-        animationType="slide"
-        transparent
-        onRequestClose={() => setShowLanguageModal(false)}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={[styles.modalContent, { backgroundColor: theme.colors.surface }]}>
-            <View style={styles.modalHeader}>
-              <Text style={[styles.modalTitle, { color: theme.colors.text }]}>Select Language</Text>
-              <TouchableOpacity onPress={() => setShowLanguageModal(false)}>
-                <Ionicons name="close" size={24} color={theme.colors.text} />
-              </TouchableOpacity>
-            </View>
-            
-            {[
-              { code: 'en' as Language, name: 'English', native: 'English' },
-              { code: 'de' as Language, name: 'German', native: 'Deutsch' },
-              { code: 'ar' as Language, name: 'Arabic', native: 'العربية' },
-            ].map((lang) => (
-              <TouchableOpacity
-                key={lang.code}
-                style={styles.optionItem}
-                onPress={() => {
-                  setLanguage(lang.code);
-                  setShowLanguageModal(false);
-                }}
-              >
-                <Text style={[styles.optionText, { color: theme.colors.text }]}>{lang.native}</Text>
-                {language === lang.code && (
-                  <Ionicons name="checkmark" size={20} color="#4A90E2" />
-                )}
-              </TouchableOpacity>
-            ))}
-          </View>
-        </View>
-      </Modal>
-
-      {/* Currency Selection Modal */}
-      <Modal
-        visible={showCurrencyModal}
-        animationType="slide"
-        transparent
-        onRequestClose={() => setShowCurrencyModal(false)}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={[styles.modalContent, { backgroundColor: theme.colors.surface }]}>
-            <View style={styles.modalHeader}>
-              <Text style={[styles.modalTitle, { color: theme.colors.text }]}>Select Currency</Text>
-              <TouchableOpacity onPress={() => setShowCurrencyModal(false)}>
-                <Ionicons name="close" size={24} color={theme.colors.text} />
-              </TouchableOpacity>
-            </View>
-            
-            {[
-              { code: 'USD' as Currency, name: 'US Dollar', symbol: '$' },
-              { code: 'EUR' as Currency, name: 'Euro', symbol: '€' },
-              { code: 'MAD' as Currency, name: 'Moroccan Dirham', symbol: 'MAD' },
-            ].map((curr) => (
-              <TouchableOpacity
-                key={curr.code}
-                style={styles.optionItem}
-                onPress={() => {
-                  setCurrency(curr.code);
-                  setShowCurrencyModal(false);
-                }}
-              >
-                <Text style={[styles.optionText, { color: theme.colors.text }]}>{curr.name} ({curr.symbol})</Text>
-                {currency === curr.code && (
-                  <Ionicons name="checkmark" size={20} color="#4A90E2" />
-                )}
-              </TouchableOpacity>
-            ))}
-          </View>
-        </View>
-      </Modal>
 
       {/* Sync Settings Modal */}
       <SyncSettingsModal
@@ -535,7 +679,7 @@ const createStyles = (theme: any) => StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingTop: 20,
+    paddingTop: 8,
     paddingBottom: 20,
   },
   title: {
@@ -594,7 +738,9 @@ const createStyles = (theme: any) => StyleSheet.create({
     borderRadius: 12,
     padding: 16,
     marginRight: 12,
-    width: 200,
+    width: 240,
+    minWidth: 240,
+    maxWidth: 240,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
@@ -612,6 +758,8 @@ const createStyles = (theme: any) => StyleSheet.create({
     fontWeight: '600',
     color: theme.colors.text,
     flex: 1,
+    marginRight: 8,
+    lineHeight: 18,
   },
   goalProgress: {
     fontSize: 12,
@@ -622,16 +770,20 @@ const createStyles = (theme: any) => StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'baseline',
     marginBottom: 12,
+    flexWrap: 'wrap',
+    maxWidth: '100%',
   },
   goalCurrent: {
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: 'bold',
     color: '#333',
     marginRight: 4,
+    flexShrink: 1,
   },
   goalTarget: {
     fontSize: 12,
     color: '#8E8E93',
+    flexShrink: 1,
   },
   progressBar: {
     height: 6,
@@ -647,6 +799,7 @@ const createStyles = (theme: any) => StyleSheet.create({
   goalDate: {
     fontSize: 12,
     color: theme.colors.textSecondary,
+    flexShrink: 1,
   },
   remindersContainer: {
     backgroundColor: theme.colors.card,
@@ -899,6 +1052,255 @@ const createStyles = (theme: any) => StyleSheet.create({
   },
   profileActions: {
     padding: 4,
+  },
+  // New styles for enhanced goals functionality
+  goalFooter: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginTop: 8,
+  },
+  goalCategory: {
+    fontSize: 10,
+    fontWeight: '500',
+    textTransform: 'uppercase',
+    flexShrink: 1,
+  },
+  completedIndicator: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 8,
+    paddingTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: theme.colors.border,
+  },
+  completedText: {
+    fontSize: 10,
+    color: '#34C759',
+    fontWeight: '500',
+    marginLeft: 4,
+  },
+  loadingContainer: {
+    padding: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: 240,
+    minWidth: 240,
+  },
+  loadingText: {
+    fontSize: 14,
+    fontStyle: 'italic',
+  },
+  emptyGoalsContainer: {
+    padding: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: 240,
+    minWidth: 240,
+  },
+  emptyGoalsText: {
+    fontSize: 14,
+    marginBottom: 12,
+    textAlign: 'center',
+  },
+  addGoalButton: {
+    backgroundColor: '#4A90E2',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 6,
+  },
+  addGoalButtonText: {
+    color: 'white',
+    fontSize: 12,
+    fontWeight: '500',
+  },
+  // Enhanced Reminders Styles
+  enhancedRemindersContainer: {
+    backgroundColor: theme.colors.card,
+    borderRadius: 12,
+    padding: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  enhancedReminderCard: {
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderLeftWidth: 4,
+    borderRadius: 8,
+    marginBottom: 12,
+    backgroundColor: theme.colors.surface,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+  },
+  reminderCardHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: 8,
+  },
+  reminderTitleContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+    marginRight: 12,
+  },
+  reminderStatusIcon: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
+  },
+  reminderTitleContent: {
+    flex: 1,
+  },
+  enhancedReminderTitle: {
+    fontSize: 15,
+    fontWeight: '600',
+    marginBottom: 2,
+  },
+  reminderFrequency: {
+    fontSize: 12,
+    textTransform: 'capitalize',
+  },
+  enhancedReminderAmount: {
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+  reminderCategoryContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 4,
+  },
+  reminderCategoryIcon: {
+    width: 16,
+    height: 16,
+    borderRadius: 8,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 6,
+  },
+  reminderCategoryName: {
+    fontSize: 12,
+    flex: 1,
+  },
+  recurringBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#8B5CF6' + '20',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 10,
+    marginLeft: 8,
+  },
+  recurringText: {
+    fontSize: 10,
+    color: '#8B5CF6',
+    fontWeight: '500',
+    marginLeft: 2,
+  },
+  overdueIndicator: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 8,
+    paddingTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: theme.colors.border,
+  },
+  overdueText: {
+    fontSize: 12,
+    color: '#EF4444',
+    fontWeight: '500',
+    marginLeft: 4,
+  },
+  manageButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#4A90E2' + '15',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#4A90E2' + '30',
+  },
+  manageButtonText: {
+    fontSize: 13,
+    color: '#4A90E2',
+    fontWeight: '600',
+    marginLeft: 4,
+  },
+  emptyRemindersContainer: {
+    backgroundColor: theme.colors.card,
+    borderRadius: 12,
+    padding: 32,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  emptyRemindersText: {
+    fontSize: 16,
+    marginTop: 12,
+    marginBottom: 16,
+    textAlign: 'center',
+  },
+  addReminderButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#4A90E2',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 8,
+  },
+  addReminderButtonText: {
+    color: 'white',
+    fontSize: 14,
+    fontWeight: '600',
+    marginLeft: 4,
+  },
+  showMoreReminders: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 12,
+    marginTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: theme.colors.border,
+  },
+  showMoreText: {
+    fontSize: 14,
+    color: '#4A90E2',
+    fontWeight: '500',
+    marginRight: 4,
+  },
+  // Reminder Stats Styles
+  reminderStatsContainer: {
+    flexDirection: 'row',
+    backgroundColor: theme.colors.surface,
+    borderRadius: 8,
+    padding: 12,
+    marginBottom: 16,
+    justifyContent: 'space-around',
+  },
+  reminderStat: {
+    alignItems: 'center',
+    flex: 1,
+  },
+  reminderStatValue: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    marginBottom: 2,
+  },
+  reminderStatLabel: {
+    fontSize: 11,
+    textTransform: 'uppercase',
+    fontWeight: '500',
   },
 });
 
