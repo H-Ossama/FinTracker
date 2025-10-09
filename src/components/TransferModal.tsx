@@ -46,7 +46,7 @@ const TransferModal: React.FC<TransferModalProps> = ({
   onTransfer,
 }) => {
   const { theme } = useTheme();
-  const { formatCurrency, currency } = useLocalization();
+  const { formatCurrency, currency, t } = useLocalization();
   const { headerPadding } = useSafeAreaHelper();
   
   const getCurrencySymbol = () => {
@@ -129,23 +129,23 @@ const TransferModal: React.FC<TransferModalProps> = ({
 
   const handleTransfer = async () => {
     if (!fromWallet || !toWallet || !amount) {
-      Alert.alert('Error', 'Please fill in all required fields');
+      Alert.alert('Error', t('transfer_required_fields'));
       return;
     }
 
     if (fromWallet.id === toWallet.id) {
-      Alert.alert('Error', 'Please select different wallets for transfer');
+      Alert.alert('Error', t('same_wallet_error'));
       return;
     }
 
     const transferAmount = parseFloat(amount);
     if (isNaN(transferAmount) || transferAmount <= 0) {
-      Alert.alert('Error', 'Please enter a valid amount');
+      Alert.alert('Error', t('valid_amount'));
       return;
     }
 
     if (transferAmount > fromWallet.balance && fromWallet.type !== 'CREDIT_CARD') {
-      Alert.alert('Error', 'Insufficient balance in source wallet');
+      Alert.alert('Error', t('insufficient_funds'));
       return;
     }
 
@@ -213,7 +213,7 @@ const TransferModal: React.FC<TransferModalProps> = ({
         ) : (
           <View style={styles.placeholderWallet}>
             <Text style={[styles.placeholderText, { color: theme.colors.textSecondary }]}>
-              Select wallet
+              {t('select_source')}
             </Text>
             <Ionicons name="chevron-down" size={20} color={theme.colors.textSecondary} />
           </View>
@@ -257,14 +257,14 @@ const TransferModal: React.FC<TransferModalProps> = ({
         {/* Header */}
         <View style={[styles.header, { borderBottomColor: theme.colors.border, paddingTop: headerPadding.paddingTop }]}>
           <TouchableOpacity onPress={handleClose}>
-            <Text style={[styles.cancelButton, { color: theme.colors.primary }]}>Cancel</Text>
+            <Text style={[styles.cancelButton, { color: theme.colors.primary }]}>{t('cancel')}</Text>
           </TouchableOpacity>
-          <Text style={[styles.title, { color: theme.colors.text }]}>Transfer Money</Text>
+          <Text style={[styles.title, { color: theme.colors.text }]}>{t('transfer_title')}</Text>
           <TouchableOpacity onPress={handleTransfer} disabled={transferring}>
             {transferring ? (
               <ActivityIndicator size="small" color={theme.colors.primary} />
             ) : (
-              <Text style={[styles.saveButton, { color: theme.colors.primary }]}>Transfer</Text>
+              <Text style={[styles.saveButton, { color: theme.colors.primary }]}>{t('confirm_transfer')}</Text>
             )}
           </TouchableOpacity>
         </View>
@@ -272,7 +272,7 @@ const TransferModal: React.FC<TransferModalProps> = ({
         {loading ? (
           <View style={[styles.loadingContainer, { backgroundColor: theme.colors.background }]}>
             <ActivityIndicator size="large" color={theme.colors.primary} />
-            <Text style={[styles.loadingText, { color: theme.colors.text }]}>Loading wallets...</Text>
+            <Text style={[styles.loadingText, { color: theme.colors.text }]}>{t('loading')}</Text>
           </View>
         ) : (
           <KeyboardAvoidingView
@@ -297,7 +297,7 @@ const TransferModal: React.FC<TransferModalProps> = ({
                 />
               </View>
               <Text style={[styles.flowText, { color: theme.colors.textSecondary }]}>
-                {fromWallet ? fromWallet.name : 'From'}
+                {fromWallet ? fromWallet.name : t('from_wallet')}
               </Text>
             </View>
             <Ionicons name="arrow-forward" size={24} color={theme.colors.primary} />
@@ -310,14 +310,14 @@ const TransferModal: React.FC<TransferModalProps> = ({
                 />
               </View>
               <Text style={[styles.flowText, { color: theme.colors.textSecondary }]}>
-                {toWallet ? toWallet.name : 'To'}
+                {toWallet ? toWallet.name : t('to_wallet')}
               </Text>
             </View>
           </View>
 
           {/* From Wallet */}
           {renderWalletSelector(
-            fromWallet ? `From: ${fromWallet.name}` : 'From Wallet',
+            fromWallet ? `${t('from_wallet')}: ${fromWallet.name}` : t('from_wallet'),
             fromWallet,
             (wallet) => {
               setFromWallet(wallet);
@@ -336,7 +336,7 @@ const TransferModal: React.FC<TransferModalProps> = ({
 
           {/* To Wallet */}
           {renderWalletSelector(
-            toWallet ? `To: ${toWallet.name}` : 'To Wallet',
+            toWallet ? `${t('to_wallet')}: ${toWallet.name}` : t('to_wallet'),
             toWallet,
             setToWallet,
             showToWallets,
@@ -349,7 +349,7 @@ const TransferModal: React.FC<TransferModalProps> = ({
 
           {/* Amount */}
           <View style={styles.inputContainer}>
-            <Text style={[styles.label, { color: theme.colors.text }]}>Amount *</Text>
+            <Text style={[styles.label, { color: theme.colors.text }]}>{t('transfer_amount')} *</Text>
             <View style={[styles.amountInput, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
               <Text style={[styles.currencySymbol, { color: theme.colors.textSecondary }]}>{getCurrencySymbol()}</Text>
               <TextInput
@@ -370,12 +370,12 @@ const TransferModal: React.FC<TransferModalProps> = ({
 
           {/* Note */}
           <View style={styles.inputContainer}>
-            <Text style={[styles.label, { color: theme.colors.text }]}>Note (Optional)</Text>
+            <Text style={[styles.label, { color: theme.colors.text }]}>{t('transfer_note')}</Text>
             <TextInput
               style={[styles.textInput, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border, color: theme.colors.text }]}
               value={note}
               onChangeText={setNote}
-              placeholder="Add a note for this transfer"
+              placeholder={t('add_note')}
               placeholderTextColor={theme.colors.textSecondary}
               multiline
               numberOfLines={3}
@@ -385,17 +385,17 @@ const TransferModal: React.FC<TransferModalProps> = ({
           {/* Transfer Summary */}
           {fromWallet && toWallet && amount && !isNaN(parseFloat(amount)) && (
             <View style={[styles.summaryCard, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
-              <Text style={[styles.summaryTitle, { color: theme.colors.text }]}>Transfer Summary</Text>
+              <Text style={[styles.summaryTitle, { color: theme.colors.text }]}>{t('transfer_title')}</Text>
               <View style={styles.summaryRow}>
-                <Text style={[styles.summaryLabel, { color: theme.colors.textSecondary }]}>From:</Text>
+                <Text style={[styles.summaryLabel, { color: theme.colors.textSecondary }]}>{t('from_wallet')}:</Text>
                 <Text style={[styles.summaryValue, { color: theme.colors.text }]}>{fromWallet.name}</Text>
               </View>
               <View style={styles.summaryRow}>
-                <Text style={[styles.summaryLabel, { color: theme.colors.textSecondary }]}>To:</Text>
+                <Text style={[styles.summaryLabel, { color: theme.colors.textSecondary }]}>{t('to_wallet')}:</Text>
                 <Text style={[styles.summaryValue, { color: theme.colors.text }]}>{toWallet.name}</Text>
               </View>
               <View style={[styles.summaryRow, styles.summaryTotal]}>
-                <Text style={[styles.summaryLabel, styles.totalLabel, { color: theme.colors.text }]}>Amount:</Text>
+                <Text style={[styles.summaryLabel, styles.totalLabel, { color: theme.colors.text }]}>{t('amount')}:</Text>
                 <Text style={[styles.summaryValue, styles.totalValue, { color: theme.colors.primary }]}>
                   {formatCurrency(parseFloat(amount))}
                 </Text>

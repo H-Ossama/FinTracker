@@ -63,7 +63,7 @@ router.post('/register', [
       { name: 'Food & Dining', icon: 'restaurant', color: '#FF6B6B' },
       { name: 'Shopping', icon: 'shopping-bag', color: '#4ECDC4' },
       { name: 'Transportation', icon: 'car', color: '#45B7D1' },
-      { name: 'Bills & Utilities', icon: 'receipt', color: '#96CEB4' },
+      { name: 'Bills & Utilities', icon: '🧾', color: '#96CEB4' },
       { name: 'Entertainment', icon: 'tv', color: '#FFEAA7' },
       { name: 'Healthcare', icon: 'medical', color: '#DDA0DD' },
       { name: 'Education', icon: 'school', color: '#98D8C8' },

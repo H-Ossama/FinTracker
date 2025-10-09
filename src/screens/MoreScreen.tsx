@@ -29,7 +29,7 @@ import { Goal, Bill } from '../types';
 
 const MoreScreen = () => {
   const { theme } = useTheme();
-  const { formatCurrency } = useLocalization();
+  const { formatCurrency, t } = useLocalization();
   const { user, isAuthenticated, biometricEnabled } = useAuth();
   const navigation = useNavigation();
   const [isBalanceMasked, setIsBalanceMasked] = useState(false);
@@ -123,7 +123,7 @@ const MoreScreen = () => {
         navigation.navigate('BillsReminder' as never);
         break;
       case 'addNew':
-        navigation.navigate('BillsReminder' as never); // Will trigger add modal
+        (navigation.navigate as any)('BillsReminder', { openAddModal: true });
         break;
       case 'notifications':
         navigation.navigate('NotificationPreferences' as never);
@@ -136,54 +136,57 @@ const MoreScreen = () => {
 
   const menuSections = [
     {
-      title: 'Financial Tools',
+      title: t('more_screen_financial_tools'),
       items: [
         {
           id: 'goals',
-          title: 'Savings Goals',
-          subtitle: `${goals.length} active goals`,
+          title: t('more_screen_savings_goals'),
+          subtitle: t('more_screen_active_goals_count', { count: goals.length }),
           icon: 'flag',
           color: '#4A90E2',
           badge: goals.length.toString(),
         },
         {
           id: 'bills',
-          title: 'Bills Reminder',
-          subtitle: `${dataStats?.billsCount || 0} bills, ${dataStats?.overdueBills || 0} overdue`,
+          title: t('more_screen_bills_reminder'),
+          subtitle: t('more_screen_bills_count', { 
+            count: dataStats?.billsCount || 0, 
+            overdue: dataStats?.overdueBills || 0 
+          }),
           icon: 'calendar',
           color: '#7ED321',
           badge: dataStats?.overdueBills > 0 ? dataStats.overdueBills.toString() : undefined,
         },
         {
           id: 'budget',
-          title: 'Budget Planner',
-          subtitle: `${dataStats?.budgetsCount || 0} categories budgeted`,
+          title: t('more_screen_budget_planner'),
+          subtitle: t('more_screen_categories_budgeted', { count: dataStats?.budgetsCount || 0 }),
           icon: 'pie-chart',
           color: '#9013FE',
         },
       ],
     },
     {
-      title: 'Reports & Export',
+      title: t('more_screen_reports_export'),
       items: [
         {
           id: 'reports',
-          title: 'Monthly Reports',
-          subtitle: 'View detailed analytics',
+          title: t('more_screen_monthly_reports'),
+          subtitle: t('more_screen_view_detailed_analytics'),
           icon: 'document-text',
           color: '#34C759',
         },
         {
           id: 'export',
-          title: 'Export Data',
-          subtitle: 'PDF, CSV, Excel',
+          title: t('more_screen_export_data'),
+          subtitle: t('more_screen_pdf_csv_excel'),
           icon: 'download',
           color: '#5856D6',
         },
         {
           id: 'backup',
-          title: 'Backup & Sync',
-          subtitle: 'Cloud storage options',
+          title: t('more_screen_backup_sync'),
+          subtitle: t('more_screen_cloud_storage_options'),
           icon: 'cloud',
           color: '#32D74B',
         },
@@ -253,7 +256,7 @@ const MoreScreen = () => {
             {formatCurrency(goal.currentAmount)}
           </Text>
           <Text style={[styles.goalTarget, { color: theme.colors.textSecondary }]} numberOfLines={1}>
-            of {formatCurrency(goal.targetAmount)}
+            {t('more_screen_of')} {formatCurrency(goal.targetAmount)}
           </Text>
         </View>
         <View style={styles.progressBar}>
@@ -264,7 +267,7 @@ const MoreScreen = () => {
         </View>
         <View style={styles.goalFooter}>
           <Text style={[styles.goalDate, { color: theme.colors.textSecondary }]} numberOfLines={1} adjustsFontSizeToFit>
-            Target: {goal.targetDate}
+            {t('more_screen_target')} {goal.targetDate}
           </Text>
           <Text style={[styles.goalCategory, { color: '#4A90E2' }]} numberOfLines={1} adjustsFontSizeToFit>
             {goal.category}
@@ -273,7 +276,7 @@ const MoreScreen = () => {
         {isCompleted && (
           <View style={styles.completedIndicator}>
             <Ionicons name="checkmark-circle" size={12} color="#34C759" />
-            <Text style={styles.completedText}>Completed</Text>
+            <Text style={styles.completedText}>{t('more_screen_completed')}</Text>
           </View>
         )}
       </TouchableOpacity>
@@ -291,11 +294,11 @@ const MoreScreen = () => {
       const diffTime = date.getTime() - now.getTime();
       const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
       
-      if (diffDays === 0) return 'Today';
-      if (diffDays === 1) return 'Tomorrow';
-      if (diffDays === -1) return 'Yesterday';
-      if (diffDays > 1) return `In ${diffDays} days`;
-      return `${Math.abs(diffDays)} days ago`;
+      if (diffDays === 0) return t('more_screen_today');
+      if (diffDays === 1) return t('more_screen_tomorrow');
+      if (diffDays === -1) return t('more_screen_yesterday');
+      if (diffDays > 1) return t('more_screen_in_days', { days: diffDays });
+      return t('more_screen_days_ago', { days: Math.abs(diffDays) });
     };
     
     const getStatusConfig = () => {
@@ -370,13 +373,13 @@ const MoreScreen = () => {
               {bill.isRecurring && (
                 <View style={[styles.badge, { backgroundColor: '#E3F2FD' }]}>
                   <Ionicons name="repeat" size={10} color="#1976D2" />
-                  <Text style={[styles.badgeText, { color: '#1976D2' }]}>Recurring</Text>
+                  <Text style={[styles.badgeText, { color: '#1976D2' }]}>{t('more_screen_recurring')}</Text>
                 </View>
               )}
               {bill.remindersPerDay > 1 && (
                 <View style={[styles.badge, { backgroundColor: '#FFF3E0' }]}>
                   <Ionicons name="notifications" size={10} color="#F57C00" />
-                  <Text style={[styles.badgeText, { color: '#F57C00' }]}>{bill.remindersPerDay}x daily</Text>
+                  <Text style={[styles.badgeText, { color: '#F57C00' }]}>{t('more_screen_daily_reminders', { count: bill.remindersPerDay })}</Text>
                 </View>
               )}
             </View>
@@ -395,7 +398,7 @@ const MoreScreen = () => {
         <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
           {/* Header */}
           <View style={styles.header}>
-            <Text style={[styles.title, { color: theme.colors.text }]}>More</Text>
+            <Text style={[styles.title, { color: theme.colors.text }]}>{t('more_screen_title')}</Text>
             <TouchableOpacity onPress={handleSettingsPress}>
               <Ionicons name="settings" size={24} color={theme.colors.text} />
             </TouchableOpacity>
@@ -418,7 +421,7 @@ const MoreScreen = () => {
                   <Text style={styles.profileName}>{user.name}</Text>
                   <Text style={styles.profileEmail}>{user.email}</Text>
                   <Text style={styles.profileStatus}>
-                    <Ionicons name="checkmark-circle" size={12} color="#34C759" /> Verified Account
+                    <Ionicons name="checkmark-circle" size={12} color="#34C759" /> {t('more_screen_verified_account')}
                   </Text>
                 </View>
               </View>
@@ -431,15 +434,15 @@ const MoreScreen = () => {
           {/* Quick Overview Cards */}
           <View style={styles.overviewSection}>
             <View style={styles.overviewCard}>
-              <Text style={styles.overviewTitle}>Active Goals</Text>
+              <Text style={styles.overviewTitle}>{t('more_screen_active_goals')}</Text>
               <Text style={styles.overviewValue}>{goals.length}</Text>
             </View>
             <View style={styles.overviewCard}>
-              <Text style={styles.overviewTitle}>Pending Bills</Text>
+              <Text style={styles.overviewTitle}>{t('more_screen_pending_bills')}</Text>
               <Text style={styles.overviewValue}>{dataStats?.pendingBills || 0}</Text>
             </View>
             <View style={styles.overviewCard}>
-              <Text style={styles.overviewTitle}>Monthly Budget</Text>
+              <Text style={styles.overviewTitle}>{t('more_screen_monthly_budget')}</Text>
               <Text style={styles.overviewValue}>${dataStats?.totalBudgetAmount?.toFixed(0) || '0'}</Text>
             </View>
           </View>
@@ -447,24 +450,24 @@ const MoreScreen = () => {
           {/* Recent Goals */}
           <View style={styles.section}>
             <View style={styles.sectionHeader}>
-              <Text style={styles.sectionTitle}>Savings Goals</Text>
+              <Text style={styles.sectionTitle}>{t('more_screen_savings_goals')}</Text>
               <TouchableOpacity onPress={() => navigation.navigate('SavingsGoals' as never)}>
-                <Text style={styles.seeAllText}>See All</Text>
+                <Text style={styles.seeAllText}>{t('more_screen_see_all')}</Text>
               </TouchableOpacity>
             </View>
             <ScrollView horizontal showsHorizontalScrollIndicator={false}>
               {goalsLoading ? (
                 <View style={styles.loadingContainer}>
-                  <Text style={[styles.loadingText, { color: theme.colors.textSecondary }]}>Loading goals...</Text>
+                  <Text style={[styles.loadingText, { color: theme.colors.textSecondary }]}>{t('more_screen_loading_goals')}</Text>
                 </View>
               ) : goals.length === 0 ? (
                 <View style={styles.emptyGoalsContainer}>
-                  <Text style={[styles.emptyGoalsText, { color: theme.colors.textSecondary }]}>No goals yet</Text>
+                  <Text style={[styles.emptyGoalsText, { color: theme.colors.textSecondary }]}>{t('more_screen_no_goals')}</Text>
                   <TouchableOpacity 
                     style={styles.addGoalButton}
                     onPress={() => navigation.navigate('SavingsGoals' as never)}
                   >
-                    <Text style={styles.addGoalButtonText}>Add Goal</Text>
+                    <Text style={styles.addGoalButtonText}>{t('more_screen_add_goal')}</Text>
                   </TouchableOpacity>
                 </View>
               ) : (
@@ -476,14 +479,14 @@ const MoreScreen = () => {
           {/* Bills Reminder */}
           <View style={styles.section}>
             <View style={styles.sectionHeader}>
-              <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>Bills Reminder</Text>
+              <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>{t('more_screen_bills_reminder')}</Text>
               <View style={styles.manageReminderContainer}>
                 <TouchableOpacity 
                   style={[styles.manageButton, { backgroundColor: theme.colors.primary }]}
                   onPress={toggleBillsDropdown}
                 >
                   <Ionicons name="settings-outline" size={16} color="white" />
-                  <Text style={[styles.manageButtonText, { color: 'white' }]}>Manage</Text>
+                  <Text style={[styles.manageButtonText, { color: 'white' }]}>{t('more_screen_manage')}</Text>
                   <Ionicons 
                     name={billsDropdownVisible ? "chevron-up" : "chevron-down"} 
                     size={16} 
@@ -498,7 +501,7 @@ const MoreScreen = () => {
                       activeOpacity={0.7}
                     >
                       <Ionicons name="list-outline" size={18} color={theme.colors.text} />
-                      <Text style={[styles.dropdownItemText, { color: theme.colors.text }]}>View All Bills</Text>
+                      <Text style={[styles.dropdownItemText, { color: theme.colors.text }]}>{t('more_screen_view_all_bills')}</Text>
                     </TouchableOpacity>
                     <TouchableOpacity
                       style={[styles.dropdownItem, { borderBottomColor: theme.colors.border }]}
@@ -506,7 +509,7 @@ const MoreScreen = () => {
                       activeOpacity={0.7}
                     >
                       <Ionicons name="add-outline" size={18} color={theme.colors.text} />
-                      <Text style={[styles.dropdownItemText, { color: theme.colors.text }]}>Add New Bill</Text>
+                      <Text style={[styles.dropdownItemText, { color: theme.colors.text }]}>{t('more_screen_add_new_bill')}</Text>
                     </TouchableOpacity>
                     <TouchableOpacity
                       style={[styles.dropdownItem, { borderBottomColor: theme.colors.border }]}
@@ -514,7 +517,7 @@ const MoreScreen = () => {
                       activeOpacity={0.7}
                     >
                       <Ionicons name="notifications-outline" size={18} color={theme.colors.text} />
-                      <Text style={[styles.dropdownItemText, { color: theme.colors.text }]}>Notification Settings</Text>
+                      <Text style={[styles.dropdownItemText, { color: theme.colors.text }]}>{t('more_screen_notification_settings')}</Text>
                     </TouchableOpacity>
                   </View>
                 )}
@@ -528,7 +531,7 @@ const MoreScreen = () => {
                   <View style={styles.loadingDot} />
                   <View style={styles.loadingDot} />
                 </View>
-                <Text style={[styles.loadingText, { color: theme.colors.textSecondary }]}>Loading your bills...</Text>
+                <Text style={[styles.loadingText, { color: theme.colors.textSecondary }]}>{t('more_screen_loading_bills')}</Text>
               </View>
             ) : bills.length === 0 ? (
               <View style={styles.emptyRemindersCard}>
@@ -539,8 +542,8 @@ const MoreScreen = () => {
                   <View style={styles.emptyIconContainer}>
                     <Ionicons name="calendar-outline" size={40} color="#6C63FF" />
                   </View>
-                  <Text style={styles.emptyRemindersTitle}>No bills added</Text>
-                  <Text style={styles.emptyRemindersSubtitle}>Stay on top of your bills and payments</Text>
+                  <Text style={styles.emptyRemindersTitle}>{t('more_screen_no_bills')}</Text>
+                  <Text style={styles.emptyRemindersSubtitle}>{t('more_screen_stay_on_top')}</Text>
                   <TouchableOpacity 
                     style={styles.addReminderButton}
                     onPress={() => navigation.navigate('BillsReminder' as never)}
@@ -550,7 +553,7 @@ const MoreScreen = () => {
                       style={styles.addButtonGradient}
                     >
                       <Ionicons name="add" size={18} color="white" />
-                      <Text style={styles.addReminderButtonText}>Add Your First Bill</Text>
+                      <Text style={styles.addReminderButtonText}>{t('more_screen_add_first_bill')}</Text>
                     </LinearGradient>
                   </TouchableOpacity>
                 </LinearGradient>
@@ -571,7 +574,7 @@ const MoreScreen = () => {
                         <Text style={[styles.statValue, { color: theme.colors.text }]}>
                           {bills.filter(b => b.status === 'pending').length}
                         </Text>
-                        <Text style={[styles.statLabel, { color: theme.colors.textSecondary }]}>Pending</Text>
+                        <Text style={[styles.statLabel, { color: theme.colors.textSecondary }]}>{t('more_screen_pending')}</Text>
                       </View>
                       
                       <View style={styles.statDivider} />
@@ -583,7 +586,7 @@ const MoreScreen = () => {
                         <Text style={[styles.statValue, { color: theme.colors.text }]}>
                           {bills.filter(b => b.status === 'overdue').length}
                         </Text>
-                        <Text style={[styles.statLabel, { color: theme.colors.textSecondary }]}>Overdue</Text>
+                        <Text style={[styles.statLabel, { color: theme.colors.textSecondary }]}>{t('more_screen_overdue')}</Text>
                       </View>
                       
                       <View style={styles.statDivider} />
@@ -595,7 +598,7 @@ const MoreScreen = () => {
                         <Text style={[styles.statValue, { color: theme.colors.text }]}>
                           {bills.filter(b => b.isRecurring).length}
                         </Text>
-                        <Text style={[styles.statLabel, { color: theme.colors.textSecondary }]}>Recurring</Text>
+                        <Text style={[styles.statLabel, { color: theme.colors.textSecondary }]}>{t('more_screen_recurring')}</Text>
                       </View>
                     </View>
                   </LinearGradient>
@@ -625,7 +628,7 @@ const MoreScreen = () => {
                       style={styles.viewAllGradient}
                     >
                       <Text style={[styles.viewAllText, { color: theme.colors.text }]}>
-                        View all {bills.filter(b => b.status === 'pending' || b.status === 'overdue').length} bills
+                        {t('more_screen_view_all_bills_count', { count: bills.filter(b => b.status === 'pending' || b.status === 'overdue').length })}
                       </Text>
                       <Ionicons name="arrow-forward" size={16} color={theme.colors.primary} />
                     </LinearGradient>

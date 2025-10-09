@@ -25,18 +25,6 @@ interface AddGoalModalProps {
   editingGoal?: Goal | null;
 }
 
-const categories = [
-  { id: 'savings', name: 'Savings', icon: '💰', color: '#4A90E2' },
-  { id: 'travel', name: 'Travel', icon: '✈️', color: '#FF9500' },
-  { id: 'education', name: 'Education', icon: '🎓', color: '#7ED321' },
-  { id: 'transportation', name: 'Transportation', icon: '🚗', color: '#9013FE' },
-  { id: 'health', name: 'Health', icon: '🏥', color: '#FF3B30' },
-  { id: 'home', name: 'Home', icon: '🏠', color: '#5AC8FA' },
-  { id: 'investment', name: 'Investment', icon: '📈', color: '#32D74B' },
-  { id: 'emergency', name: 'Emergency', icon: '🚨', color: '#FF2D92' },
-  { id: 'other', name: 'Other', icon: '📝', color: '#8E8E93' },
-];
-
 const AddGoalModal: React.FC<AddGoalModalProps> = ({ 
   visible, 
   onClose, 
@@ -44,7 +32,20 @@ const AddGoalModal: React.FC<AddGoalModalProps> = ({
   editingGoal 
 }) => {
   const { theme } = useTheme();
-  const { formatCurrency } = useLocalization();
+  const { t, formatCurrency } = useLocalization();
+  
+  const categories = [
+    { id: 'vacation', name: t('goalCategory.vacation'), icon: '✈️', color: '#FF9500' },
+    { id: 'emergency', name: t('goalCategory.emergency'), icon: '🚨', color: '#FF2D92' },
+    { id: 'car', name: t('goalCategory.car'), icon: '🚗', color: '#9013FE' },
+    { id: 'house', name: t('goalCategory.house'), icon: '🏠', color: '#5AC8FA' },
+    { id: 'education', name: t('goalCategory.education'), icon: '🎓', color: '#7ED321' },
+    { id: 'wedding', name: t('goalCategory.wedding'), icon: '💒', color: '#FF3B30' },
+    { id: 'retirement', name: t('goalCategory.retirement'), icon: '👴', color: '#32D74B' },
+    { id: 'gadgets', name: t('goalCategory.gadgets'), icon: '📱', color: '#4A90E2' },
+    { id: 'health', name: t('goalCategory.health'), icon: '🏥', color: '#FF3B30' },
+    { id: 'other', name: t('goalCategory.other'), icon: '📝', color: '#8E8E93' },
+  ];
   const [title, setTitle] = useState('');
   const [targetAmount, setTargetAmount] = useState('');
   const [currentAmount, setCurrentAmount] = useState('');
@@ -85,21 +86,21 @@ const AddGoalModal: React.FC<AddGoalModalProps> = ({
 
   const validateForm = () => {
     if (!title.trim()) {
-      Alert.alert('Error', 'Please enter a goal title');
+      Alert.alert(t('error'), t('addGoal.fillAllFields'));
       return false;
     }
     if (!targetAmount || parseFloat(targetAmount) <= 0) {
-      Alert.alert('Error', 'Please enter a valid target amount');
+      Alert.alert(t('error'), t('addGoal.validAmount'));
       return false;
     }
     const currentAmountNum = parseFloat(currentAmount) || 0;
     const targetAmountNum = parseFloat(targetAmount);
     if (currentAmountNum > targetAmountNum) {
-      Alert.alert('Error', 'Current amount cannot be greater than target amount');
+      Alert.alert(t('error'), t('addGoal.currentAmountLower'));
       return false;
     }
     if (targetDate <= new Date()) {
-      Alert.alert('Error', 'Target date must be in the future');
+      Alert.alert(t('error'), 'Target date must be in the future');
       return false;
     }
     return true;
@@ -128,12 +129,12 @@ const AddGoalModal: React.FC<AddGoalModalProps> = ({
       onGoalAdded?.(result);
       handleClose();
       Alert.alert(
-        'Success', 
-        editingGoal ? 'Goal updated successfully!' : 'Goal created successfully!'
+        t('success'), 
+        editingGoal ? t('savingsGoals.goalUpdated') : t('savingsGoals.goalCreated')
       );
     } catch (error) {
       console.error('Error saving goal:', error);
-      Alert.alert('Error', 'Failed to save goal. Please try again.');
+      Alert.alert(t('error'), editingGoal ? t('savingsGoals.updateFailed') : t('savingsGoals.createFailed'));
     } finally {
       setIsSubmitting(false);
     }
@@ -198,10 +199,10 @@ const AddGoalModal: React.FC<AddGoalModalProps> = ({
         {/* Header */}
         <View style={styles.header}>
           <TouchableOpacity onPress={handleClose}>
-            <Text style={styles.cancelButton}>Cancel</Text>
+            <Text style={styles.cancelButton}>{t('payment.cancel')}</Text>
           </TouchableOpacity>
           <Text style={styles.title}>
-            {editingGoal ? 'Edit Goal' : 'New Goal'}
+            {editingGoal ? t('addGoal.editTitle') : t('addGoal.title')}
           </Text>
           <TouchableOpacity 
             onPress={handleSubmit} 
@@ -212,7 +213,7 @@ const AddGoalModal: React.FC<AddGoalModalProps> = ({
               styles.saveButtonText,
               isSubmitting && styles.saveButtonTextDisabled
             ]}>
-              {isSubmitting ? 'Saving...' : 'Save'}
+              {isSubmitting ? 'Saving...' : (editingGoal ? t('addGoal.update') : t('addGoal.save'))}
             </Text>
           </TouchableOpacity>
         </View>
@@ -220,12 +221,12 @@ const AddGoalModal: React.FC<AddGoalModalProps> = ({
         <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
           {/* Goal Title */}
           <View style={styles.section}>
-            <Text style={styles.label}>Goal Title</Text>
+            <Text style={styles.label}>{t('addGoal.goalName')}</Text>
             <TextInput
               style={styles.input}
               value={title}
               onChangeText={setTitle}
-              placeholder="e.g., Emergency Fund, Vacation Trip"
+              placeholder={t('addGoal.goalNamePlaceholder')}
               placeholderTextColor={theme.colors.textSecondary}
               maxLength={50}
             />
@@ -233,12 +234,12 @@ const AddGoalModal: React.FC<AddGoalModalProps> = ({
 
           {/* Target Amount */}
           <View style={styles.section}>
-            <Text style={styles.label}>Target Amount</Text>
+            <Text style={styles.label}>{t('addGoal.targetAmount')}</Text>
             <TextInput
               style={styles.input}
               value={targetAmount}
               onChangeText={setTargetAmount}
-              placeholder="0.00"
+              placeholder={t('addGoal.targetAmountPlaceholder')}
               placeholderTextColor={theme.colors.textSecondary}
               keyboardType="numeric"
             />
@@ -246,12 +247,12 @@ const AddGoalModal: React.FC<AddGoalModalProps> = ({
 
           {/* Current Amount */}
           <View style={styles.section}>
-            <Text style={styles.label}>Current Amount (Optional)</Text>
+            <Text style={styles.label}>{t('addGoal.currentAmount')}</Text>
             <TextInput
               style={styles.input}
               value={currentAmount}
               onChangeText={setCurrentAmount}
-              placeholder="0.00"
+              placeholder={t('addGoal.currentAmountPlaceholder')}
               placeholderTextColor={theme.colors.textSecondary}
               keyboardType="numeric"
             />
@@ -259,7 +260,7 @@ const AddGoalModal: React.FC<AddGoalModalProps> = ({
 
           {/* Target Date */}
           <View style={styles.section}>
-            <Text style={styles.label}>Target Date</Text>
+            <Text style={styles.label}>{t('addGoal.targetDate')}</Text>
             <TouchableOpacity 
               style={styles.dateButton}
               onPress={() => setShowDatePicker(true)}
@@ -287,7 +288,7 @@ const AddGoalModal: React.FC<AddGoalModalProps> = ({
 
           {/* Category Selection */}
           <View style={styles.section}>
-            <Text style={styles.label}>Category</Text>
+            <Text style={styles.label}>{t('addGoal.category')}</Text>
             <View style={styles.categoriesContainer}>
               {categories.map(renderCategoryItem)}
             </View>
@@ -296,7 +297,7 @@ const AddGoalModal: React.FC<AddGoalModalProps> = ({
           {/* Goal Preview */}
           {title && targetAmount && (
             <View style={styles.previewSection}>
-              <Text style={styles.previewTitle}>Preview</Text>
+              <Text style={styles.previewTitle}>{t('addGoal.preview')}</Text>
               <View style={styles.previewCard}>
                 <View style={styles.previewHeader}>
                   <Text style={styles.previewGoalTitle} numberOfLines={2} ellipsizeMode="tail">
@@ -311,7 +312,7 @@ const AddGoalModal: React.FC<AddGoalModalProps> = ({
                     {formatCurrency(parseFloat(currentAmount) || 0)}
                   </Text>
                   <Text style={styles.previewTarget} numberOfLines={1} adjustsFontSizeToFit>
-                    of {formatCurrency(parseFloat(targetAmount) || 0)}
+                    {t('more_screen_of')} {formatCurrency(parseFloat(targetAmount) || 0)}
                   </Text>
                 </View>
                 <View style={styles.previewProgress}>
@@ -325,7 +326,7 @@ const AddGoalModal: React.FC<AddGoalModalProps> = ({
                   </View>
                 </View>
                 <Text style={styles.previewDate} numberOfLines={1}>
-                  Target: {formatDate(targetDate)}
+                  {t('more_screen_target')} {formatDate(targetDate)}
                 </Text>
               </View>
             </View>

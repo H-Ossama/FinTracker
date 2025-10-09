@@ -15,6 +15,7 @@ import DateTimePicker from '@react-native-community/datetimepicker';
 import { Ionicons } from '@expo/vector-icons';
 import { BorrowedMoney } from '../types';
 import { useTheme } from '../contexts/ThemeContext';
+import { useLocalization } from '../contexts/LocalizationContext';
 import useSafeAreaHelper from '../hooks/useSafeAreaHelper';
 
 interface AddBorrowedMoneyModalProps {
@@ -31,6 +32,7 @@ const AddBorrowedMoneyModal: React.FC<AddBorrowedMoneyModalProps> = ({
   onAddWithReminder,
 }) => {
   const { theme } = useTheme();
+  const { t } = useLocalization();
   const { headerPadding } = useSafeAreaHelper();
   const [formData, setFormData] = useState({
     personName: '',
@@ -64,17 +66,17 @@ const AddBorrowedMoneyModal: React.FC<AddBorrowedMoneyModalProps> = ({
 
   const handleAdd = () => {
     if (!formData.personName.trim()) {
-      Alert.alert('Error', 'Please enter the person\'s name');
+      Alert.alert('Error', t('person_name_required'));
       return;
     }
     
     if (!formData.amount.trim() || isNaN(Number(formData.amount))) {
-      Alert.alert('Error', 'Please enter a valid amount');
+      Alert.alert('Error', t('valid_amount'));
       return;
     }
     
     if (!formData.reason.trim()) {
-      Alert.alert('Error', 'Please enter the reason for borrowing');
+      Alert.alert('Error', t('reason_required'));
       return;
     }
 
@@ -132,11 +134,11 @@ const AddBorrowedMoneyModal: React.FC<AddBorrowedMoneyModalProps> = ({
             <Ionicons name="close" size={24} color={theme.colors.text} />
           </TouchableOpacity>
           <Text style={[styles.headerTitle, { color: theme.colors.text }]}>
-            Add Borrowed Money
+            {t('add_borrowed_money_title')}
           </Text>
           <TouchableOpacity onPress={handleAdd} style={styles.addButton}>
             <Text style={[styles.addButtonText, { color: theme.colors.primary }]}>
-              Add
+              {t('add_new')}
             </Text>
           </TouchableOpacity>
         </View>
@@ -154,12 +156,12 @@ const AddBorrowedMoneyModal: React.FC<AddBorrowedMoneyModalProps> = ({
           {/* Person Details Section */}
           <View style={[styles.section, { backgroundColor: theme.colors.surface }]}>
             <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>
-              Person Details
+              {t('person_details')}
             </Text>
             
             <View style={styles.inputGroup}>
               <Text style={[styles.label, { color: theme.colors.textSecondary }]}>
-                Name *
+                {t('person_name')} *
               </Text>
               <TextInput
                 style={[styles.input, { 
@@ -169,14 +171,14 @@ const AddBorrowedMoneyModal: React.FC<AddBorrowedMoneyModalProps> = ({
                 }]}
                 value={formData.personName}
                 onChangeText={(text) => setFormData({...formData, personName: text})}
-                placeholder="Enter person's name"
+                placeholder={t('name_placeholder')}
                 placeholderTextColor={theme.colors.textSecondary}
               />
             </View>
 
             <View style={styles.inputGroup}>
               <Text style={[styles.label, { color: theme.colors.textSecondary }]}>
-                Phone Number
+                {t('phone_number')}
               </Text>
               <TextInput
                 style={[styles.input, { 
@@ -186,7 +188,7 @@ const AddBorrowedMoneyModal: React.FC<AddBorrowedMoneyModalProps> = ({
                 }]}
                 value={formData.phoneNumber}
                 onChangeText={(text) => setFormData({...formData, phoneNumber: text})}
-                placeholder="Enter phone number"
+                placeholder={t('phone_placeholder')}
                 placeholderTextColor={theme.colors.textSecondary}
                 keyboardType="phone-pad"
               />
@@ -194,7 +196,7 @@ const AddBorrowedMoneyModal: React.FC<AddBorrowedMoneyModalProps> = ({
 
             <View style={styles.inputGroup}>
               <Text style={[styles.label, { color: theme.colors.textSecondary }]}>
-                Email
+                {t('email')}
               </Text>
               <TextInput
                 style={[styles.input, { 
@@ -204,7 +206,7 @@ const AddBorrowedMoneyModal: React.FC<AddBorrowedMoneyModalProps> = ({
                 }]}
                 value={formData.email}
                 onChangeText={(text) => setFormData({...formData, email: text})}
-                placeholder="Enter email address"
+                placeholder={t('email_placeholder')}
                 placeholderTextColor={theme.colors.textSecondary}
                 keyboardType="email-address"
                 autoCapitalize="none"
@@ -215,12 +217,12 @@ const AddBorrowedMoneyModal: React.FC<AddBorrowedMoneyModalProps> = ({
           {/* Loan Details Section */}
           <View style={[styles.section, { backgroundColor: theme.colors.surface }]}>
             <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>
-              Loan Details
+              {t('loan_details')}
             </Text>
             
             <View style={styles.inputGroup}>
               <Text style={[styles.label, { color: theme.colors.textSecondary }]}>
-                Amount *
+                {t('amount')} *
               </Text>
               <TextInput
                 style={[styles.input, { 
@@ -230,7 +232,7 @@ const AddBorrowedMoneyModal: React.FC<AddBorrowedMoneyModalProps> = ({
                 }]}
                 value={formData.amount}
                 onChangeText={(text) => setFormData({...formData, amount: text})}
-                placeholder="Enter amount"
+                placeholder={t('amount_placeholder')}
                 placeholderTextColor={theme.colors.textSecondary}
                 keyboardType="numeric"
               />
@@ -238,7 +240,7 @@ const AddBorrowedMoneyModal: React.FC<AddBorrowedMoneyModalProps> = ({
 
             <View style={styles.inputGroup}>
               <Text style={[styles.label, { color: theme.colors.textSecondary }]}>
-                Reason *
+                {t('reason')} *
               </Text>
               <TextInput
                 style={[styles.input, { 
@@ -248,14 +250,14 @@ const AddBorrowedMoneyModal: React.FC<AddBorrowedMoneyModalProps> = ({
                 }]}
                 value={formData.reason}
                 onChangeText={(text) => setFormData({...formData, reason: text})}
-                placeholder="Why did they borrow this money?"
+                placeholder={t('reason_placeholder')}
                 placeholderTextColor={theme.colors.textSecondary}
               />
             </View>
 
             <View style={styles.inputGroup}>
               <Text style={[styles.label, { color: theme.colors.textSecondary }]}>
-                Due Date * 
+                {t('due_date')} * 
               </Text>
               <TouchableOpacity
                 style={[styles.datePickerButton, { 
@@ -283,7 +285,7 @@ const AddBorrowedMoneyModal: React.FC<AddBorrowedMoneyModalProps> = ({
 
             <View style={styles.inputGroup}>
               <Text style={[styles.label, { color: theme.colors.textSecondary }]}>
-                Notes
+                {t('notes')}
               </Text>
               <TextInput
                 style={[styles.textArea, { 
@@ -293,7 +295,7 @@ const AddBorrowedMoneyModal: React.FC<AddBorrowedMoneyModalProps> = ({
                 }]}
                 value={formData.notes}
                 onChangeText={(text) => setFormData({...formData, notes: text})}
-                placeholder="Additional notes or comments"
+                placeholder={t('notes_placeholder')}
                 placeholderTextColor={theme.colors.textSecondary}
                 multiline
                 numberOfLines={4}
@@ -304,7 +306,7 @@ const AddBorrowedMoneyModal: React.FC<AddBorrowedMoneyModalProps> = ({
 
           <View style={styles.disclaimer}>
             <Text style={[styles.disclaimerText, { color: theme.colors.textSecondary }]}>
-              * Required fields
+              {t('required_fields')}
             </Text>
           </View>
 
@@ -313,11 +315,11 @@ const AddBorrowedMoneyModal: React.FC<AddBorrowedMoneyModalProps> = ({
             <View style={styles.reminderHeader}>
               <Ionicons name="notifications-outline" size={20} color={theme.colors.primary} />
               <Text style={[styles.reminderTitle, { color: theme.colors.text }]}>
-                Add to Reminders
+                {t('add_reminder')}
               </Text>
             </View>
             <Text style={[styles.reminderSubtitle, { color: theme.colors.textSecondary }]}>
-              Automatically create a reminder for the due date
+              {t('reminder_subtitle')}
             </Text>
             <TouchableOpacity 
               style={[styles.reminderToggle, { 

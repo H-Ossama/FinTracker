@@ -29,14 +29,6 @@ interface AddWalletModalProps {
 
 const { width } = Dimensions.get('window');
 
-const walletTypes = [
-  { id: 'bank', name: 'Bank Account', icon: 'card', description: 'Checking or savings account' },
-  { id: 'cash', name: 'Cash', icon: 'cash', description: 'Physical cash on hand' },
-  { id: 'savings', name: 'Savings', icon: 'wallet', description: 'High-yield savings account' },
-  { id: 'investment', name: 'Investment', icon: 'trending-up', description: 'Investment portfolio' },
-  { id: 'credit', name: 'Credit Card', icon: 'card-outline', description: 'Credit card account' },
-];
-
 const colorOptions = [
   '#4A90E2', // Blue
   '#7ED321', // Green
@@ -58,7 +50,15 @@ const AddWalletModal: React.FC<AddWalletModalProps> = ({
   onAddWallet,
 }) => {
   const { theme } = useTheme();
-  const { currency, formatCurrency } = useLocalization();
+  const { currency, formatCurrency, t } = useLocalization();
+  
+  const walletTypes = [
+    { id: 'bank', name: t('wallet_type_bank'), icon: 'card', description: t('wallet_type_bank_desc') },
+    { id: 'cash', name: t('wallet_type_cash'), icon: 'cash', description: t('wallet_type_cash_desc') },
+    { id: 'savings', name: t('wallet_type_savings'), icon: 'wallet', description: t('wallet_type_savings_desc') },
+    { id: 'investment', name: t('wallet_type_investment'), icon: 'trending-up', description: t('wallet_type_investment_desc') },
+    { id: 'credit', name: t('wallet_type_credit'), icon: 'card-outline', description: t('wallet_type_credit_desc') },
+  ];
   
   const getCurrencySymbol = () => {
     const symbols = { USD: '$', EUR: '€', MAD: 'MAD' };
@@ -82,17 +82,17 @@ const AddWalletModal: React.FC<AddWalletModalProps> = ({
     const newErrors: { [key: string]: string } = {};
 
     if (!name.trim()) {
-      newErrors.name = 'Wallet name is required';
+      newErrors.name = t('add_wallet_name_required');
     } else if (name.trim().length < 2) {
-      newErrors.name = 'Name must be at least 2 characters';
+      newErrors.name = t('add_wallet_name_min_length');
     }
 
     if (!initialBalance.trim()) {
-      newErrors.initialBalance = 'Initial balance is required';
+      newErrors.initialBalance = t('add_wallet_balance_required');
     } else if (isNaN(parseFloat(initialBalance))) {
-      newErrors.initialBalance = 'Please enter a valid amount';
+      newErrors.initialBalance = t('add_wallet_balance_invalid');
     } else if (parseFloat(initialBalance) < 0) {
-      newErrors.initialBalance = 'Balance cannot be negative';
+      newErrors.initialBalance = t('add_wallet_balance_negative');
     }
 
     setErrors(newErrors);
@@ -132,9 +132,9 @@ const AddWalletModal: React.FC<AddWalletModalProps> = ({
           <TouchableOpacity onPress={handleClose} style={styles.headerButton}>
             <Ionicons name="close" size={24} color={theme.colors.text} />
           </TouchableOpacity>
-          <Text style={[styles.headerTitle, { color: theme.colors.text }]}>Add New Wallet</Text>
+          <Text style={[styles.headerTitle, { color: theme.colors.text }]}>{t('add_wallet_title')}</Text>
           <TouchableOpacity onPress={handleSubmit} style={styles.headerButton}>
-            <Text style={[styles.saveButtonText, { color: theme.colors.primary }]}>Save</Text>
+            <Text style={[styles.saveButtonText, { color: theme.colors.primary }]}>{t('save')}</Text>
           </TouchableOpacity>
         </View>
 
@@ -151,7 +151,7 @@ const AddWalletModal: React.FC<AddWalletModalProps> = ({
           >
           {/* Wallet Preview */}
           <View style={styles.section}>
-            <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>Preview</Text>
+            <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>{t('add_wallet_preview')}</Text>
             <View style={[styles.previewCard, { backgroundColor: selectedColor }]}>
               <View style={styles.previewHeader}>
                 <View style={styles.previewTitleRow}>
@@ -161,7 +161,7 @@ const AddWalletModal: React.FC<AddWalletModalProps> = ({
                     color="white" 
                   />
                   <Text style={styles.previewName}>
-                    {name.trim() || 'Wallet Name'}
+                    {name.trim() || t('add_wallet_default_name')}
                   </Text>
                 </View>
               </View>
@@ -174,22 +174,22 @@ const AddWalletModal: React.FC<AddWalletModalProps> = ({
 
           {/* Name Input */}
           <View style={styles.section}>
-            <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>Wallet Name</Text>
+            <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>{t('add_wallet_name')}</Text>
             <TextInput
               style={[styles.input, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border, color: theme.colors.text }, errors.name && styles.inputError]}
-              placeholder="Enter wallet name"
+              placeholder={t('add_wallet_name_placeholder')}
               placeholderTextColor={theme.colors.textSecondary}
               value={name}
               onChangeText={setName}
               maxLength={30}
             />
             {errors.name && <Text style={styles.errorText}>{errors.name}</Text>}
-            <Text style={[styles.helpText, { color: theme.colors.textSecondary }]}>Choose a name that helps you identify this wallet</Text>
+            <Text style={[styles.helpText, { color: theme.colors.textSecondary }]}>{t('add_wallet_name_help')}</Text>
           </View>
 
           {/* Wallet Type Selection */}
           <View style={styles.section}>
-            <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>Wallet Type</Text>
+            <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>{t('add_wallet_type')}</Text>
             <View style={[styles.typesContainer, { backgroundColor: theme.colors.surface }]}>
               {walletTypes.map((type) => (
                 <TouchableOpacity
@@ -236,7 +236,7 @@ const AddWalletModal: React.FC<AddWalletModalProps> = ({
 
           {/* Color Selection */}
           <View style={styles.section}>
-            <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>Choose Color</Text>
+            <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>{t('add_wallet_color')}</Text>
             <View style={[styles.colorsContainer, { backgroundColor: theme.colors.surface }]}>
               {colorOptions.map((color) => (
                 <TouchableOpacity
@@ -258,7 +258,7 @@ const AddWalletModal: React.FC<AddWalletModalProps> = ({
 
           {/* Initial Balance */}
           <View style={styles.section}>
-            <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>Initial Balance</Text>
+            <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>{t('add_wallet_initial_balance')}</Text>
             <View style={[styles.amountContainer, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }, errors.initialBalance && styles.inputError]}>
               <Text style={[styles.currencySymbol, { color: theme.colors.text }]}>{getCurrencySymbol()}</Text>
               <TextInput
@@ -274,14 +274,14 @@ const AddWalletModal: React.FC<AddWalletModalProps> = ({
               <Text style={styles.errorText}>{errors.initialBalance}</Text>
             )}
             <Text style={[styles.helpText, { color: theme.colors.textSecondary }]}>
-              Enter the current balance for this wallet (can be 0)
+              {t('add_wallet_balance_help')}
             </Text>
           </View>
 
           {/* Add Button */}
           <TouchableOpacity style={[styles.addButton, { backgroundColor: selectedColor }]} onPress={handleSubmit}>
             <Ionicons name="add" size={20} color="white" />
-            <Text style={styles.addButtonText}>Add Wallet</Text>
+            <Text style={styles.addButtonText}>{t('add_wallet_button')}</Text>
           </TouchableOpacity>
         </ScrollView>
         </KeyboardAvoidingView>

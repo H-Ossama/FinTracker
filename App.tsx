@@ -9,6 +9,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { View, Text, ActivityIndicator, StyleSheet } from 'react-native';
 
 import SwipeableBottomTabNavigator from './src/components/SwipeableBottomTabNavigator';
+import TouchActivityWrapper from './src/components/TouchActivityWrapper';
 import AddIncomeScreen from './src/screens/AddIncomeScreen';
 import BorrowedMoneyHistoryScreen from './src/screens/BorrowedMoneyHistoryScreen';
 import TransactionsHistoryScreen from './src/screens/TransactionsHistoryScreen';
@@ -20,6 +21,8 @@ import UserProfileScreen from './src/screens/UserProfileScreen';
 import SavingsGoalsScreen from './src/screens/SavingsGoalsScreen';
 import QuickSettingsScreen from './src/screens/QuickSettingsScreen';
 import AppLockSettingsScreen from './src/screens/AppLockSettingsScreen';
+import PinSetupScreen from './src/screens/PinSetupScreen';
+import AppLockScreen from './src/screens/AppLockScreen';
 import BillsTrackerScreen from './src/screens/BillsTrackerScreen';
 import BudgetPlannerScreen from './src/screens/BudgetPlannerScreen';
 import { ThemeProvider, useTheme } from './src/contexts/ThemeContext';
@@ -27,6 +30,7 @@ import { LocalizationProvider } from './src/contexts/LocalizationContext';
 import { AuthProvider, useAuth } from './src/contexts/AuthContext';
 import { NotificationProvider } from './src/contexts/NotificationContext';
 import { hybridDataService, AppInitResult } from './src/services/hybridDataService';
+import AppLockService from './src/services/appLockService';
 import SyncReminderBanner from './src/components/SyncReminderBanner';
 
 const Stack = createStackNavigator();
@@ -34,113 +38,170 @@ const Stack = createStackNavigator();
 const AppNavigator = () => {
   const { isDark } = useTheme();
   const { isAuthenticated, isLoading: authLoading } = useAuth();
+  const [isAppLocked, setIsAppLocked] = useState(false);
+  const [appLockInitialized, setAppLockInitialized] = useState(false);
+  const appLockService = AppLockService.getInstance();
 
-  if (authLoading) {
+  useEffect(() => {
+    if (isAuthenticated) {
+      initializeAppLock();
+    }
+    
+    // Cleanup function
+    return () => {
+      if (isAuthenticated) {
+        appLockService.cleanup();
+      }
+    };
+  }, [isAuthenticated]);
+
+  const initializeAppLock = async () => {
+    try {
+      await appLockService.initialize();
+      const settings = appLockService.getSettings();
+      
+      // Set up lock state change listener
+      appLockService.setLockStateChangeListener((locked: boolean) => {
+        setIsAppLocked(locked);
+      });
+      
+      // Check if app should be locked on startup
+      if (settings?.isEnabled && (settings.hasPinSet || settings.requireBiometric)) {
+        appLockService.lock(); // Lock immediately on app start
+      }
+      
+      setAppLockInitialized(true);
+    } catch (error) {
+      console.error('Failed to initialize app lock:', error);
+      setAppLockInitialized(true);
+    }
+  };
+
+  const handleUnlock = () => {
+    appLockService.unlock();
+  };
+
+  if (authLoading || (isAuthenticated && !appLockInitialized)) {
     return <LoadingScreen />;
   }
 
+  // Show lock screen if app is locked and user is authenticated
+  if (isAuthenticated && isAppLocked) {
+    return <AppLockScreen onUnlock={handleUnlock} />;
+  }
+
   return (
-    <NavigationContainer>
-      <StatusBar style={isDark ? "light" : "dark"} />
-      <Stack.Navigator screenOptions={{ headerShown: false }}>
-        {isAuthenticated ? (
-          // Authenticated user screens
-          <>
-            <Stack.Screen name="TabNavigator" component={SwipeableBottomTabNavigator} />
-            <Stack.Screen name="AddIncome" component={AddIncomeScreen} />
-            <Stack.Screen 
-              name="BorrowedMoneyHistory" 
-              component={BorrowedMoneyHistoryScreen}
-              options={{ 
-                headerShown: false,
-              }}
-            />
-            <Stack.Screen 
-              name="TransactionsHistory" 
-              component={TransactionsHistoryScreen}
-              options={{ 
-                headerShown: false,
-              }}
-            />
-            <Stack.Screen 
-              name="NotificationCenter" 
-              component={NotificationCenterScreen}
-              options={{ 
-                headerShown: false,
-                presentation: 'modal',
-              }}
-            />
-            <Stack.Screen 
-              name="NotificationPreferences" 
-              component={NotificationPreferencesScreen}
-              options={{ 
-                headerShown: false,
-                presentation: 'modal',
-              }}
-            />
-            <Stack.Screen 
-              name="UserProfile" 
-              component={UserProfileScreen}
-              options={{ 
-                headerShown: false,
-                presentation: 'modal',
-              }}
-            />
-            <Stack.Screen 
-              name="SavingsGoals" 
-              component={SavingsGoalsScreen}
-              options={{ 
-                headerShown: false,
-              }}
-            />
-            <Stack.Screen 
-              name="QuickSettings" 
-              component={QuickSettingsScreen}
-              options={{ 
-                headerShown: false,
-                presentation: 'modal',
-              }}
-            />
-            <Stack.Screen 
-              name="AppLockSettings" 
-              component={AppLockSettingsScreen}
-              options={{ 
-                headerShown: false,
-                presentation: 'modal',
-              }}
-            />
-            <Stack.Screen 
-              name="BillsReminder" 
-              component={BillsTrackerScreen}
-              options={{ 
-                headerShown: false,
-              }}
-            />
-            <Stack.Screen 
-              name="BudgetPlanner" 
-              component={BudgetPlannerScreen}
-              options={{ 
-                headerShown: false,
-              }}
-            />
-          </>
-        ) : (
-          // Unauthenticated user screens
-          <>
-            <Stack.Screen 
-              name="SignIn" 
-              component={SignInScreen}
-              options={{ headerShown: false }}
-            />
-            <Stack.Screen 
-              name="SignUp" 
-              component={SignUpScreen}
-              options={{ headerShown: false }}
-            />
-          </>
-        )}
-      </Stack.Navigator>
-    </NavigationContainer>
+    <TouchActivityWrapper>
+      <NavigationContainer>
+        <StatusBar style={isDark ? "light" : "dark"} />
+        <Stack.Navigator screenOptions={{ headerShown: false }}>
+          {isAuthenticated ? (
+            // Authenticated user screens
+            <>
+              <Stack.Screen name="TabNavigator" component={SwipeableBottomTabNavigator} />
+              <Stack.Screen name="AddIncome" component={AddIncomeScreen} />
+              <Stack.Screen 
+                name="BorrowedMoneyHistory" 
+                component={BorrowedMoneyHistoryScreen}
+                options={{ 
+                  headerShown: false,
+                }}
+              />
+              <Stack.Screen 
+                name="TransactionsHistory" 
+                component={TransactionsHistoryScreen}
+                options={{ 
+                  headerShown: false,
+                }}
+              />
+              <Stack.Screen 
+                name="NotificationCenter" 
+                component={NotificationCenterScreen}
+                options={{ 
+                  headerShown: false,
+                  presentation: 'modal',
+                }}
+              />
+              <Stack.Screen 
+                name="NotificationPreferences" 
+                component={NotificationPreferencesScreen}
+                options={{ 
+                  headerShown: false,
+                  presentation: 'modal',
+                }}
+              />
+              <Stack.Screen 
+                name="UserProfile" 
+                component={UserProfileScreen}
+                options={{ 
+                  headerShown: false,
+                  presentation: 'modal',
+                }}
+              />
+              <Stack.Screen 
+                name="SavingsGoals" 
+                component={SavingsGoalsScreen}
+                options={{ 
+                  headerShown: false,
+                }}
+              />
+              <Stack.Screen 
+                name="QuickSettings" 
+                component={QuickSettingsScreen}
+                options={{ 
+                  headerShown: false,
+                  presentation: 'modal',
+                }}
+              />
+              <Stack.Screen 
+                name="AppLockSettings" 
+                component={AppLockSettingsScreen}
+                options={{ 
+                  headerShown: false,
+                  presentation: 'modal',
+                }}
+              />
+              <Stack.Screen 
+                name="PinSetup" 
+                component={PinSetupScreen}
+                options={{ 
+                  headerShown: false,
+                  presentation: 'modal',
+                }}
+              />
+              <Stack.Screen 
+                name="BillsReminder" 
+                component={BillsTrackerScreen}
+                options={{ 
+                  headerShown: false,
+                }}
+              />
+              <Stack.Screen 
+                name="BudgetPlanner" 
+                component={BudgetPlannerScreen}
+                options={{ 
+                  headerShown: false,
+                }}
+              />
+            </>
+          ) : (
+            // Unauthenticated user screens
+            <>
+              <Stack.Screen 
+                name="SignIn" 
+                component={SignInScreen}
+                options={{ headerShown: false }}
+              />
+              <Stack.Screen 
+                name="SignUp" 
+                component={SignUpScreen}
+                options={{ headerShown: false }}
+              />
+            </>
+          )}
+        </Stack.Navigator>
+      </NavigationContainer>
+    </TouchActivityWrapper>
   );
 };
 

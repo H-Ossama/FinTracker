@@ -33,7 +33,7 @@ const BorrowedMoneyDetailsModal: React.FC<BorrowedMoneyDetailsModalProps> = ({
   onDelete,
 }) => {
   const { theme } = useTheme();
-  const { formatCurrency } = useLocalization();
+  const { formatCurrency, t } = useLocalization();
   const [isEditing, setIsEditing] = useState(false);
   const [editedData, setEditedData] = useState<BorrowedMoney | null>(null);
 
@@ -63,12 +63,12 @@ const BorrowedMoneyDetailsModal: React.FC<BorrowedMoneyDetailsModalProps> = ({
 
   const handleMarkAsPaid = () => {
     Alert.alert(
-      'Mark as Paid',
-      `Are you sure you want to mark this debt from ${borrowedMoney.personName} as paid?`,
+      t('mark_as_paid'),
+      t('mark_paid_confirmation').replace('{name}', borrowedMoney.personName),
       [
-        { text: 'Cancel', style: 'cancel' },
+        { text: t('cancel'), style: 'cancel' },
         { 
-          text: 'Mark as Paid', 
+          text: t('mark_as_paid'), 
           style: 'default',
           onPress: () => onMarkAsPaid(borrowedMoney.id)
         },
@@ -78,12 +78,12 @@ const BorrowedMoneyDetailsModal: React.FC<BorrowedMoneyDetailsModalProps> = ({
 
   const handleDelete = () => {
     Alert.alert(
-      'Delete Record',
-      `Are you sure you want to delete this record for ${borrowedMoney.personName}?`,
+      t('delete_record'),
+      t('delete_record_confirmation').replace('{name}', borrowedMoney.personName),
       [
-        { text: 'Cancel', style: 'cancel' },
+        { text: t('cancel'), style: 'cancel' },
         { 
-          text: 'Delete', 
+          text: t('delete'), 
           style: 'destructive',
           onPress: () => {
             onDelete(borrowedMoney.id);
@@ -131,7 +131,7 @@ const BorrowedMoneyDetailsModal: React.FC<BorrowedMoneyDetailsModalProps> = ({
             <Ionicons name="close" size={24} color={theme.colors.text} />
           </TouchableOpacity>
           <Text style={[styles.headerTitle, { color: theme.colors.text }]}>
-            Borrowed Money Details
+            {t('borrowed_money_details')}
           </Text>
           <TouchableOpacity 
             onPress={isEditing ? handleSaveEdit : handleEdit} 
@@ -159,7 +159,7 @@ const BorrowedMoneyDetailsModal: React.FC<BorrowedMoneyDetailsModalProps> = ({
               }
             ]}>
               <Text style={styles.statusText}>
-                {borrowedMoney.isPaid ? 'PAID' : isOverdue ? 'OVERDUE' : 'PENDING'}
+                {borrowedMoney.isPaid ? t('paid') : isOverdue ? t('overdue') : t('pending')}
               </Text>
             </View>
           </View>
@@ -167,7 +167,7 @@ const BorrowedMoneyDetailsModal: React.FC<BorrowedMoneyDetailsModalProps> = ({
           {/* Amount */}
           <View style={[styles.amountCard, { backgroundColor: theme.colors.surface }]}>
             <Text style={[styles.amountLabel, { color: theme.colors.textSecondary }]}>
-              Amount Borrowed
+              {t('amount_borrowed')}
             </Text>
             <Text style={[styles.amountValue, { color: theme.colors.text }]}>
               {formatCurrency(borrowedMoney.amount)}
@@ -177,19 +177,19 @@ const BorrowedMoneyDetailsModal: React.FC<BorrowedMoneyDetailsModalProps> = ({
           {/* Person Details */}
           <View style={[styles.section, { backgroundColor: theme.colors.surface }]}>
             <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>
-              Person Details
+              {t('person_details')}
             </Text>
             
             <View style={styles.detailRow}>
               <Text style={[styles.detailLabel, { color: theme.colors.textSecondary }]}>
-                Name
+                {t('person_name')}
               </Text>
               {isEditing ? (
                 <TextInput
                   style={[styles.input, { color: theme.colors.text, borderColor: theme.colors.border }]}
                   value={editedData.personName}
                   onChangeText={(text) => setEditedData({...editedData, personName: text})}
-                  placeholder="Person name"
+                  placeholder={t('name_placeholder')}
                   placeholderTextColor={theme.colors.textSecondary}
                 />
               ) : (
@@ -202,14 +202,14 @@ const BorrowedMoneyDetailsModal: React.FC<BorrowedMoneyDetailsModalProps> = ({
             {(borrowedMoney.phoneNumber || isEditing) && (
               <View style={styles.detailRow}>
                 <Text style={[styles.detailLabel, { color: theme.colors.textSecondary }]}>
-                  Phone
+                  {t('phone_number')}
                 </Text>
                 {isEditing ? (
                   <TextInput
                     style={[styles.input, { color: theme.colors.text, borderColor: theme.colors.border }]}
                     value={editedData.phoneNumber || ''}
                     onChangeText={(text) => setEditedData({...editedData, phoneNumber: text})}
-                    placeholder="Phone number"
+                    placeholder={t('phone_placeholder')}
                     placeholderTextColor={theme.colors.textSecondary}
                     keyboardType="phone-pad"
                   />
@@ -227,14 +227,14 @@ const BorrowedMoneyDetailsModal: React.FC<BorrowedMoneyDetailsModalProps> = ({
             {(borrowedMoney.email || isEditing) && (
               <View style={styles.detailRow}>
                 <Text style={[styles.detailLabel, { color: theme.colors.textSecondary }]}>
-                  Email
+                  {t('email')}
                 </Text>
                 {isEditing ? (
                   <TextInput
                     style={[styles.input, { color: theme.colors.text, borderColor: theme.colors.border }]}
                     value={editedData.email || ''}
                     onChangeText={(text) => setEditedData({...editedData, email: text})}
-                    placeholder="Email address"
+                    placeholder={t('email_placeholder')}
                     placeholderTextColor={theme.colors.textSecondary}
                     keyboardType="email-address"
                     autoCapitalize="none"
@@ -254,19 +254,19 @@ const BorrowedMoneyDetailsModal: React.FC<BorrowedMoneyDetailsModalProps> = ({
           {/* Loan Details */}
           <View style={[styles.section, { backgroundColor: theme.colors.surface }]}>
             <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>
-              Loan Details
+              {t('loan_details')}
             </Text>
             
             <View style={styles.detailRow}>
               <Text style={[styles.detailLabel, { color: theme.colors.textSecondary }]}>
-                Reason
+                {t('reason')}
               </Text>
               {isEditing ? (
                 <TextInput
                   style={[styles.input, { color: theme.colors.text, borderColor: theme.colors.border }]}
                   value={editedData.reason}
                   onChangeText={(text) => setEditedData({...editedData, reason: text})}
-                  placeholder="Reason for borrowing"
+                  placeholder={t('reason_placeholder')}
                   placeholderTextColor={theme.colors.textSecondary}
                 />
               ) : (
@@ -278,7 +278,7 @@ const BorrowedMoneyDetailsModal: React.FC<BorrowedMoneyDetailsModalProps> = ({
 
             <View style={styles.detailRow}>
               <Text style={[styles.detailLabel, { color: theme.colors.textSecondary }]}>
-                Borrowed Date
+                {t('borrowed_date')}
               </Text>
               <Text style={[styles.detailValue, { color: theme.colors.text }]}>
                 {formatDate(borrowedMoney.borrowedDate)}
@@ -287,28 +287,28 @@ const BorrowedMoneyDetailsModal: React.FC<BorrowedMoneyDetailsModalProps> = ({
 
             <View style={styles.detailRow}>
               <Text style={[styles.detailLabel, { color: theme.colors.textSecondary }]}>
-                Due Date
+                {t('due_date')}
               </Text>
               <Text style={[
                 styles.detailValue,
                 { color: isOverdue ? '#FF3B30' : theme.colors.text }
               ]}>
                 {formatDate(borrowedMoney.dueDate)}
-                {isOverdue && ' (Overdue)'}
+                {isOverdue && ` (${t('overdue')})`}
               </Text>
             </View>
 
             {(borrowedMoney.notes || isEditing) && (
               <View style={styles.detailRow}>
                 <Text style={[styles.detailLabel, { color: theme.colors.textSecondary }]}>
-                  Notes
+                  {t('notes')}
                 </Text>
                 {isEditing ? (
                   <TextInput
                     style={[styles.textArea, { color: theme.colors.text, borderColor: theme.colors.border }]}
                     value={editedData.notes || ''}
                     onChangeText={(text) => setEditedData({...editedData, notes: text})}
-                    placeholder="Additional notes"
+                    placeholder={t('notes_placeholder')}
                     placeholderTextColor={theme.colors.textSecondary}
                     multiline
                     numberOfLines={3}
@@ -332,7 +332,7 @@ const BorrowedMoneyDetailsModal: React.FC<BorrowedMoneyDetailsModalProps> = ({
                 onPress={handleMarkAsPaid}
               >
                 <Ionicons name="checkmark-circle" size={20} color="white" />
-                <Text style={styles.actionButtonText}>Mark as Paid</Text>
+                <Text style={styles.actionButtonText}>{t('mark_as_paid')}</Text>
               </TouchableOpacity>
             )}
             
@@ -341,7 +341,7 @@ const BorrowedMoneyDetailsModal: React.FC<BorrowedMoneyDetailsModalProps> = ({
               onPress={handleDelete}
             >
               <Ionicons name="trash" size={20} color="white" />
-              <Text style={styles.actionButtonText}>Delete</Text>
+              <Text style={styles.actionButtonText}>{t('delete')}</Text>
             </TouchableOpacity>
           </View>
         )}
@@ -352,14 +352,14 @@ const BorrowedMoneyDetailsModal: React.FC<BorrowedMoneyDetailsModalProps> = ({
               style={[styles.actionButton, { backgroundColor: theme.colors.textSecondary }]}
               onPress={handleCancelEdit}
             >
-              <Text style={styles.actionButtonText}>Cancel</Text>
+              <Text style={styles.actionButtonText}>{t('cancel')}</Text>
             </TouchableOpacity>
             
             <TouchableOpacity
               style={[styles.actionButton, { backgroundColor: theme.colors.primary }]}
               onPress={handleSaveEdit}
             >
-              <Text style={styles.actionButtonText}>Save Changes</Text>
+              <Text style={styles.actionButtonText}>{t('save_changes')}</Text>
             </TouchableOpacity>
           </View>
         )}

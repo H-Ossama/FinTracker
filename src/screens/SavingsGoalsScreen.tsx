@@ -20,7 +20,7 @@ import AddGoalModal from '../components/AddGoalModal';
 
 const SavingsGoalsScreen = () => {
   const { theme } = useTheme();
-  const { formatCurrency } = useLocalization();
+  const { t, formatCurrency } = useLocalization();
   const navigation = useNavigation();
   const [goals, setGoals] = useState<Goal[]>([]);
   const [refreshing, setRefreshing] = useState(false);
@@ -61,19 +61,20 @@ const SavingsGoalsScreen = () => {
 
   const handleDeleteGoal = (goalId: string) => {
     Alert.alert(
-      'Delete Goal',
-      'Are you sure you want to delete this goal?',
+      t('savingsGoals.deleteGoal'),
+      t('savingsGoals.deleteConfirm', { goalName: 'this goal' }),
       [
-        { text: 'Cancel', style: 'cancel' },
+        { text: t('payment.cancel'), style: 'cancel' },
         {
-          text: 'Delete',
+          text: t('savingsGoals.deleteGoal'),
           style: 'destructive',
           onPress: async () => {
             try {
               await GoalsService.deleteGoal(goalId);
               await loadGoals();
+              Alert.alert(t('success'), t('savingsGoals.goalDeleted'));
             } catch (error) {
-              Alert.alert('Error', 'Failed to delete goal');
+              Alert.alert(t('error'), t('savingsGoals.deleteFailed'));
             }
           },
         },
@@ -83,20 +84,21 @@ const SavingsGoalsScreen = () => {
 
   const handleAddMoney = (goalId: string) => {
     Alert.prompt(
-      'Add Money',
+      t('add_money_title'),
       'How much would you like to add to this goal?',
       [
-        { text: 'Cancel', style: 'cancel' },
+        { text: t('payment.cancel'), style: 'cancel' },
         {
-          text: 'Add',
+          text: t('add'),
           onPress: async (text?: string) => {
             const amount = parseFloat(text || '0');
             if (amount > 0) {
               try {
                 await GoalsService.addMoneyToGoal(goalId, amount);
                 await loadGoals();
+                Alert.alert(t('success'), t('savingsGoals.goalUpdated'));
               } catch (error) {
-                Alert.alert('Error', 'Failed to add money to goal');
+                Alert.alert(t('error'), t('savingsGoals.updateFailed'));
               }
             }
           },
@@ -155,7 +157,9 @@ const SavingsGoalsScreen = () => {
 
         <View style={styles.goalAmounts}>
           <Text style={styles.goalCurrent} numberOfLines={1} adjustsFontSizeToFit>{formatCurrency(goal.currentAmount)}</Text>
-          <Text style={styles.goalTarget} numberOfLines={1} adjustsFontSizeToFit>of {formatCurrency(goal.targetAmount)}</Text>
+          <Text style={styles.goalTarget} numberOfLines={1} adjustsFontSizeToFit>
+            {t('more_screen_of')} {formatCurrency(goal.targetAmount)}
+          </Text>
         </View>
 
         <View style={styles.progressContainer}>
@@ -174,19 +178,22 @@ const SavingsGoalsScreen = () => {
         </View>
 
         <View style={styles.goalFooter}>
-          <Text style={styles.goalDate}>Target: {goal.targetDate}</Text>
+          <Text style={styles.goalDate}>{t('more_screen_target')} {goal.targetDate}</Text>
           <Text style={[
             styles.daysLeft,
             { color: daysLeft < 30 ? '#FF9500' : theme.colors.textSecondary }
           ]}>
-            {daysLeft > 0 ? `${daysLeft} days left` : 'Overdue'}
+            {daysLeft > 0 ? 
+              t('savingsGoals.dueInDays', { days: daysLeft }) : 
+              t('savingsGoals.overdue')
+            }
           </Text>
         </View>
 
         {isCompleted && (
           <View style={styles.completedBadge}>
             <Ionicons name="checkmark-circle" size={16} color="#34C759" />
-            <Text style={styles.completedText}>Completed!</Text>
+            <Text style={styles.completedText}>{t('savingsGoals.completed')}</Text>
           </View>
         )}
       </TouchableOpacity>
@@ -204,7 +211,7 @@ const SavingsGoalsScreen = () => {
           <TouchableOpacity onPress={() => navigation.goBack()}>
             <Ionicons name="arrow-back" size={24} color={theme.colors.text} />
           </TouchableOpacity>
-          <Text style={styles.title}>Savings Goals</Text>
+          <Text style={styles.title}>{t('savingsGoals.title')}</Text>
           <TouchableOpacity onPress={() => setShowAddModal(true)}>
             <Ionicons name="add" size={24} color={theme.colors.text} />
           </TouchableOpacity>
@@ -214,15 +221,15 @@ const SavingsGoalsScreen = () => {
         <View style={styles.summaryContainer}>
           <View style={styles.summaryCard}>
             <Text style={styles.summaryValue}>{summary.totalGoals}</Text>
-            <Text style={styles.summaryLabel}>Total Goals</Text>
+            <Text style={styles.summaryLabel}>{t('savingsGoals.totalGoals')}</Text>
           </View>
           <View style={styles.summaryCard}>
             <Text style={styles.summaryValue}>{summary.completedGoals}</Text>
-            <Text style={styles.summaryLabel}>Completed</Text>
+            <Text style={styles.summaryLabel}>{t('savingsGoals.completed')}</Text>
           </View>
           <View style={styles.summaryCard}>
             <Text style={styles.summaryValue}>{formatCurrency(summary.totalSaved)}</Text>
-            <Text style={styles.summaryLabel}>Total Saved</Text>
+            <Text style={styles.summaryLabel}>{t('savingsGoals.totalSaved')}</Text>
           </View>
         </View>
 
@@ -237,12 +244,12 @@ const SavingsGoalsScreen = () => {
           {goals.length === 0 ? (
             <View style={styles.emptyState}>
               <Ionicons name="flag-outline" size={64} color={theme.colors.textSecondary} />
-              <Text style={styles.emptyTitle}>No Goals Yet</Text>
+              <Text style={styles.emptyTitle}>{t('savingsGoals.noGoalsYet')}</Text>
               <Text style={styles.emptySubtitle}>
-                Create your first savings goal to start tracking your progress
+                {t('savingsGoals.createFirstGoal')}
               </Text>
               <TouchableOpacity style={styles.addButton} onPress={() => setShowAddModal(true)}>
-                <Text style={styles.addButtonText}>Add Your First Goal</Text>
+                <Text style={styles.addButtonText}>{t('savingsGoals.addFirstGoal')}</Text>
               </TouchableOpacity>
             </View>
           ) : (

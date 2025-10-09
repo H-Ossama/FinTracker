@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -9,12 +9,14 @@ import {
   Alert,
   KeyboardAvoidingView,
   Platform,
+  ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import DateTimePicker from '@react-native-community/datetimepicker';
-import { mockWallets } from '../data/mockData';
+import { hybridDataService, HybridWallet } from '../services/hybridDataService';
+import { LocalCategory } from '../services/localStorageService';
 import { useTheme } from '../contexts/ThemeContext';
 import { useLocalization } from '../contexts/LocalizationContext';
 
@@ -22,15 +24,25 @@ interface AddIncomeScreenProps {
   navigation: any;
 }
 
-const incomeCategories = [
-  { id: 'salary', name: 'Salary', icon: '💼', color: '#4A90E2' },
-  { id: 'freelance', name: 'Freelance', icon: '💻', color: '#7ED321' },
-  { id: 'business', name: 'Business', icon: '🏢', color: '#9013FE' },
-  { id: 'investment', name: 'Investment', icon: '📈', color: '#F5A623' },
-  { id: 'rental', name: 'Rental', icon: '🏠', color: '#D0021B' },
-  { id: 'bonus', name: 'Bonus', icon: '🎁', color: '#BD10E0' },
-  { id: 'refund', name: 'Refund', icon: '↩️', color: '#50E3C2' },
-  { id: 'other', name: 'Other', icon: '💰', color: '#8E8E93' },
+interface ExtendedIncomeCategory {
+  id: string;
+  name: string;
+  icon: string;
+  color: string;
+  actualCategoryId?: string;
+  displayName?: string;
+  dbCategory?: LocalCategory;
+}
+
+const defaultIncomeCategories: ExtendedIncomeCategory[] = [
+  { id: 'salary', name: 'Salary', icon: 'briefcase', color: '#4A90E2' },
+  { id: 'freelance', name: 'Freelance', icon: 'laptop', color: '#7ED321' },
+  { id: 'business', name: 'Business', icon: 'business', color: '#9013FE' },
+  { id: 'investment', name: 'Investment', icon: 'trending-up', color: '#F5A623' },
+  { id: 'rental', name: 'Rental', icon: 'home', color: '#D0021B' },
+  { id: 'bonus', name: 'Bonus', icon: 'gift', color: '#BD10E0' },
+  { id: 'refund', name: 'Refund', icon: 'return-up-back', color: '#50E3C2' },
+  { id: 'other', name: 'Other', icon: 'cash', color: '#8E8E93' },
 ];
 
 const AddIncomeScreen: React.FC<AddIncomeScreenProps> = ({ navigation }) => {
@@ -38,56 +50,139 @@ const AddIncomeScreen: React.FC<AddIncomeScreenProps> = ({ navigation }) => {
   const { t, formatCurrency } = useLocalization();
   const [title, setTitle] = useState('');
   const [amount, setAmount] = useState('');
-  const [selectedCategory, setSelectedCategory] = useState(incomeCategories[0]);
-  const [selectedWallet, setSelectedWallet] = useState(mockWallets[0]);
+  const [selectedCategory, setSelectedCategory] = useState<LocalCategory | null>(null);
+  const [selectedWallet, setSelectedWallet] = useState<HybridWallet | null>(null);
   const [description, setDescription] = useState('');
   const [date, setDate] = useState(new Date());
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [errors, setErrors] = useState<{ [key: string]: string }>({});
+  const [loading, setLoading] = useState(true);
+  const [submitting, setSubmitting] = useState(false);
+  const [wallets, setWallets] = useState<HybridWallet[]>([]);
+  const [categories, setCategories] = useState<LocalCategory[]>([]);
+  const [incomeCategories, setIncomeCategories] = useState<ExtendedIncomeCategory[]>(defaultIncomeCategories);
+
+  useEffect(() => {
+    loadData();
+  }, []);
+
+  const loadData = async () => {
+    try {
+      setLoading(true);
+      const [walletsData, categoriesData] = await Promise.all([
+        hybridDataService.getWallets(),
+        hybridDataService.getCategories()
+      ]);
+
+      setWallets(walletsData);
+      setCategories(categoriesData);
+
+      // Set default selections
+      if (walletsData.length > 0) {
+        setSelectedWallet(walletsData[0]);
+      }
+
+      // Find or create income-related categories
+      const salaryCategory = categoriesData.find(c => 
+        c.name.toLowerCase().includes('salary') || 
+        c.name.toLowerCase().includes('income')
+      );
+      
+      if (salaryCategory) {
+        setSelectedCategory(salaryCategory);
+      }
+
+      // Update income categories with actual category data where available
+      const updatedIncomeCategories = defaultIncomeCategories.map(defaultCat => {
+        const matchingCategory = categoriesData.find(c => 
+          c.name.toLowerCase().includes(defaultCat.name.toLowerCase())
+        );
+        return {
+          ...defaultCat,
+          // Keep the default display name but use real category ID if found
+          actualCategoryId: matchingCategory?.id,
+          displayName: defaultCat.name, // Always use the nice display name
+          dbCategory: matchingCategory
+        };
+      });
+      
+      setIncomeCategories(updatedIncomeCategories);
+    } catch (error) {
+      console.error('Error loading data:', error);
+      Alert.alert(
+        t('error') || 'Error',
+        t('failed_to_load_data') || 'Failed to load wallets and categories. Please try again.'
+      );
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const validateForm = () => {
     const newErrors: { [key: string]: string } = {};
 
     if (!title.trim()) {
-      newErrors.title = 'Title is required';
+      newErrors.title = t('title_required') || 'Title is required';
     }
 
     if (!amount.trim()) {
-      newErrors.amount = 'Amount is required';
+      newErrors.amount = t('amount_required') || 'Amount is required';
     } else if (isNaN(parseFloat(amount)) || parseFloat(amount) <= 0) {
-      newErrors.amount = 'Please enter a valid amount';
+      newErrors.amount = t('valid_amount') || 'Please enter a valid amount';
+    }
+
+    if (!selectedWallet) {
+      newErrors.wallet = t('wallet_required') || 'Please select a wallet';
+    }
+
+    if (!selectedCategory) {
+      newErrors.category = t('category_required') || 'Please select a category';
     }
 
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
 
-  const handleSubmit = () => {
-    if (validateForm()) {
-      const income = {
-        id: Date.now().toString(),
-        title: title.trim(),
+  const handleSubmit = async () => {
+    if (!validateForm() || !selectedWallet || !selectedCategory) {
+      return;
+    }
+
+    setSubmitting(true);
+    try {
+      const transactionData = {
         amount: parseFloat(amount),
-        category: selectedCategory.name,
+        description: title.trim(),
+        type: 'INCOME' as const,
+        date: date.toISOString(),
+        notes: description.trim() || undefined,
         walletId: selectedWallet.id,
-        date: date.toISOString().split('T')[0],
-        type: 'income' as const,
-        description: description.trim() || undefined,
+        categoryId: selectedCategory.id,
       };
 
-      // In a real app, this would save to your data store
-      console.log('Adding income:', income);
+      await hybridDataService.createTransaction(transactionData);
       
       Alert.alert(
-        'Success!',
-        `Income of ${formatCurrency(parseFloat(amount))} has been added to your ${selectedWallet.name}.`,
+        t('success') || 'Success',
+        (t('income_added_success') || 'Income of {amount} added to {wallet} successfully!')
+          .replace('{amount}', formatCurrency(parseFloat(amount)))
+          .replace('{wallet}', selectedWallet.name),
         [
           {
-            text: 'OK',
+            text: t('ok') || 'OK',
             onPress: () => navigation.goBack(),
           },
         ]
       );
+    } catch (error) {
+      console.error('Error adding income:', error);
+      Alert.alert(
+        t('error') || 'Error',
+        t('failed_to_add_income') || 'Failed to add income. Please try again.',
+        [{ text: t('ok') || 'OK' }]
+      );
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -106,6 +201,19 @@ const AddIncomeScreen: React.FC<AddIncomeScreenProps> = ({ navigation }) => {
     });
   };
 
+  if (loading) {
+    return (
+      <SafeAreaView style={[styles.container, { backgroundColor: theme.colors.background }]}>
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={theme.colors.primary} />
+          <Text style={[styles.loadingText, { color: theme.colors.text }]}>
+            {t('loading') || 'Loading...'}
+          </Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: theme.colors.background }]}>
       <LinearGradient
@@ -120,9 +228,19 @@ const AddIncomeScreen: React.FC<AddIncomeScreenProps> = ({ navigation }) => {
           >
             <Ionicons name="arrow-back" size={24} color={theme.colors.text} />
           </TouchableOpacity>
-          <Text style={[styles.headerTitle, { color: theme.colors.text }]}>Add Income</Text>
-          <TouchableOpacity onPress={handleSubmit} style={styles.headerButton}>
-            <Text style={[styles.saveButtonText, { color: theme.colors.success }]}>Save</Text>
+          <Text style={[styles.headerTitle, { color: theme.colors.text }]}>{t('add_income_title')}</Text>
+          <TouchableOpacity 
+            onPress={handleSubmit} 
+            style={[styles.headerButton, submitting && styles.headerButtonDisabled]}
+            disabled={submitting}
+          >
+            {submitting ? (
+              <ActivityIndicator size="small" color={theme.colors.success} />
+            ) : (
+              <Text style={[styles.saveButtonText, { color: theme.colors.success }]}>
+                {t('save') || 'Save'}
+              </Text>
+            )}
           </TouchableOpacity>
         </View>
 
@@ -139,7 +257,7 @@ const AddIncomeScreen: React.FC<AddIncomeScreenProps> = ({ navigation }) => {
           >
           {/* Amount Input */}
           <View style={styles.section}>
-            <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>Amount</Text>
+            <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>{t('amount')}</Text>
             <View style={[
               styles.amountContainer, 
               { backgroundColor: theme.colors.surface, borderColor: theme.colors.border },
@@ -161,14 +279,14 @@ const AddIncomeScreen: React.FC<AddIncomeScreenProps> = ({ navigation }) => {
 
           {/* Title Input */}
           <View style={styles.section}>
-            <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>Title</Text>
+            <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>{t('title')}</Text>
             <TextInput
               style={[
                 styles.input, 
                 { backgroundColor: theme.colors.surface, borderColor: theme.colors.border, color: theme.colors.text },
                 errors.title && styles.inputError
               ]}
-              placeholder="What income did you receive?"
+              placeholder={t('income_description')}
               placeholderTextColor={theme.colors.textSecondary}
               value={title}
               onChangeText={setTitle}
@@ -178,99 +296,131 @@ const AddIncomeScreen: React.FC<AddIncomeScreenProps> = ({ navigation }) => {
 
           {/* Category Selection */}
           <View style={styles.section}>
-            <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>Category</Text>
+            <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>{t('category')}</Text>
             <ScrollView
               horizontal
               showsHorizontalScrollIndicator={false}
               style={styles.categoriesScroll}
             >
-              {incomeCategories.map((category) => (
-                <TouchableOpacity
-                  key={category.id}
-                  style={[
-                    styles.categoryItem,
-                    selectedCategory.id === category.id && { 
-                      backgroundColor: theme.isDark ? theme.colors.card : '#E8F5E8' 
-                    },
-                  ]}
-                  onPress={() => setSelectedCategory(category)}
-                >
-                  <View
+              {incomeCategories.map((category) => {
+                const isSelected = selectedCategory?.id === (category.actualCategoryId || category.id);
+                return (
+                  <TouchableOpacity
+                    key={category.id}
                     style={[
-                      styles.categoryIcon,
-                      { backgroundColor: category.color },
-                      selectedCategory.id === category.id && styles.categoryIconSelected,
-                    ]}
-                  >
-                    <Text style={styles.categoryEmoji}>{category.icon}</Text>
-                  </View>
-                  <Text
-                    style={[
-                      styles.categoryName,
-                      { color: theme.colors.textSecondary },
-                      selectedCategory.id === category.id && { 
-                        color: theme.colors.success, 
-                        fontWeight: '600' 
+                      styles.categoryItem,
+                      {
+                        backgroundColor: isSelected 
+                          ? (theme.isDark ? theme.colors.card : '#F0F9FF')
+                          : 'transparent',
+                        borderWidth: isSelected ? 2 : 1,
+                        borderColor: isSelected 
+                          ? theme.colors.primary || category.color
+                          : theme.colors.border || '#E5E5EA'
                       },
                     ]}
+                    onPress={() => {
+                      // Use the actual database category if available, otherwise create a structure
+                      const actualCategory = category.dbCategory || {
+                        id: category.actualCategoryId || category.id,
+                        name: category.displayName || category.name,
+                        icon: category.icon,
+                        color: category.color,
+                        isCustom: false,
+                        createdAt: new Date().toISOString(),
+                        updatedAt: new Date().toISOString()
+                      };
+                      setSelectedCategory(actualCategory);
+                    }}
                   >
-                    {category.name}
-                  </Text>
-                </TouchableOpacity>
-              ))}
+                    <View
+                      style={[
+                        styles.categoryIcon,
+                        { backgroundColor: category.color },
+                        isSelected && styles.categoryIconSelected,
+                      ]}
+                    >
+                      <Ionicons 
+                        name={category.icon as any} 
+                        size={24} 
+                        color="white" 
+                      />
+                    </View>
+                    <Text
+                      numberOfLines={1}
+                      ellipsizeMode="tail"
+                      style={[
+                        styles.categoryName,
+                        { color: theme.colors.textSecondary },
+                        isSelected && { 
+                          color: theme.colors.primary || '#7ED321', 
+                          fontWeight: '600' 
+                        },
+                      ]}
+                    >
+                      {category.displayName || category.name}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
             </ScrollView>
           </View>
 
           {/* Wallet Selection */}
           <View style={styles.section}>
-            <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>Add To</Text>
+            <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>{t('received_in')}</Text>
             <View style={[styles.walletsContainer, { backgroundColor: theme.colors.surface }]}>
-              {mockWallets.map((wallet) => (
-                <TouchableOpacity
-                  key={wallet.id}
-                  style={[
-                    styles.walletItem,
-                    { borderBottomColor: theme.colors.border },
-                    selectedWallet.id === wallet.id && { 
-                      backgroundColor: theme.isDark ? theme.colors.card : '#E8F5E8' 
-                    },
-                  ]}
-                  onPress={() => setSelectedWallet(wallet)}
-                >
-                  <View style={styles.walletLeft}>
-                    <View style={[styles.walletIcon, { backgroundColor: wallet.color }]}>
-                      <Ionicons
-                        name={
-                          wallet.type === 'bank'
-                            ? 'card'
-                            : wallet.type === 'cash'
-                            ? 'cash'
-                            : 'wallet'
-                        }
-                        size={16}
-                        color="white"
-                      />
+              {wallets.map((wallet) => {
+                const isSelected = selectedWallet?.id === wallet.id;
+                return (
+                  <TouchableOpacity
+                    key={wallet.id}
+                    style={[
+                      styles.walletItem,
+                      { borderBottomColor: theme.colors.border },
+                      isSelected && { 
+                        backgroundColor: theme.isDark ? theme.colors.card : '#E8F5E8' 
+                      },
+                    ]}
+                    onPress={() => setSelectedWallet(wallet)}
+                  >
+                    <View style={styles.walletLeft}>
+                      <View style={[styles.walletIcon, { backgroundColor: wallet.color }]}>
+                        <Ionicons
+                          name={
+                            wallet.type === 'BANK'
+                              ? 'card'
+                              : wallet.type === 'CASH'
+                              ? 'cash'
+                              : wallet.type === 'SAVINGS'
+                              ? 'shield-checkmark'
+                              : 'wallet'
+                          }
+                          size={16}
+                          color="white"
+                        />
+                      </View>
+                      <View>
+                        <Text style={[styles.walletName, { color: theme.colors.text }]}>
+                          {wallet.name}
+                        </Text>
+                        <Text style={[styles.walletBalance, { color: theme.colors.textSecondary }]}>
+                          {formatCurrency(wallet.balance)}
+                        </Text>
+                      </View>
                     </View>
-                    <View>
-                      <Text style={[styles.walletName, { color: theme.colors.text }]}>
-                        {wallet.name}
-                      </Text>
-                      <Text style={[styles.walletBalance, { color: theme.colors.textSecondary }]}>
-                        {formatCurrency(wallet.balance)}
-                      </Text>
-                    </View>
-                  </View>
-                  {selectedWallet.id === wallet.id && (
-                    <Ionicons name="checkmark-circle" size={20} color={theme.colors.success} />
-                  )}
-                </TouchableOpacity>
-              ))}
+                    {isSelected && (
+                      <Ionicons name="checkmark-circle" size={20} color={theme.colors.success} />
+                    )}
+                  </TouchableOpacity>
+                );
+              })}
             </View>
           </View>
 
           {/* Date Selection */}
           <View style={styles.section}>
-            <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>Date</Text>
+            <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>{t('date')}</Text>
             <TouchableOpacity 
               style={[
                 styles.dateButton, 
@@ -289,7 +439,7 @@ const AddIncomeScreen: React.FC<AddIncomeScreenProps> = ({ navigation }) => {
           {/* Description Input */}
           <View style={styles.section}>
             <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>
-              Description (Optional)
+              {t('description_optional')}
             </Text>
             <TextInput
               style={[
@@ -301,7 +451,7 @@ const AddIncomeScreen: React.FC<AddIncomeScreenProps> = ({ navigation }) => {
                   color: theme.colors.text 
                 }
               ]}
-              placeholder="Add a note about this income..."
+              placeholder={t('income_note_placeholder')}
               placeholderTextColor={theme.colors.textSecondary}
               value={description}
               onChangeText={setDescription}
@@ -312,23 +462,23 @@ const AddIncomeScreen: React.FC<AddIncomeScreenProps> = ({ navigation }) => {
 
           {/* Income Summary Card */}
           <View style={[styles.summaryCard, { backgroundColor: theme.colors.surface }]}>
-            <Text style={[styles.summaryTitle, { color: theme.colors.text }]}>Summary</Text>
+            <Text style={[styles.summaryTitle, { color: theme.colors.text }]}>{t('summary')}</Text>
             <View style={styles.summaryRow}>
-              <Text style={[styles.summaryLabel, { color: theme.colors.textSecondary }]}>Amount:</Text>
+              <Text style={[styles.summaryLabel, { color: theme.colors.textSecondary }]}>{t('amount')}:</Text>
               <Text style={[styles.summaryValue, { color: theme.colors.success }]}>
                 {amount ? `+${formatCurrency(parseFloat(amount) || 0)}` : '$0.00'}
               </Text>
             </View>
             <View style={styles.summaryRow}>
-              <Text style={[styles.summaryLabel, { color: theme.colors.textSecondary }]}>Category:</Text>
+              <Text style={[styles.summaryLabel, { color: theme.colors.textSecondary }]}>{t('category') || 'Category'}:</Text>
               <Text style={[styles.summaryValue, { color: theme.colors.text }]}>
-                {selectedCategory.name}
+                {selectedCategory ? selectedCategory.name : t('select_category') || 'Select category'}
               </Text>
             </View>
             <View style={styles.summaryRow}>
-              <Text style={[styles.summaryLabel, { color: theme.colors.textSecondary }]}>Wallet:</Text>
+              <Text style={[styles.summaryLabel, { color: theme.colors.textSecondary }]}>{t('wallet_label') || 'Wallet'}:</Text>
               <Text style={[styles.summaryValue, { color: theme.colors.text }]}>
-                {selectedWallet.name}
+                {selectedWallet ? selectedWallet.name : t('select_wallet') || 'Select wallet'}
               </Text>
             </View>
           </View>
@@ -446,32 +596,42 @@ const styles = StyleSheet.create({
   categoriesScroll: {
     marginHorizontal: -20,
     paddingHorizontal: 20,
+    paddingVertical: 8,
   },
   categoryItem: {
     alignItems: 'center',
-    marginRight: 16,
-    padding: 8,
-    borderRadius: 12,
+    marginRight: 12,
+    padding: 12,
+    borderRadius: 16,
+    minWidth: 80,
+    borderWidth: 1,
+    borderColor: '#E5E5EA',
   },
   categoryIcon: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
+    width: 52,
+    height: 52,
+    borderRadius: 26,
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    elevation: 2,
   },
   categoryIconSelected: {
-    borderWidth: 2,
+    borderWidth: 3,
     borderColor: '#7ED321',
-  },
-  categoryEmoji: {
-    fontSize: 20,
+    shadowOpacity: 0.2,
+    elevation: 4,
   },
   categoryName: {
-    fontSize: 12,
+    fontSize: 11,
     color: '#8E8E93',
     textAlign: 'center',
+    fontWeight: '500',
+    maxWidth: 70,
   },
   walletsContainer: {
     backgroundColor: 'white',
@@ -556,6 +716,19 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '500',
     color: '#333',
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  loadingText: {
+    marginTop: 12,
+    fontSize: 16,
+    color: '#666',
+  },
+  headerButtonDisabled: {
+    opacity: 0.6,
   },
 });
 

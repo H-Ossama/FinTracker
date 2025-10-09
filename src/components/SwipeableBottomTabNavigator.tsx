@@ -10,18 +10,20 @@ import InsightsScreen from '../screens/InsightsScreen';
 import WalletScreen from '../screens/WalletScreen';
 import MoreScreen from '../screens/MoreScreen';
 import { useTheme } from '../contexts/ThemeContext';
+import { useLocalization } from '../contexts/LocalizationContext';
 
 const initialLayout = { width: Dimensions.get('window').width };
 
 const SwipeableBottomTabNavigator = () => {
   const { isDark } = useTheme();
+  const { t } = useLocalization();
   const insets = useSafeAreaInsets();
   const [index, setIndex] = useState(0);
   const [routes] = useState([
-    { key: 'home', title: 'Home' },
-    { key: 'insights', title: 'Insights' },
-    { key: 'wallet', title: 'Wallet' },
-    { key: 'more', title: 'More' },
+    { key: 'home', title: t('home') },
+    { key: 'insights', title: t('insights') },
+    { key: 'wallet', title: t('wallet') },
+    { key: 'more', title: t('more') },
   ]);
 
   const renderScene = ({ route }: { route: any }) => {

@@ -52,7 +52,7 @@ const AddMoneyModal: React.FC<AddMoneyModalProps> = ({
   allowWalletSelection = false,
 }) => {
   const { theme } = useTheme();
-  const { formatCurrency } = useLocalization();
+  const { formatCurrency, t } = useLocalization();
   
   const [title, setTitle] = useState('');
   const [amount, setAmount] = useState('');
@@ -84,17 +84,17 @@ const AddMoneyModal: React.FC<AddMoneyModalProps> = ({
     const newErrors: { [key: string]: string } = {};
 
     if (!title.trim()) {
-      newErrors.title = 'Title is required';
+      newErrors.title = t('title_required');
     }
 
     if (!amount.trim()) {
-      newErrors.amount = 'Amount is required';
+      newErrors.amount = t('amount_required');
     } else if (isNaN(parseFloat(amount)) || parseFloat(amount) <= 0) {
-      newErrors.amount = 'Please enter a valid amount greater than 0';
+      newErrors.amount = t('valid_amount');
     }
 
     if (allowWalletSelection && !currentSelectedWallet) {
-      newErrors.wallet = 'Please select a wallet';
+      newErrors.wallet = t('add_money_wallet_required');
     }
 
     setErrors(newErrors);
@@ -118,7 +118,7 @@ const AddMoneyModal: React.FC<AddMoneyModalProps> = ({
         onClose();
       } catch (error) {
         console.error('Error adding money:', error);
-        Alert.alert('Error', 'Failed to add money. Please try again.');
+        Alert.alert(t('error'), t('add_money_error'));
       } finally {
         setIsLoading(false);
       }
@@ -165,7 +165,7 @@ const AddMoneyModal: React.FC<AddMoneyModalProps> = ({
             <Ionicons name="close" size={24} color={theme.colors.text} />
           </TouchableOpacity>
           <Text style={[styles.headerTitle, { color: theme.colors.text }]}>
-            {allowWalletSelection ? 'Add Money' : `Add Money to ${currentSelectedWallet?.name || 'Wallet'}`}
+            {allowWalletSelection ? t('add_money_title') : t('add_money_to_wallet', { wallet: currentSelectedWallet?.name || 'Wallet' })}
           </Text>
           <TouchableOpacity 
             onPress={handleSubmit} 
@@ -176,7 +176,7 @@ const AddMoneyModal: React.FC<AddMoneyModalProps> = ({
               styles.saveButtonText, 
               { color: isLoading ? theme.colors.textSecondary : theme.colors.success }
             ]}>
-              {isLoading ? 'Adding...' : 'Add'}
+              {isLoading ? t('add_money_adding') : t('add')}
             </Text>
           </TouchableOpacity>
         </View>
@@ -203,17 +203,17 @@ const AddMoneyModal: React.FC<AddMoneyModalProps> = ({
                 />
               </View>
               <Text style={[styles.walletInfoText, { color: theme.colors.text }]}>
-                Adding money to <Text style={{ fontWeight: '600' }}>{currentSelectedWallet.name}</Text>
+                {t('add_money_adding_to')}<Text style={{ fontWeight: '600' }}>{currentSelectedWallet.name}</Text>
               </Text>
               <Text style={[styles.walletBalance, { color: theme.colors.textSecondary }]}>
-                Current: {formatCurrency(currentSelectedWallet.balance)}
+                {t('add_money_current_balance', { balance: formatCurrency(currentSelectedWallet.balance) })}
               </Text>
             </View>
           )}
 
           {/* Amount Input */}
           <View style={styles.section}>
-            <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>Amount</Text>
+            <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>{t('amount')}</Text>
             <View style={[
               styles.amountContainer, 
               { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }, 
@@ -235,7 +235,7 @@ const AddMoneyModal: React.FC<AddMoneyModalProps> = ({
             {/* Quick Amount Buttons */}
             <View style={styles.quickAmountsContainer}>
               <Text style={[styles.quickAmountsLabel, { color: theme.colors.textSecondary }]}>
-                Quick amounts:
+                {t('add_money_quick_amounts')}
               </Text>
               <View style={styles.quickAmounts}>
                 {quickAmounts.map((quickAmount) => (
@@ -270,7 +270,7 @@ const AddMoneyModal: React.FC<AddMoneyModalProps> = ({
           {/* Wallet Selection */}
           {allowWalletSelection && availableWallets.length > 0 && (
             <View style={styles.section}>
-              <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>Select Wallet</Text>
+              <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>{t('add_money_select_wallet')}</Text>
               <View style={[styles.walletsContainer, { backgroundColor: theme.colors.surface }]}>
                 {availableWallets.map((wallet) => (
                   <TouchableOpacity
@@ -319,7 +319,7 @@ const AddMoneyModal: React.FC<AddMoneyModalProps> = ({
 
           {/* Title Input */}
           <View style={styles.section}>
-            <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>Title</Text>
+            <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>{t('title')}</Text>
             <TextInput
               style={[
                 styles.input, 
@@ -330,7 +330,7 @@ const AddMoneyModal: React.FC<AddMoneyModalProps> = ({
                 }, 
                 errors.title && styles.inputError
               ]}
-              placeholder="e.g., Cash deposit, Salary, Gift money..."
+              placeholder={t('add_money_placeholder')}
               placeholderTextColor={theme.colors.textSecondary}
               value={title}
               onChangeText={setTitle}
@@ -340,7 +340,7 @@ const AddMoneyModal: React.FC<AddMoneyModalProps> = ({
 
           {/* Date Selection */}
           <View style={styles.section}>
-            <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>Date</Text>
+            <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>{t('date')}</Text>
             <TouchableOpacity 
               style={[styles.dateButton, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]} 
               onPress={() => setShowDatePicker(true)}
@@ -353,7 +353,7 @@ const AddMoneyModal: React.FC<AddMoneyModalProps> = ({
 
           {/* Description Input */}
           <View style={styles.section}>
-            <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>Note (Optional)</Text>
+            <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>{t('description_optional')}</Text>
             <TextInput
               style={[
                 styles.input, 
@@ -364,7 +364,7 @@ const AddMoneyModal: React.FC<AddMoneyModalProps> = ({
                   color: theme.colors.text 
                 }
               ]}
-              placeholder="Add a note about this money..."
+              placeholder={t('add_money_note_placeholder')}
               placeholderTextColor={theme.colors.textSecondary}
               value={description}
               onChangeText={setDescription}
@@ -387,7 +387,7 @@ const AddMoneyModal: React.FC<AddMoneyModalProps> = ({
           >
             <Ionicons name="add" size={20} color="white" />
             <Text style={styles.addButtonText}>
-              {isLoading ? 'Adding Money...' : `Add ${amount ? formatCurrency(parseFloat(amount) || 0) : '$0'}`}
+              {isLoading ? t('add_money_adding_money') : t('add_money_button', { amount: amount ? formatCurrency(parseFloat(amount) || 0) : '$0' })}
             </Text>
           </TouchableOpacity>
         </ScrollView>

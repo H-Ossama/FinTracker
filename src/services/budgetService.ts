@@ -11,7 +11,7 @@ const defaultBudgetCategories: BudgetCategory[] = [
   { id: '2', name: 'Transportation', icon: 'car', color: '#4ECDC4', isDefault: true },
   { id: '3', name: 'Shopping', icon: 'bag', color: '#45B7D1', isDefault: true },
   { id: '4', name: 'Entertainment', icon: 'game-controller', color: '#96CEB4', isDefault: true },
-  { id: '5', name: 'Bills & Utilities', icon: 'receipt', color: '#FFEAA7', isDefault: true },
+  { id: '5', name: 'Bills & Utilities', icon: '🧾', color: '#FFEAA7', isDefault: true },
   { id: '6', name: 'Healthcare', icon: 'medical', color: '#DDA0DD', isDefault: true },
   { id: '7', name: 'Education', icon: 'school', color: '#98D8C8', isDefault: true },
   { id: '8', name: 'Personal Care', icon: 'person', color: '#F7DC6F', isDefault: true },

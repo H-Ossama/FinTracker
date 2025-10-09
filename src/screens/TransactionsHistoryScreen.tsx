@@ -21,7 +21,7 @@ import useSafeAreaHelper from '../hooks/useSafeAreaHelper';
 const TransactionsHistoryScreen = () => {
   const navigation = useNavigation();
   const { theme } = useTheme();
-  const { formatCurrency } = useLocalization();
+  const { formatCurrency, t } = useLocalization();
   const { headerPadding } = useSafeAreaHelper();
   
   const [transactions, setTransactions] = useState<HybridTransaction[]>([]);
@@ -107,9 +107,9 @@ const TransactionsHistoryScreen = () => {
     const diffTime = Math.abs(today.getTime() - date.getTime());
     const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
     
-    if (diffDays === 1) return 'Today';
-    if (diffDays === 2) return 'Yesterday';
-    if (diffDays <= 7) return `${diffDays - 1} days ago`;
+    if (diffDays === 1) return t('today');
+    if (diffDays === 2) return t('yesterday');
+    if (diffDays <= 7) return `${diffDays - 1} ${t('days_ago')}`;
     return date.toLocaleDateString('en-US', {
       month: 'short',
       day: 'numeric',
@@ -217,12 +217,12 @@ const TransactionsHistoryScreen = () => {
         color={theme.colors.textSecondary} 
       />
       <Text style={[styles.emptyTitle, { color: theme.colors.text }]}>
-        No transactions found
+        {t('no_transactions')}
       </Text>
       <Text style={[styles.emptySubtitle, { color: theme.colors.textSecondary }]}>
         {filter === 'all' 
-          ? 'Start by adding your first transaction'
-          : `No ${filter} transactions found`
+          ? t('no_transactions_subtitle')
+          : t('no_filtered_transactions').replace('{filter}', t(filter))
         }
       </Text>
     </View>
@@ -235,7 +235,7 @@ const TransactionsHistoryScreen = () => {
       <View style={styles.footerLoading}>
         <ActivityIndicator size="small" color={theme.colors.primary} />
         <Text style={[styles.footerLoadingText, { color: theme.colors.textSecondary }]}>
-          Loading more...
+          {t('loading_more')}
         </Text>
       </View>
     );
@@ -266,7 +266,7 @@ const TransactionsHistoryScreen = () => {
             <Ionicons name="arrow-back" size={24} color={theme.colors.text} />
           </TouchableOpacity>
           <Text style={[styles.title, { color: theme.colors.text }]}>
-            All Transactions
+            {t('transactions_history')}
           </Text>
           <View style={styles.headerSpacer} />
         </View>
@@ -278,7 +278,7 @@ const TransactionsHistoryScreen = () => {
               {formatCurrency(stats.income)}
             </Text>
             <Text style={[styles.statLabel, { color: theme.colors.textSecondary }]}>
-              Income
+              {t('income')}
             </Text>
           </View>
           <View style={styles.statDivider} />
@@ -287,7 +287,7 @@ const TransactionsHistoryScreen = () => {
               {formatCurrency(stats.expense)}
             </Text>
             <Text style={[styles.statLabel, { color: theme.colors.textSecondary }]}>
-              Expenses
+              {t('expenses')}
             </Text>
           </View>
           <View style={styles.statDivider} />
@@ -296,17 +296,17 @@ const TransactionsHistoryScreen = () => {
               {stats.transfers}
             </Text>
             <Text style={[styles.statLabel, { color: theme.colors.textSecondary }]}>
-              Transfers
+              {t('transfers')}
             </Text>
           </View>
         </View>
 
         {/* Filter Tabs */}
         <View style={styles.filterContainer}>
-          {renderFilterTab('all', 'All')}
-          {renderFilterTab('income', 'Income')}
-          {renderFilterTab('expense', 'Expenses')}
-          {renderFilterTab('transfer', 'Transfers')}
+          {renderFilterTab('all', t('all'))}
+          {renderFilterTab('income', t('income'))}
+          {renderFilterTab('expense', t('expenses'))}
+          {renderFilterTab('transfer', t('transfers'))}
         </View>
 
         {/* Transactions List */}
@@ -314,7 +314,7 @@ const TransactionsHistoryScreen = () => {
           <View style={styles.loadingContainer}>
             <ActivityIndicator size="large" color={theme.colors.primary} />
             <Text style={[styles.loadingText, { color: theme.colors.text }]}>
-              Loading transactions...
+              {t('loading_transactions')}
             </Text>
           </View>
         ) : (

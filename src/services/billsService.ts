@@ -15,11 +15,11 @@ const defaultBillCategories: BillCategory[] = [
   { id: '3', name: 'Transportation', icon: 'car', color: '#10B981', description: 'Car payments, insurance, fuel' },
   { id: '4', name: 'Insurance', icon: 'shield-checkmark', color: '#8B5CF6', description: 'Health, life, auto insurance' },
   { id: '5', name: 'Subscriptions', icon: 'tv', color: '#EF4444', description: 'Netflix, Spotify, gym memberships' },
-  { id: '6', name: 'Healthcare', icon: 'medical', color: '#EC4899', description: 'Medical bills, prescriptions' },
+  { id: '6', name: 'Healthcare', icon: '🏥', color: '#EC4899', description: 'Medical bills, prescriptions' },
   { id: '7', name: 'Credit Cards', icon: 'card', color: '#F97316', description: 'Credit card payments' },
   { id: '8', name: 'Loans', icon: 'cash', color: '#6366F1', description: 'Student loans, personal loans' },
-  { id: '9', name: 'Phone', icon: 'call', color: '#14B8A6', description: 'Mobile phone bills' },
-  { id: '10', name: 'Other', icon: 'ellipsis-horizontal', color: '#6B7280', description: 'Miscellaneous bills' },
+  { id: '9', name: 'Phone', icon: '📞', color: '#14B8A6', description: 'Mobile phone bills' },
+  { id: '10', name: 'Other', icon: '📄', color: '#6B7280', description: 'Miscellaneous bills' },
 ];
 
 class BillsService {

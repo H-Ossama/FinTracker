@@ -436,40 +436,40 @@ const QuickSettingsScreen = () => {
   const quickActions = [
     {
       id: 'notification-preferences',
-      title: 'Notification Preferences',
-      subtitle: 'Configure notification settings',
+      title: t('settings_screen_notification_prefs'),
+      subtitle: t('settings_screen_notification_prefs_desc'),
       icon: 'notifications-outline',
       color: '#4CAF50',
       onPress: () => navigation.navigate('NotificationPreferences' as never),
     },
     {
       id: 'share-app',
-      title: 'Share App',
-      subtitle: 'Tell friends about FinTracker',
+      title: t('settings_screen_share_app'),
+      subtitle: t('settings_screen_share_app_desc'),
       icon: 'share-outline',
       color: '#2196F3',
       onPress: handleShareApp,
     },
     {
       id: 'export-data',
-      title: 'Export Data',
-      subtitle: 'Download your financial data',
+      title: t('settings_screen_export_data'),
+      subtitle: t('settings_screen_export_data_desc'),
       icon: 'download-outline',
       color: '#FF9800',
-      onPress: () => Alert.alert('Export Data', 'Data export feature coming soon!'),
+      onPress: () => Alert.alert(t('settings_screen_export_data'), 'Data export feature coming soon!'),
     },
     {
       id: 'backup-restore',
-      title: 'Backup & Restore',
-      subtitle: 'Sync your data to cloud',
+      title: t('settings_screen_backup_restore'),
+      subtitle: t('settings_screen_backup_restore_desc'),
       icon: 'cloud-upload-outline',
       color: '#9C27B0',
       onPress: handleSecureBackup,
     },
     {
       id: 'security-audit',
-      title: 'Security Audit',
-      subtitle: 'Comprehensive security check',
+      title: t('settings_screen_security_audit'),
+      subtitle: t('settings_screen_security_audit_desc'),
       icon: 'shield-checkmark-outline',
       color: '#E91E63',
       onPress: handleSecurityAudit,
@@ -488,7 +488,7 @@ const QuickSettingsScreen = () => {
             <TouchableOpacity onPress={handleGoBack} style={styles.backButton}>
               <Ionicons name="arrow-back" size={24} color={theme.colors.text} />
             </TouchableOpacity>
-            <Text style={[styles.title, { color: theme.colors.text }]}>Settings & Actions</Text>
+            <Text style={[styles.title, { color: theme.colors.text }]}>{t('settings_screen_title')}</Text>
             <View style={styles.placeholder} />
           </View>
 
@@ -499,10 +499,10 @@ const QuickSettingsScreen = () => {
             </View>
             <View style={styles.securityTextContainer}>
               <Text style={[styles.securityTitle, { color: isDark ? '#4ade80' : '#16a34a' }]}>
-                🛡️ Maximum Security Active
+                🛡️ {t('settings_screen_max_security')}
               </Text>
               <Text style={[styles.securitySubtitle, { color: isDark ? '#86efac' : '#059669' }]}>
-                Zero-exposure encryption • Hardware protected • Keys never displayed
+                {t('settings_screen_security_desc')}
               </Text>
             </View>
           </View>
@@ -511,7 +511,7 @@ const QuickSettingsScreen = () => {
           <View style={styles.section}>
             <View style={styles.sectionHeader}>
               <Ionicons name="flash" size={20} color={theme.colors.primary} />
-              <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>Quick Actions</Text>
+              <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>{t('settings_screen_quick_actions')}</Text>
             </View>
 
             <View style={styles.card}>
@@ -545,7 +545,7 @@ const QuickSettingsScreen = () => {
           <View style={styles.section}>
             <View style={styles.sectionHeader}>
               <Ionicons name="person-circle" size={20} color={theme.colors.primary} />
-              <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>Account Settings</Text>
+              <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>{t('settings_screen_account_settings')}</Text>
             </View>
 
             <View style={styles.card}>
@@ -556,7 +556,7 @@ const QuickSettingsScreen = () => {
                 <View style={styles.settingContent}>
                   <Ionicons name="person-outline" size={20} color={theme.colors.text} />
                   <Text style={[styles.settingTitle, { color: theme.colors.text }]}>
-                    Profile Settings
+                    {t('settings_screen_profile_settings')}
                   </Text>
                 </View>
                 <Ionicons name="chevron-forward" size={16} color={theme.colors.textSecondary} />
@@ -566,7 +566,7 @@ const QuickSettingsScreen = () => {
                 <View style={styles.settingContent}>
                   <Ionicons name="moon-outline" size={20} color={theme.colors.text} />
                   <Text style={[styles.settingTitle, { color: theme.colors.text }]}>
-                    Dark Mode
+                    {t('settings_screen_dark_mode')}
                   </Text>
                 </View>
                 <Switch
@@ -582,7 +582,7 @@ const QuickSettingsScreen = () => {
                   <View style={styles.settingContent}>
                     <Ionicons name="finger-print-outline" size={20} color={theme.colors.text} />
                     <Text style={[styles.settingTitle, { color: theme.colors.text }]}>
-                      Biometric Authentication
+                      {t('profile_screen_biometric_auth')}
                     </Text>
                   </View>
                   <Switch
@@ -600,7 +600,7 @@ const QuickSettingsScreen = () => {
           <View style={styles.section}>
             <View style={styles.sectionHeader}>
               <Ionicons name="shield-checkmark" size={20} color={theme.colors.primary} />
-              <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>Privacy & Security</Text>
+              <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>{t('settings_screen_privacy_security')}</Text>
             </View>
 
             <View style={styles.card}>
@@ -608,7 +608,7 @@ const QuickSettingsScreen = () => {
                 <View style={styles.settingContent}>
                   <Ionicons name="eye-off-outline" size={20} color={theme.colors.text} />
                   <Text style={[styles.settingTitle, { color: theme.colors.text }]}>
-                    Hide Balance
+                    {t('settings_screen_hide_balance')}
                   </Text>
                 </View>
                 <Switch
@@ -626,7 +626,7 @@ const QuickSettingsScreen = () => {
                 <View style={styles.settingContent}>
                   <Ionicons name="lock-closed-outline" size={20} color={theme.colors.text} />
                   <Text style={[styles.settingTitle, { color: theme.colors.text }]}>
-                    App Lock Settings
+                    {t('settings_screen_app_lock_settings')}
                   </Text>
                 </View>
                 <Ionicons name="chevron-forward" size={16} color={theme.colors.textSecondary} />
@@ -639,7 +639,7 @@ const QuickSettingsScreen = () => {
                 <View style={styles.settingContent}>
                   <Ionicons name="key-outline" size={20} color={theme.colors.text} />
                   <Text style={[styles.settingTitle, { color: theme.colors.text }]}>
-                    Data Encryption
+                    {t('settings_screen_data_encryption')}
                   </Text>
                 </View>
                 <Ionicons name="chevron-forward" size={16} color={theme.colors.textSecondary} />
@@ -651,7 +651,7 @@ const QuickSettingsScreen = () => {
           <View style={styles.section}>
             <View style={styles.sectionHeader}>
               <Ionicons name="color-palette" size={20} color={theme.colors.primary} />
-              <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>Appearance & Language</Text>
+              <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>{t('settings_screen_appearance_language')}</Text>
             </View>
 
             <View style={styles.card}>
@@ -662,12 +662,12 @@ const QuickSettingsScreen = () => {
                 <View style={styles.settingContent}>
                   <Ionicons name="language-outline" size={20} color={theme.colors.text} />
                   <Text style={[styles.settingTitle, { color: theme.colors.text }]}>
-                    Language
+                    {t('language')}
                   </Text>
                 </View>
                 <View style={styles.settingRight}>
                   <Text style={[styles.settingValue, { color: theme.colors.textSecondary }]}>
-                    {language === 'en' ? 'English' : language === 'de' ? 'Deutsch' : 'العربية'}
+                    {language === 'en' ? t('english') : language === 'de' ? t('german') : t('arabic')}
                   </Text>
                   <Ionicons name="chevron-forward" size={16} color={theme.colors.textSecondary} />
                 </View>
@@ -680,7 +680,7 @@ const QuickSettingsScreen = () => {
                 <View style={styles.settingContent}>
                   <Ionicons name="card-outline" size={20} color={theme.colors.text} />
                   <Text style={[styles.settingTitle, { color: theme.colors.text }]}>
-                    Currency
+                    {t('currency')}
                   </Text>
                 </View>
                 <View style={styles.settingRight}>
@@ -695,7 +695,7 @@ const QuickSettingsScreen = () => {
           <View style={styles.section}>
             <View style={styles.sectionHeader}>
               <Ionicons name="help-circle" size={20} color={theme.colors.primary} />
-              <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>Support & Feedback</Text>
+              <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>{t('settings_screen_support_feedback')}</Text>
             </View>
 
             <View style={styles.card}>
@@ -706,7 +706,7 @@ const QuickSettingsScreen = () => {
                 <View style={styles.settingContent}>
                   <Ionicons name="mail-outline" size={20} color={theme.colors.text} />
                   <Text style={[styles.settingTitle, { color: theme.colors.text }]}>
-                    Contact Support
+                    {t('settings_screen_contact_support')}
                   </Text>
                 </View>
                 <Ionicons name="chevron-forward" size={16} color={theme.colors.textSecondary} />
@@ -719,7 +719,7 @@ const QuickSettingsScreen = () => {
                 <View style={styles.settingContent}>
                   <Ionicons name="star-outline" size={20} color={theme.colors.text} />
                   <Text style={[styles.settingTitle, { color: theme.colors.text }]}>
-                    Rate FinTracker
+                    {t('settings_screen_rate_app')}
                   </Text>
                 </View>
                 <Ionicons name="chevron-forward" size={16} color={theme.colors.textSecondary} />
@@ -732,7 +732,7 @@ const QuickSettingsScreen = () => {
                 <View style={styles.settingContent}>
                   <Ionicons name="shield-outline" size={20} color={theme.colors.text} />
                   <Text style={[styles.settingTitle, { color: theme.colors.text }]}>
-                    Privacy Policy
+                    {t('settings_screen_privacy_policy')}
                   </Text>
                 </View>
                 <Ionicons name="chevron-forward" size={16} color={theme.colors.textSecondary} />
@@ -745,7 +745,7 @@ const QuickSettingsScreen = () => {
                 <View style={styles.settingContent}>
                   <Ionicons name="document-text-outline" size={20} color={theme.colors.text} />
                   <Text style={[styles.settingTitle, { color: theme.colors.text }]}>
-                    Terms of Service
+                    {t('settings_screen_terms_service')}
                   </Text>
                 </View>
                 <Ionicons name="chevron-forward" size={16} color={theme.colors.textSecondary} />
@@ -758,7 +758,7 @@ const QuickSettingsScreen = () => {
             <View style={styles.section}>
               <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
                 <Ionicons name="log-out-outline" size={20} color="#FF3B30" />
-                <Text style={styles.logoutText}>Sign Out</Text>
+                <Text style={styles.logoutText}>{t('profile_screen_sign_out')}</Text>
               </TouchableOpacity>
             </View>
           )}
@@ -766,10 +766,10 @@ const QuickSettingsScreen = () => {
           {/* App Version */}
           <View style={styles.versionContainer}>
             <Text style={[styles.versionText, { color: theme.colors.textSecondary }]}>
-              FinTracker v1.0.0
+              {t('settings_screen_app_version')}
             </Text>
             <Text style={[styles.versionText, { color: theme.colors.textSecondary }]}>
-              Built with ❤️ for your financial freedom
+              {t('settings_screen_built_with_love')}
             </Text>
           </View>
         </ScrollView>
@@ -785,7 +785,7 @@ const QuickSettingsScreen = () => {
         <View style={styles.modalOverlay}>
           <View style={[styles.modalContent, { backgroundColor: theme.colors.surface }]}>
             <View style={styles.modalHeader}>
-              <Text style={[styles.modalTitle, { color: theme.colors.text }]}>Select Language</Text>
+              <Text style={[styles.modalTitle, { color: theme.colors.text }]}>{t('settings_screen_select_language')}</Text>
               <TouchableOpacity onPress={() => setShowLanguageModal(false)}>
                 <Ionicons name="close" size={24} color={theme.colors.text} />
               </TouchableOpacity>
@@ -824,7 +824,7 @@ const QuickSettingsScreen = () => {
         <View style={styles.modalOverlay}>
           <View style={[styles.modalContent, { backgroundColor: theme.colors.surface }]}>
             <View style={styles.modalHeader}>
-              <Text style={[styles.modalTitle, { color: theme.colors.text }]}>Select Currency</Text>
+              <Text style={[styles.modalTitle, { color: theme.colors.text }]}>{t('settings_screen_select_currency')}</Text>
               <TouchableOpacity onPress={() => setShowCurrencyModal(false)}>
                 <Ionicons name="close" size={24} color={theme.colors.text} />
               </TouchableOpacity>

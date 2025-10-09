@@ -293,7 +293,7 @@ class LocalStorageService {
       { name: 'Food & Dining', icon: 'restaurant', color: '#FF6B6B', isCustom: false },
       { name: 'Shopping', icon: 'shopping-bag', color: '#4ECDC4', isCustom: false },
       { name: 'Transportation', icon: 'car', color: '#45B7D1', isCustom: false },
-      { name: 'Bills & Utilities', icon: 'receipt', color: '#96CEB4', isCustom: false },
+      { name: 'Bills & Utilities', icon: '🧾', color: '#96CEB4', isCustom: false },
       { name: 'Entertainment', icon: 'tv', color: '#FFEAA7', isCustom: false },
       { name: 'Healthcare', icon: 'medical', color: '#DDA0DD', isCustom: false },
       { name: 'Education', icon: 'school', color: '#98D8C8', isCustom: false },

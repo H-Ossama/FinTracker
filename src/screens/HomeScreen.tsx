@@ -10,6 +10,8 @@ import {
   PanResponder,
   Animated,
   ActivityIndicator,
+  Alert,
+  Modal,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -40,6 +42,9 @@ const HomeScreen = () => {
   const [showTransferModal, setShowTransferModal] = useState(false);
   const [showBorrowedMoneyDetailsModal, setShowBorrowedMoneyDetailsModal] = useState(false);
   const [showAddBorrowedMoneyModal, setShowAddBorrowedMoneyModal] = useState(false);
+  const [showPaymentModal, setShowPaymentModal] = useState(false);
+  const [selectedBorrowedMoneyForPayment, setSelectedBorrowedMoneyForPayment] = useState<BorrowedMoney | null>(null);
+  const [selectedWallet, setSelectedWallet] = useState<string>('');
   const [selectedBorrowedMoney, setSelectedBorrowedMoney] = useState<BorrowedMoney | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [currentWalletIndex, setCurrentWalletIndex] = useState(0);
@@ -157,10 +162,10 @@ const HomeScreen = () => {
   
   const getWalletDisplayName = (type: string) => {
     switch (type.toUpperCase()) {
-      case 'CASH': return 'Pocket Money';
-      case 'BANK': return 'Bank Account';
-      case 'SAVINGS': return 'Savings';
-      default: return 'Total Balance';
+      case 'CASH': return t('pocket_money');
+      case 'BANK': return t('bank_account');
+      case 'SAVINGS': return t('savings');
+      default: return t('total_balance');
     }
   };
   
@@ -295,13 +300,53 @@ const HomeScreen = () => {
     setShowBorrowedMoneyDetailsModal(true);
   };
 
+  const processPayment = async () => {
+    if (!selectedBorrowedMoneyForPayment || !selectedWallet) return;
+    
+    try {
+      setShowPaymentModal(false);
+      await borrowedMoneyService.markAsPaid(selectedBorrowedMoneyForPayment.id, selectedWallet);
+      await loadBorrowedMoneyData();
+      await loadAllData();
+      setShowBorrowedMoneyDetailsModal(false);
+      setSelectedBorrowedMoneyForPayment(null);
+      Alert.alert('Success', `Payment of ${formatCurrency(selectedBorrowedMoneyForPayment.amount)} received from ${selectedBorrowedMoneyForPayment.personName}`);
+    } catch (error) {
+      console.error('Error processing payment:', error);
+      Alert.alert('Error', 'Failed to process payment');
+    }
+  };
+
   const handleMarkAsPaid = async (id: string) => {
     try {
-      await borrowedMoneyService.markAsPaid(id);
-      await loadBorrowedMoneyData();
-      setShowBorrowedMoneyDetailsModal(false);
+      const borrowedMoney = await borrowedMoneyService.getBorrowedMoneyById(id);
+      if (!borrowedMoney) {
+        Alert.alert('Error', 'Borrowed money record not found');
+        return;
+      }
+
+      if (wallets.length === 0) {
+        Alert.alert('No Wallets', 'You need to have at least one wallet to receive the payment.');
+        return;
+      }
+
+      // If only one wallet, use it automatically
+      if (wallets.length === 1) {
+        await borrowedMoneyService.markAsPaid(id, wallets[0].id);
+        await loadBorrowedMoneyData();
+        await loadAllData();
+        setShowBorrowedMoneyDetailsModal(false);
+        Alert.alert('Success', `Payment of ${formatCurrency(borrowedMoney.amount)} received from ${borrowedMoney.personName}`);
+        return;
+      }
+
+      // Multiple wallets - show styled modal
+      setSelectedBorrowedMoneyForPayment(borrowedMoney);
+      setSelectedWallet(wallets[0].id); // Default to first wallet
+      setShowPaymentModal(true);
     } catch (error) {
-      console.error('Error marking as paid:', error);
+      console.error('Error marking borrowed money as paid:', error);
+      Alert.alert('Error', 'Failed to mark as paid');
     }
   };
 
@@ -337,23 +382,15 @@ const HomeScreen = () => {
       const newBorrowedMoney = await borrowedMoneyService.addBorrowedMoney(newItem);
       await loadBorrowedMoneyData();
       
-      // Navigate to reminders screen to set up the reminder
-      (navigation as any).navigate('Reminders', { 
-        newReminder: {
-          title: `Payment due from ${newItem.personName}`,
-          amount: newItem.amount,
-          dueDate: newItem.dueDate,
-          type: 'borrowed_money',
-          relatedId: newBorrowedMoney.id,
-        }
-      });
+      // Reminder will be handled internally without navigating to reminders screen
+      console.log(`Borrowed money added with reminder: ${newBorrowedMoney.id}`);
     } catch (error) {
       console.error('Error adding borrowed money with reminder:', error);
     }
   };
 
   const formatDate = (dateString: string) => {
-    if (!dateString) return 'No date';
+    if (!dateString) return t('no_date');
     const date = new Date(dateString);
     return date.toLocaleDateString('en-US', {
       month: 'short',
@@ -402,7 +439,7 @@ const HomeScreen = () => {
             styles.borrowedDueDate, 
             { color: overdue ? '#FF3B30' : theme.colors.textSecondary }
           ]}>
-            Due: {formatDate(item.dueDate)}
+            {t('due')}: {formatDate(item.dueDate)}
           </Text>
         </View>
         <TouchableOpacity 
@@ -416,7 +453,7 @@ const HomeScreen = () => {
             styles.transferButtonText, 
             { color: overdue ? 'white' : theme.colors.primary }
           ]}>
-            {overdue ? 'Overdue' : 'Details'}
+            {overdue ? t('overdue') : t('details')}
           </Text>
         </TouchableOpacity>
       </TouchableOpacity>
@@ -444,9 +481,9 @@ const HomeScreen = () => {
       const diffTime = Math.abs(today.getTime() - date.getTime());
       const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
       
-      if (diffDays === 1) return 'Today';
-      if (diffDays === 2) return 'Yesterday';
-      if (diffDays <= 7) return `${diffDays} days ago`;
+      if (diffDays === 1) return t('today');
+      if (diffDays === 2) return t('yesterday');
+      if (diffDays <= 7) return `${diffDays} ${t('days_ago')}`;
       return date.toLocaleDateString();
     };
 
@@ -481,6 +518,92 @@ const HomeScreen = () => {
     );
   };
 
+  const renderPaymentModal = () => {
+    if (!selectedBorrowedMoneyForPayment) return null;
+
+    return (
+      <Modal
+        visible={showPaymentModal}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => setShowPaymentModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={[styles.paymentModalContent, { backgroundColor: theme.colors.card }]}>
+            <View style={styles.paymentModalHeader}>
+              <Text style={[styles.paymentModalTitle, { color: theme.colors.text }]}>
+                {t('payment.title') || 'Receive Payment'}
+              </Text>
+              <TouchableOpacity
+                onPress={() => setShowPaymentModal(false)}
+                style={styles.closeButton}
+              >
+                <Ionicons name="close" size={24} color={theme.colors.text} />
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.paymentDetails}>
+              <Text style={[styles.paymentBillTitle, { color: theme.colors.text }]}>
+                Payment from {selectedBorrowedMoneyForPayment.personName}
+              </Text>
+              <Text style={[styles.paymentAmount, { color: theme.colors.primary }]}>
+                {formatCurrency(selectedBorrowedMoneyForPayment.amount)}
+              </Text>
+            </View>
+
+            <View style={styles.walletSelection}>
+              <Text style={[styles.walletSelectionLabel, { color: theme.colors.text }]}>
+                Select wallet to receive payment
+              </Text>
+              <ScrollView style={styles.walletsList}>
+                {wallets.map((wallet) => (
+                  <TouchableOpacity
+                    key={wallet.id}
+                    style={[
+                      styles.walletOption,
+                      {
+                        backgroundColor: selectedWallet === wallet.id ? theme.colors.primary + '20' : theme.colors.surface,
+                        borderColor: selectedWallet === wallet.id ? theme.colors.primary : theme.colors.border,
+                      },
+                    ]}
+                    onPress={() => setSelectedWallet(wallet.id)}
+                  >
+                    <View style={styles.walletInfo}>
+                      <Text style={[styles.walletName, { color: theme.colors.text }]}>
+                        {wallet.name}
+                      </Text>
+                      <Text style={[styles.walletBalance, { color: theme.colors.textSecondary }]}>
+                        Balance: {formatCurrency(wallet.balance)}
+                      </Text>
+                    </View>
+                    {selectedWallet === wallet.id && (
+                      <Ionicons name="checkmark-circle" size={24} color={theme.colors.primary} />
+                    )}
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+            </View>
+
+            <View style={styles.paymentActions}>
+              <TouchableOpacity
+                style={[styles.cancelButton, { borderColor: theme.colors.border }]}
+                onPress={() => setShowPaymentModal(false)}
+              >
+                <Text style={[styles.cancelButtonText, { color: theme.colors.text }]}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.payButton, { backgroundColor: theme.colors.primary }]}
+                onPress={processPayment}
+              >
+                <Text style={styles.payButtonText}>Receive Payment</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+    );
+  };
+
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: theme.colors.background }]}>
       <LinearGradient
@@ -490,7 +613,7 @@ const HomeScreen = () => {
         {loadingData ? (
           <View style={styles.loadingContainer}>
             <ActivityIndicator size="large" color={theme.colors.primary} />
-            <Text style={[styles.loadingText, { color: theme.colors.text }]}>Loading your data...</Text>
+            <Text style={[styles.loadingText, { color: theme.colors.text }]}>{t('loading_data')}</Text>
           </View>
         ) : (
           <ScrollView 
@@ -575,12 +698,12 @@ const HomeScreen = () => {
             </TouchableOpacity>
             {isBalanceVisible && (
               <Text style={[styles.totalBalanceHint, { color: theme.colors.textSecondary }]}>
-                Total: {formatCurrency(totalBalance)}
+                {t('total_balance')}: {formatCurrency(totalBalance)}
               </Text>
             )}
             <View style={styles.swipeHint}>
               <Text style={[styles.swipeHintText, { color: theme.colors.textSecondary }]}>
-                Swipe left/right to switch wallets
+                {t('swipe_hint')}
               </Text>
               <Ionicons 
                 name="swap-horizontal-outline" 
@@ -593,9 +716,9 @@ const HomeScreen = () => {
           {/* Borrowed Money Section */}
           <View style={styles.section}>
             <View style={styles.sectionHeader}>
-              <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>Borrowed Money</Text>
+              <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>{t('borrowed_money')}</Text>
               <TouchableOpacity onPress={() => (navigation as any).navigate('BorrowedMoneyHistory')}>
-                <Text style={styles.seeAllText}>See All</Text>
+                <Text style={styles.seeAllText}>{t('see_all')}</Text>
               </TouchableOpacity>
             </View>
             {borrowedMoneyList.length > 0 ? (
@@ -607,7 +730,7 @@ const HomeScreen = () => {
                   <View style={styles.totalBorrowedHeader}>
                     <Ionicons name="people" size={20} color={theme.colors.warning} />
                     <Text style={[styles.totalBorrowedLabel, { color: theme.colors.textSecondary }]}>
-                      Total Amount Owed to You
+                      {t('total_amount_owed')}
                     </Text>
                   </View>
                   <Text style={[styles.totalBorrowedAmount, { color: theme.colors.warning }]}>
@@ -618,7 +741,7 @@ const HomeScreen = () => {
                     onPress={() => setShowAddBorrowedMoneyModal(true)}
                   >
                     <Ionicons name="add" size={16} color="white" />
-                    <Text style={styles.addBorrowedButtonText}>Add New</Text>
+                    <Text style={styles.addBorrowedButtonText}>{t('add_new')}</Text>
                   </TouchableOpacity>
                 </View>
               </>
@@ -626,17 +749,17 @@ const HomeScreen = () => {
               <View style={[styles.emptyBorrowedMoney, { backgroundColor: theme.colors.surface }]}>
                 <Ionicons name="people-outline" size={48} color={theme.colors.textSecondary} />
                 <Text style={[styles.emptyBorrowedTitle, { color: theme.colors.text }]}>
-                  No borrowed money records
+                  {t('no_borrowed_money')}
                 </Text>
                 <Text style={[styles.emptyBorrowedSubtitle, { color: theme.colors.textSecondary }]}>
-                  Keep track of money you've lent to others
+                  {t('track_borrowed_money')}
                 </Text>
                 <TouchableOpacity 
                   style={[styles.addBorrowedButton, { backgroundColor: theme.colors.primary }]}
                   onPress={() => setShowAddBorrowedMoneyModal(true)}
                 >
                   <Ionicons name="add" size={16} color="white" />
-                  <Text style={styles.addBorrowedButtonText}>Add First Record</Text>
+                  <Text style={styles.addBorrowedButtonText}>{t('add_first_record')}</Text>
                 </TouchableOpacity>
               </View>
             )}
@@ -681,7 +804,7 @@ const HomeScreen = () => {
             <View style={styles.sectionHeader}>
               <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>{t('recent_transactions')}</Text>
               <TouchableOpacity onPress={() => (navigation as any).navigate('TransactionsHistory')}>
-                <Text style={styles.seeAllText}>See All</Text>
+                <Text style={styles.seeAllText}>{t('see_all')}</Text>
               </TouchableOpacity>
             </View>
             <View style={[styles.transactionsList, { backgroundColor: theme.colors.surface }]}>
@@ -699,7 +822,7 @@ const HomeScreen = () => {
             </View>
             <View style={styles.tipContent}>
               <Text style={[styles.tipTitle, { color: theme.colors.text }]}>{t('smart_tip')}</Text>
-              <Text style={[styles.tipText, { color: theme.colors.textSecondary }]}>You spent 20% less this week than last week. Keep it up!</Text>
+              <Text style={[styles.tipText, { color: theme.colors.textSecondary }]}>{t('tip_message')}</Text>
             </View>
             </View>
           </ScrollView>
@@ -743,6 +866,9 @@ const HomeScreen = () => {
           onAdd={handleAddBorrowedMoney}
           onAddWithReminder={handleAddBorrowedMoneyWithReminder}
         />
+
+        {/* Payment Modal */}
+        {renderPaymentModal()}
       </LinearGradient>
     </SafeAreaView>
   );
@@ -759,6 +885,99 @@ const styles = StyleSheet.create({
   scrollView: {
     flex: 1,
     paddingHorizontal: 20,
+  },
+  // Payment Modal Styles
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  paymentModalContent: {
+    width: '100%',
+    maxWidth: 400,
+    borderRadius: 16,
+    padding: 20,
+    maxHeight: '80%',
+  },
+  paymentModalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  paymentModalTitle: {
+    fontSize: 20,
+    fontWeight: '600',
+  },
+  closeButton: {
+    padding: 4,
+  },
+  paymentDetails: {
+    alignItems: 'center',
+    marginBottom: 24,
+    paddingVertical: 16,
+    borderRadius: 12,
+    backgroundColor: 'rgba(0, 0, 0, 0.05)',
+  },
+  paymentBillTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    marginBottom: 8,
+  },
+  paymentAmount: {
+    fontSize: 24,
+    fontWeight: '700',
+  },
+  walletSelection: {
+    marginBottom: 24,
+  },
+  walletSelectionLabel: {
+    fontSize: 16,
+    fontWeight: '500',
+    marginBottom: 12,
+  },
+  walletsList: {
+    maxHeight: 200,
+  },
+  walletOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: 16,
+    borderRadius: 12,
+    borderWidth: 1,
+    marginBottom: 8,
+  },
+  walletInfo: {
+    flex: 1,
+  },
+  paymentActions: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  cancelButton: {
+    flex: 1,
+    paddingVertical: 14,
+    borderRadius: 12,
+    borderWidth: 1,
+    alignItems: 'center',
+  },
+  cancelButtonText: {
+    fontSize: 16,
+    fontWeight: '500',
+  },
+  payButton: {
+    flex: 1,
+    paddingVertical: 14,
+    borderRadius: 12,
+    alignItems: 'center',
+  },
+  payButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#FFFFFF',
   },
   header: {
     flexDirection: 'row',

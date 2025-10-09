@@ -83,11 +83,11 @@ export const mockSpendingCategories: SpendingCategory[] = [
   },
   {
     id: '2',
-    name: 'Expenses',
+    name: 'Bills',
     amount: 149.28,
     percentage: 12,
     color: '#7ED321',
-    icon: '📄'
+    icon: '🧾'
   },
   {
     id: '3',
@@ -287,7 +287,7 @@ export const mockBudgetCategories: BudgetCategory[] = [
   { id: '2', name: 'Transportation', icon: 'car', color: '#4ECDC4', isDefault: true },
   { id: '3', name: 'Shopping', icon: 'bag', color: '#45B7D1', isDefault: true },
   { id: '4', name: 'Entertainment', icon: 'game-controller', color: '#96CEB4', isDefault: true },
-  { id: '5', name: 'Bills & Utilities', icon: 'receipt', color: '#FFEAA7', isDefault: true },
+  { id: '5', name: 'Bills & Utilities', icon: '🧾', color: '#FFEAA7', isDefault: true },
   { id: '6', name: 'Healthcare', icon: 'medical', color: '#DDA0DD', isDefault: true },
 ];
 

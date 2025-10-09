@@ -21,9 +21,9 @@ import { localStorageService } from '../services/localStorageService';
 import { Bill, BillCategory } from '../types';
 import { useFocusEffect } from '@react-navigation/native';
 
-const BillsTrackerScreen = ({ navigation }: any) => {
+const BillsTrackerScreen = ({ navigation, route }: any) => {
   const { theme } = useTheme();
-  const { formatCurrency } = useLocalization();
+  const { t, formatCurrency } = useLocalization();
   const [bills, setBills] = useState<Bill[]>([]);
   const [categories, setCategories] = useState<BillCategory[]>([]);
   const [loading, setLoading] = useState(true);
@@ -72,10 +72,35 @@ const BillsTrackerScreen = ({ navigation }: any) => {
 
   const styles = createStyles(theme);
 
+  // Function to translate category names
+  const getCategoryTranslation = (categoryName: string) => {
+    const categoryMap: { [key: string]: string } = {
+      'Housing': t('billCategory.housing'),
+      'Utilities': t('billCategory.utilities'),
+      'Transportation': t('billCategory.transportation'),
+      'Insurance': t('billCategory.insurance'),
+      'Subscriptions': t('billCategory.subscriptions'),
+      'Healthcare': t('billCategory.healthcare'),
+      'Credit Cards': t('billCategory.credit'),
+      'Loans': t('billCategory.loan'),
+      'Phone': t('billCategory.phone'),
+      'Internet': t('billCategory.internet'),
+      'Other': t('billCategory.other'),
+    };
+    return categoryMap[categoryName] || categoryName;
+  };
+
   useFocusEffect(
     useCallback(() => {
       loadData();
-    }, [])
+      
+      // Check if we should open the add modal
+      if (route?.params?.openAddModal) {
+        setShowAddModal(true);
+        // Clear the param to prevent reopening on subsequent visits
+        navigation.setParams({ openAddModal: undefined });
+      }
+    }, [route?.params?.openAddModal])
   );
 
   const loadData = async () => {
@@ -132,7 +157,7 @@ const BillsTrackerScreen = ({ navigation }: any) => {
       }
     } catch (error) {
       console.error('❌ Error loading bills data:', error);
-      Alert.alert('Error', 'Failed to load bills data: ' + (error instanceof Error ? error.message : 'Unknown error'));
+      Alert.alert(t('error'), t('bills.loadingError', { error: error instanceof Error ? error.message : 'Unknown error' }));
       
       // Set empty data to prevent infinite loading
       setBills([]);
@@ -159,7 +184,7 @@ const BillsTrackerScreen = ({ navigation }: any) => {
 
   const handleMarkAsPaid = async (bill: Bill) => {
     if (wallets.length === 0) {
-      Alert.alert('No Wallets', 'Please add a wallet first to make payments.');
+      Alert.alert(t('no_wallets'), t('bills.noWallets'));
       return;
     }
     setSelectedBillForPayment(bill);
@@ -175,11 +200,15 @@ const BillsTrackerScreen = ({ navigation }: any) => {
       
       if (selectedWalletData && selectedWalletData.balance < selectedBillForPayment.amount) {
         Alert.alert(
-          'Insufficient Funds',
-          `Your ${selectedWalletData.name} has insufficient balance. Current balance: ${formatCurrency(selectedWalletData.balance)}, Required: ${formatCurrency(selectedBillForPayment.amount)}`,
+          t('bills.insufficientFunds'),
+          t('bills.insufficientFunds', { 
+            walletName: selectedWalletData.name,
+            currentBalance: formatCurrency(selectedWalletData.balance),
+            requiredAmount: formatCurrency(selectedBillForPayment.amount)
+          }),
           [
-            { text: 'Cancel', style: 'cancel' },
-            { text: 'Pay Anyway', onPress: () => performPayment() }
+            { text: t('payment.cancel'), style: 'cancel' },
+            { text: t('bills.payAnyway'), onPress: () => performPayment() }
           ]
         );
       } else {
@@ -187,7 +216,7 @@ const BillsTrackerScreen = ({ navigation }: any) => {
       }
     } catch (error) {
       console.error('Error processing payment:', error);
-      Alert.alert('Error', 'Failed to process payment');
+      Alert.alert(t('error'), t('bills.paymentFailed'));
     }
   };
 
@@ -209,11 +238,11 @@ const BillsTrackerScreen = ({ navigation }: any) => {
       await loadData();
       setSelectedBillForPayment(null);
       
-      Alert.alert('Success', `Payment of ${formatCurrency(selectedBillForPayment.amount)} processed successfully!`);
+      Alert.alert(t('success'), t('bills.paymentSuccess', { amount: formatCurrency(selectedBillForPayment.amount) }));
       console.log('✅ Payment process completed successfully');
     } catch (error) {
       console.error('❌ Error making payment:', error);
-      Alert.alert('Error', 'Failed to process payment');
+      Alert.alert(t('error'), t('bills.paymentFailed'));
     }
   };
 
@@ -239,13 +268,13 @@ const BillsTrackerScreen = ({ navigation }: any) => {
   const handleUpdateBill = async () => {
     try {
       if (!editBill.title || !editBill.amount || !editBill.categoryId || !selectedBillForEdit) {
-        Alert.alert('Error', 'Please fill in all required fields');
+        Alert.alert(t('error'), t('addBill.fillRequired'));
         return;
       }
 
       const category = categories.find(c => c.id === editBill.categoryId);
       if (!category) {
-        Alert.alert('Error', 'Please select a valid category');
+        Alert.alert(t('error'), t('addBill.selectCategory'));
         return;
       }
 
@@ -268,10 +297,10 @@ const BillsTrackerScreen = ({ navigation }: any) => {
       setSelectedBillForEdit(null);
       resetEditForm();
       await loadData();
-      Alert.alert('Success', 'Bill updated successfully!');
+      Alert.alert(t('success'), t('bills.billUpdated'));
     } catch (error) {
       console.error('Error updating bill:', error);
-      Alert.alert('Error', 'Failed to update bill');
+      Alert.alert(t('error'), t('bills.updateFailed'));
     }
   };
 
@@ -295,37 +324,37 @@ const BillsTrackerScreen = ({ navigation }: any) => {
   const handleDeleteBill = async (bill: Bill) => {
     try {
       Alert.alert(
-        'Delete Bill',
-        `Are you sure you want to delete "${bill.title}"?`,
+        t('bills.deleteBill'),
+        t('bills.deleteConfirm', { billTitle: bill.title }),
         [
-          { text: 'Cancel', style: 'cancel' },
+          { text: t('payment.cancel'), style: 'cancel' },
           {
-            text: 'Delete',
+            text: t('bills.deleteBill'),
             style: 'destructive',
             onPress: async () => {
               await billsService.deleteBill(bill.id);
               await loadData();
-              Alert.alert('Success', 'Bill deleted!');
+              Alert.alert(t('success'), t('bills.billDeleted'));
             }
           }
         ]
       );
     } catch (error) {
       console.error('Error deleting bill:', error);
-      Alert.alert('Error', 'Failed to delete bill');
+      Alert.alert(t('error'), t('bills.deleteFailed'));
     }
   };
 
   const handleAddBill = async () => {
     try {
       if (!newBill.title || !newBill.amount || !newBill.categoryId) {
-        Alert.alert('Error', 'Please fill in all required fields');
+        Alert.alert(t('error'), t('addBill.fillRequired'));
         return;
       }
 
       const category = categories.find(c => c.id === newBill.categoryId);
       if (!category) {
-        Alert.alert('Error', 'Please select a valid category');
+        Alert.alert(t('error'), t('addBill.selectCategory'));
         return;
       }
 
@@ -348,10 +377,10 @@ const BillsTrackerScreen = ({ navigation }: any) => {
       setShowAddModal(false);
       resetForm();
       await loadData();
-      Alert.alert('Success', 'Bill added successfully!');
+      Alert.alert(t('success'), t('bills.billCreated'));
     } catch (error) {
       console.error('Error adding bill:', error);
-      Alert.alert('Error', 'Failed to add bill');
+      Alert.alert(t('error'), t('bills.createFailed'));
     }
   };
 
@@ -397,11 +426,11 @@ const BillsTrackerScreen = ({ navigation }: any) => {
     const today = new Date();
     const diffDays = Math.ceil((date.getTime() - today.getTime()) / (1000 * 3600 * 24));
 
-    if (diffDays === 0) return 'Today';
-    if (diffDays === 1) return 'Tomorrow';
-    if (diffDays === -1) return 'Yesterday';
-    if (diffDays > 1) return `In ${diffDays} days`;
-    return `${Math.abs(diffDays)} days ago`;
+    if (diffDays === 0) return t('bills.today');
+    if (diffDays === 1) return t('bills.tomorrow');
+    if (diffDays === -1) return t('bills.yesterday');
+    if (diffDays > 1) return t('bills.inDays', { days: diffDays });
+    return t('bills.daysAgo', { days: Math.abs(diffDays) });
   };
 
   const renderBillCard = (bill: Bill) => {
@@ -432,13 +461,13 @@ const BillsTrackerScreen = ({ navigation }: any) => {
                 </Text>
                 <View style={styles.billMeta}>
                   <Text style={[styles.billCategory, { color: theme.colors.textSecondary }]}>
-                    {bill.category}
+                    {getCategoryTranslation(bill.category)}
                   </Text>
                   {bill.isRecurring && (
                     <>
                       <View style={styles.metaDivider} />
                       <Text style={[styles.billFrequency, { color: theme.colors.textSecondary }]}>
-                        {bill.frequency}
+                        {bill.frequency === 'one-time' ? t('bills.oneTime') : t(`bills.${bill.frequency}`)}
                       </Text>
                     </>
                   )}
@@ -463,14 +492,14 @@ const BillsTrackerScreen = ({ navigation }: any) => {
             <View style={styles.dueDateInfo}>
               <Ionicons name="calendar-outline" size={14} color={theme.colors.textSecondary} />
               <Text style={[styles.dueDateText, { color: theme.colors.textSecondary }]}>
-                Due: {formatDate(bill.nextDueDate)}
+                {t('bills.due', { date: formatDate(bill.nextDueDate) })}
               </Text>
               {bill.remindersPerDay > 1 && (
                 <>
                   <View style={styles.metaDivider} />
                   <Ionicons name="notifications" size={14} color={theme.colors.textSecondary} />
                   <Text style={[styles.dueDateText, { color: theme.colors.textSecondary }]}>
-                    {bill.remindersPerDay}x daily
+                    {t('bills.reminderDaily', { count: bill.remindersPerDay })}
                   </Text>
                 </>
               )}
@@ -483,7 +512,7 @@ const BillsTrackerScreen = ({ navigation }: any) => {
                   onPress={() => handleMarkAsPaid(bill)}
                 >
                   <Ionicons name="checkmark" size={16} color="#4ECDC4" />
-                  <Text style={[styles.actionText, { color: '#4ECDC4' }]}>Pay</Text>
+                  <Text style={[styles.actionText, { color: '#4ECDC4' }]}>{t('bills.pay')}</Text>
                 </TouchableOpacity>
               )}
               
@@ -492,7 +521,7 @@ const BillsTrackerScreen = ({ navigation }: any) => {
                 onPress={() => handleEditBill(bill)}
               >
                 <Ionicons name="pencil" size={16} color={theme.colors.primary} />
-                <Text style={[styles.actionText, { color: theme.colors.primary }]}>Edit</Text>
+                <Text style={[styles.actionText, { color: theme.colors.primary }]}>{t('bills.edit')}</Text>
               </TouchableOpacity>
               
               <TouchableOpacity
@@ -510,11 +539,11 @@ const BillsTrackerScreen = ({ navigation }: any) => {
 
   const renderFilterTabs = () => {
     const filters: { key: typeof selectedFilter; label: string; count: number }[] = [
-      { key: 'all', label: 'All', count: bills.length },
-      { key: 'overdue', label: 'Overdue', count: bills.filter(b => b.status === 'overdue').length },
-      { key: 'pending', label: 'Pending', count: bills.filter(b => b.status === 'pending').length },
-      { key: 'upcoming', label: 'Upcoming', count: bills.filter(b => b.status === 'upcoming').length },
-      { key: 'paid', label: 'Paid', count: bills.filter(b => b.status === 'paid').length },
+      { key: 'all', label: t('bills.all'), count: bills.length },
+      { key: 'overdue', label: t('bills.overdue'), count: bills.filter(b => b.status === 'overdue').length },
+      { key: 'pending', label: t('bills.pending'), count: bills.filter(b => b.status === 'pending').length },
+      { key: 'upcoming', label: t('bills.upcoming'), count: bills.filter(b => b.status === 'upcoming').length },
+      { key: 'paid', label: t('bills.paid'), count: bills.filter(b => b.status === 'paid').length },
     ];
 
     return (
@@ -573,7 +602,7 @@ const BillsTrackerScreen = ({ navigation }: any) => {
 
     return (
       <View style={[styles.analyticsCard, { backgroundColor: theme.colors.card }]}>
-        <Text style={[styles.analyticsTitle, { color: theme.colors.text }]}>Bills Overview</Text>
+        <Text style={[styles.analyticsTitle, { color: theme.colors.text }]}>{t('bills.overview')}</Text>
         
         <View style={styles.analyticsGrid}>
           <View style={styles.analyticsItem}>
@@ -584,7 +613,7 @@ const BillsTrackerScreen = ({ navigation }: any) => {
               {formatCurrency(analytics.totalOverdue)}
             </Text>
             <Text style={[styles.analyticsLabel, { color: theme.colors.textSecondary }]}>
-              Overdue
+              {t('bills.overdue')}
             </Text>
           </View>
 
@@ -596,7 +625,7 @@ const BillsTrackerScreen = ({ navigation }: any) => {
               {formatCurrency(analytics.totalPending)}
             </Text>
             <Text style={[styles.analyticsLabel, { color: theme.colors.textSecondary }]}>
-              Pending
+              {t('bills.pending')}
             </Text>
           </View>
 
@@ -608,7 +637,7 @@ const BillsTrackerScreen = ({ navigation }: any) => {
               {formatCurrency(analytics.totalPaidThisMonth)}
             </Text>
             <Text style={[styles.analyticsLabel, { color: theme.colors.textSecondary }]}>
-              Paid This Month
+              {t('bills.paidThisMonth')}
             </Text>
           </View>
         </View>
@@ -637,38 +666,38 @@ const BillsTrackerScreen = ({ navigation }: any) => {
             }}>
               <Ionicons name="close" size={24} color={theme.colors.text} />
             </TouchableOpacity>
-            <Text style={[styles.modalTitle, { color: theme.colors.text }]}>Edit Bill</Text>
+            <Text style={[styles.modalTitle, { color: theme.colors.text }]}>{t('addBill.editTitle')}</Text>
             <TouchableOpacity onPress={handleUpdateBill}>
-              <Text style={[styles.saveButton, { color: theme.colors.primary }]}>Update</Text>
+              <Text style={[styles.saveButton, { color: theme.colors.primary }]}>{t('addBill.update')}</Text>
             </TouchableOpacity>
           </View>
 
           <ScrollView style={styles.modalContent}>
             <View style={styles.formGroup}>
-              <Text style={[styles.formLabel, { color: theme.colors.text }]}>Bill Title *</Text>
+              <Text style={[styles.formLabel, { color: theme.colors.text }]}>{t('addBill.billTitle')} *</Text>
               <TextInput
                 style={[styles.formInput, { backgroundColor: theme.colors.surface, color: theme.colors.text, borderColor: theme.colors.border }]}
                 value={editBill.title}
                 onChangeText={(text) => setEditBill({ ...editBill, title: text })}
-                placeholder="e.g., Electricity Bill"
+                placeholder={t('addBill.billTitlePlaceholder')}
                 placeholderTextColor={theme.colors.textSecondary}
               />
             </View>
 
             <View style={styles.formGroup}>
-              <Text style={[styles.formLabel, { color: theme.colors.text }]}>Amount *</Text>
+              <Text style={[styles.formLabel, { color: theme.colors.text }]}>{t('addBill.amount')} *</Text>
               <TextInput
                 style={[styles.formInput, { backgroundColor: theme.colors.surface, color: theme.colors.text, borderColor: theme.colors.border }]}
                 value={editBill.amount}
                 onChangeText={(text) => setEditBill({ ...editBill, amount: text })}
-                placeholder="0.00"
+                placeholder={t('addBill.amountPlaceholder')}
                 keyboardType="numeric"
                 placeholderTextColor={theme.colors.textSecondary}
               />
             </View>
 
             <View style={styles.formGroup}>
-              <Text style={[styles.formLabel, { color: theme.colors.text }]}>Category *</Text>
+              <Text style={[styles.formLabel, { color: theme.colors.text }]}>{t('addBill.category')} *</Text>
               <ScrollView horizontal showsHorizontalScrollIndicator={false}>
                 {categories.map((category, index) => (
                   <TouchableOpacity
@@ -684,7 +713,7 @@ const BillsTrackerScreen = ({ navigation }: any) => {
                   >
                     <Ionicons name={category.icon as any} size={20} color={category.color} />
                     <Text style={[styles.categoryOptionText, { color: theme.colors.text }]}>
-                      {category.name}
+                      {getCategoryTranslation(category.name)}
                     </Text>
                   </TouchableOpacity>
                 ))}
@@ -693,18 +722,18 @@ const BillsTrackerScreen = ({ navigation }: any) => {
 
             <View style={styles.formRow}>
               <View style={styles.formGroup}>
-                <Text style={[styles.formLabel, { color: theme.colors.text }]}>Due Date</Text>
+                <Text style={[styles.formLabel, { color: theme.colors.text }]}>{t('addBill.dueDate')}</Text>
                 <TextInput
                   style={[styles.formInput, { backgroundColor: theme.colors.surface, color: theme.colors.text, borderColor: theme.colors.border }]}
                   value={editBill.dueDate}
                   onChangeText={(text) => setEditBill({ ...editBill, dueDate: text })}
-                  placeholder="YYYY-MM-DD"
+                  placeholder={t('addBill.dueDatePlaceholder')}
                   placeholderTextColor={theme.colors.textSecondary}
                 />
               </View>
 
               <View style={styles.formGroup}>
-                <Text style={[styles.formLabel, { color: theme.colors.text }]}>Frequency</Text>
+                <Text style={[styles.formLabel, { color: theme.colors.text }]}>{t('addBill.frequency')}</Text>
                 <View style={[styles.pickerContainer, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
                   <ScrollView horizontal showsHorizontalScrollIndicator={false}>
                     {(['weekly', 'monthly', 'yearly', 'one-time'] as const).map((freq, index) => (
@@ -726,7 +755,7 @@ const BillsTrackerScreen = ({ navigation }: any) => {
                             },
                           ]}
                         >
-                          {freq}
+                          {freq === 'one-time' ? t('bills.oneTime') : t(`bills.${freq}`)}
                         </Text>
                       </TouchableOpacity>
                     ))}
@@ -736,12 +765,12 @@ const BillsTrackerScreen = ({ navigation }: any) => {
             </View>
 
             <View style={styles.formGroup}>
-              <Text style={[styles.formLabel, { color: theme.colors.text }]}>Description</Text>
+              <Text style={[styles.formLabel, { color: theme.colors.text }]}>{t('addBill.description')}</Text>
               <TextInput
                 style={[styles.formTextArea, { backgroundColor: theme.colors.surface, color: theme.colors.text, borderColor: theme.colors.border }]}
                 value={editBill.description}
                 onChangeText={(text) => setEditBill({ ...editBill, description: text })}
-                placeholder="Optional description"
+                placeholder={t('addBill.descriptionPlaceholder')}
                 multiline
                 numberOfLines={3}
                 placeholderTextColor={theme.colors.textSecondary}
@@ -750,7 +779,7 @@ const BillsTrackerScreen = ({ navigation }: any) => {
 
             <View style={styles.formGroup}>
               <View style={styles.switchRow}>
-                <Text style={[styles.formLabel, { color: theme.colors.text }]}>Recurring Bill</Text>
+                <Text style={[styles.formLabel, { color: theme.colors.text }]}>{t('addBill.recurringBill')}</Text>
                 <Switch
                   value={editBill.isRecurring}
                   onValueChange={(value) => setEditBill({ ...editBill, isRecurring: value })}
@@ -762,7 +791,7 @@ const BillsTrackerScreen = ({ navigation }: any) => {
 
             <View style={styles.formGroup}>
               <View style={styles.switchRow}>
-                <Text style={[styles.formLabel, { color: theme.colors.text }]}>Auto Pay</Text>
+                <Text style={[styles.formLabel, { color: theme.colors.text }]}>{t('addBill.autoPay')}</Text>
                 <Switch
                   value={editBill.isAutoPay}
                   onValueChange={(value) => setEditBill({ ...editBill, isAutoPay: value })}
@@ -773,7 +802,7 @@ const BillsTrackerScreen = ({ navigation }: any) => {
             </View>
 
             <View style={styles.formGroup}>
-              <Text style={[styles.formLabel, { color: theme.colors.text }]}>Reminder (days before due)</Text>
+              <Text style={[styles.formLabel, { color: theme.colors.text }]}>{t('addBill.reminderDays')}</Text>
               <View style={styles.reminderOptions}>
                 {[1, 3, 7, 14].map((days, index) => (
                   <TouchableOpacity
@@ -803,7 +832,7 @@ const BillsTrackerScreen = ({ navigation }: any) => {
             </View>
 
             <View style={styles.formGroup}>
-              <Text style={[styles.formLabel, { color: theme.colors.text }]}>Reminders per day</Text>
+              <Text style={[styles.formLabel, { color: theme.colors.text }]}>{t('addBill.remindersPerDay')}</Text>
               <View style={styles.reminderOptions}>
                 {[1, 2, 3, 4].map((count, index) => (
                   <TouchableOpacity
@@ -833,12 +862,12 @@ const BillsTrackerScreen = ({ navigation }: any) => {
             </View>
 
             <View style={styles.formGroup}>
-              <Text style={[styles.formLabel, { color: theme.colors.text }]}>Notes</Text>
+              <Text style={[styles.formLabel, { color: theme.colors.text }]}>{t('addBill.notes')}</Text>
               <TextInput
                 style={[styles.formTextArea, { backgroundColor: theme.colors.surface, color: theme.colors.text, borderColor: theme.colors.border }]}
                 value={editBill.notes}
                 onChangeText={(text) => setEditBill({ ...editBill, notes: text })}
-                placeholder="Optional notes"
+                placeholder={t('addBill.notesPlaceholder')}
                 multiline
                 numberOfLines={3}
                 placeholderTextColor={theme.colors.textSecondary}
@@ -864,38 +893,38 @@ const BillsTrackerScreen = ({ navigation }: any) => {
             <TouchableOpacity onPress={() => setShowAddModal(false)}>
               <Ionicons name="close" size={24} color={theme.colors.text} />
             </TouchableOpacity>
-            <Text style={[styles.modalTitle, { color: theme.colors.text }]}>Add New Bill</Text>
+            <Text style={[styles.modalTitle, { color: theme.colors.text }]}>{t('addBill.addTitle')}</Text>
             <TouchableOpacity onPress={handleAddBill}>
-              <Text style={[styles.saveButton, { color: theme.colors.primary }]}>Save</Text>
+              <Text style={[styles.saveButton, { color: theme.colors.primary }]}>{t('addBill.save')}</Text>
             </TouchableOpacity>
           </View>
 
           <ScrollView style={styles.modalContent}>
             <View style={styles.formGroup}>
-              <Text style={[styles.formLabel, { color: theme.colors.text }]}>Bill Title *</Text>
+              <Text style={[styles.formLabel, { color: theme.colors.text }]}>{t('addBill.billTitle')} *</Text>
               <TextInput
                 style={[styles.formInput, { backgroundColor: theme.colors.surface, color: theme.colors.text, borderColor: theme.colors.border }]}
                 value={newBill.title}
                 onChangeText={(text) => setNewBill({ ...newBill, title: text })}
-                placeholder="e.g., Electricity Bill"
+                placeholder={t('addBill.billTitlePlaceholder')}
                 placeholderTextColor={theme.colors.textSecondary}
               />
             </View>
 
             <View style={styles.formGroup}>
-              <Text style={[styles.formLabel, { color: theme.colors.text }]}>Amount *</Text>
+              <Text style={[styles.formLabel, { color: theme.colors.text }]}>{t('addBill.amount')} *</Text>
               <TextInput
                 style={[styles.formInput, { backgroundColor: theme.colors.surface, color: theme.colors.text, borderColor: theme.colors.border }]}
                 value={newBill.amount}
                 onChangeText={(text) => setNewBill({ ...newBill, amount: text })}
-                placeholder="0.00"
+                placeholder={t('addBill.amountPlaceholder')}
                 keyboardType="numeric"
                 placeholderTextColor={theme.colors.textSecondary}
               />
             </View>
 
             <View style={styles.formGroup}>
-              <Text style={[styles.formLabel, { color: theme.colors.text }]}>Category *</Text>
+              <Text style={[styles.formLabel, { color: theme.colors.text }]}>{t('addBill.category')} *</Text>
               <ScrollView horizontal showsHorizontalScrollIndicator={false}>
                 {categories.map((category, index) => (
                   <TouchableOpacity
@@ -911,7 +940,7 @@ const BillsTrackerScreen = ({ navigation }: any) => {
                   >
                     <Ionicons name={category.icon as any} size={20} color={category.color} />
                     <Text style={[styles.categoryOptionText, { color: theme.colors.text }]}>
-                      {category.name}
+                      {getCategoryTranslation(category.name)}
                     </Text>
                   </TouchableOpacity>
                 ))}
@@ -920,18 +949,18 @@ const BillsTrackerScreen = ({ navigation }: any) => {
 
             <View style={styles.formRow}>
               <View style={styles.formGroup}>
-                <Text style={[styles.formLabel, { color: theme.colors.text }]}>Due Date</Text>
+                <Text style={[styles.formLabel, { color: theme.colors.text }]}>{t('addBill.dueDate')}</Text>
                 <TextInput
                   style={[styles.formInput, { backgroundColor: theme.colors.surface, color: theme.colors.text, borderColor: theme.colors.border }]}
                   value={newBill.dueDate}
                   onChangeText={(text) => setNewBill({ ...newBill, dueDate: text })}
-                  placeholder="YYYY-MM-DD"
+                  placeholder={t('addBill.dueDatePlaceholder')}
                   placeholderTextColor={theme.colors.textSecondary}
                 />
               </View>
 
               <View style={styles.formGroup}>
-                <Text style={[styles.formLabel, { color: theme.colors.text }]}>Frequency</Text>
+                <Text style={[styles.formLabel, { color: theme.colors.text }]}>{t('addBill.frequency')}</Text>
                 <View style={[styles.pickerContainer, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
                   <ScrollView horizontal showsHorizontalScrollIndicator={false}>
                     {(['weekly', 'monthly', 'yearly', 'one-time'] as const).map((freq, index) => (
@@ -953,7 +982,7 @@ const BillsTrackerScreen = ({ navigation }: any) => {
                             },
                           ]}
                         >
-                          {freq}
+                          {t(`bills.${freq.replace('-', '')}`)}
                         </Text>
                       </TouchableOpacity>
                     ))}
@@ -963,12 +992,12 @@ const BillsTrackerScreen = ({ navigation }: any) => {
             </View>
 
             <View style={styles.formGroup}>
-              <Text style={[styles.formLabel, { color: theme.colors.text }]}>Description</Text>
+              <Text style={[styles.formLabel, { color: theme.colors.text }]}>{t('addBill.description')}</Text>
               <TextInput
                 style={[styles.formTextArea, { backgroundColor: theme.colors.surface, color: theme.colors.text, borderColor: theme.colors.border }]}
                 value={newBill.description}
                 onChangeText={(text) => setNewBill({ ...newBill, description: text })}
-                placeholder="Optional description"
+                placeholder={t('addBill.descriptionPlaceholder')}
                 multiline
                 numberOfLines={3}
                 placeholderTextColor={theme.colors.textSecondary}
@@ -989,7 +1018,7 @@ const BillsTrackerScreen = ({ navigation }: any) => {
 
             <View style={styles.formGroup}>
               <View style={styles.switchRow}>
-                <Text style={[styles.formLabel, { color: theme.colors.text }]}>Auto Pay</Text>
+                <Text style={[styles.formLabel, { color: theme.colors.text }]}>{t('addBill.autoPay')}</Text>
                 <Switch
                   value={newBill.isAutoPay}
                   onValueChange={(value) => setNewBill({ ...newBill, isAutoPay: value })}
@@ -1000,7 +1029,7 @@ const BillsTrackerScreen = ({ navigation }: any) => {
             </View>
 
             <View style={styles.formGroup}>
-              <Text style={[styles.formLabel, { color: theme.colors.text }]}>Reminder (days before due)</Text>
+              <Text style={[styles.formLabel, { color: theme.colors.text }]}>{t('addBill.reminderDays')}</Text>
               <View style={styles.reminderOptions}>
                 {[1, 3, 7, 14].map((days, index) => (
                   <TouchableOpacity
@@ -1030,7 +1059,7 @@ const BillsTrackerScreen = ({ navigation }: any) => {
             </View>
 
             <View style={styles.formGroup}>
-              <Text style={[styles.formLabel, { color: theme.colors.text }]}>Reminders per day</Text>
+              <Text style={[styles.formLabel, { color: theme.colors.text }]}>{t('addBill.remindersPerDay')}</Text>
               <View style={styles.reminderOptions}>
                 {[1, 2, 3, 4].map((count, index) => (
                   <TouchableOpacity
@@ -1078,7 +1107,7 @@ const BillsTrackerScreen = ({ navigation }: any) => {
           <View style={[styles.paymentModalContent, { backgroundColor: theme.colors.card }]}>
             <View style={styles.paymentModalHeader}>
               <Text style={[styles.paymentModalTitle, { color: theme.colors.text }]}>
-                Pay Bill
+                {t('payment.title')}
               </Text>
               <TouchableOpacity
                 onPress={() => setShowPaymentModal(false)}
@@ -1099,7 +1128,7 @@ const BillsTrackerScreen = ({ navigation }: any) => {
 
             <View style={styles.walletSelection}>
               <Text style={[styles.walletSelectionLabel, { color: theme.colors.text }]}>
-                Select Payment Method
+                {t('payment.selectMethod')}
               </Text>
               <ScrollView style={styles.walletsList}>
                 {wallets.map((wallet) => (
@@ -1119,7 +1148,7 @@ const BillsTrackerScreen = ({ navigation }: any) => {
                         {wallet.name}
                       </Text>
                       <Text style={[styles.walletBalance, { color: theme.colors.textSecondary }]}>
-                        Balance: {formatCurrency(wallet.balance)}
+                        {t('payment.balance', { balance: formatCurrency(wallet.balance) })}
                       </Text>
                     </View>
                     {selectedWallet === wallet.id && (
@@ -1135,13 +1164,13 @@ const BillsTrackerScreen = ({ navigation }: any) => {
                 style={[styles.cancelButton, { borderColor: theme.colors.border }]}
                 onPress={() => setShowPaymentModal(false)}
               >
-                <Text style={[styles.cancelButtonText, { color: theme.colors.text }]}>Cancel</Text>
+                <Text style={[styles.cancelButtonText, { color: theme.colors.text }]}>{t('payment.cancel')}</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={[styles.payButton, { backgroundColor: theme.colors.primary }]}
                 onPress={processPayment}
               >
-                <Text style={styles.payButtonText}>Pay Now</Text>
+                <Text style={styles.payButtonText}>{t('payment.payNow')}</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -1154,7 +1183,7 @@ const BillsTrackerScreen = ({ navigation }: any) => {
     return (
       <SafeAreaView style={[styles.container, { backgroundColor: theme.colors.background }]}>
         <View style={styles.loadingContainer}>
-          <Text style={[styles.loadingText, { color: theme.colors.textSecondary }]}>Loading bills...</Text>
+          <Text style={[styles.loadingText, { color: theme.colors.textSecondary }]}>{t('bills.loadingBills')}</Text>
         </View>
       </SafeAreaView>
     );
@@ -1173,7 +1202,7 @@ const BillsTrackerScreen = ({ navigation }: any) => {
           <TouchableOpacity onPress={() => navigation.goBack()}>
             <Ionicons name="arrow-back" size={24} color={theme.colors.text} />
           </TouchableOpacity>
-          <Text style={[styles.title, { color: theme.colors.text }]}>Bills Reminder</Text>
+          <Text style={[styles.title, { color: theme.colors.text }]}>{t('bills.title')}</Text>
           <View style={{ flexDirection: 'row', alignItems: 'center' }}>
             {/* Development helper button */}
             {__DEV__ && (
@@ -1241,7 +1270,7 @@ const BillsTrackerScreen = ({ navigation }: any) => {
                     onPress={() => setShowAddModal(true)}
                   >
                     <Ionicons name="add" size={20} color="#FFFFFF" />
-                    <Text style={styles.addFirstBillText}>Add Your First Bill</Text>
+                    <Text style={styles.addFirstBillText}>{t('bills.addYourFirstBill')}</Text>
                   </TouchableOpacity>
                 )}
               </View>

@@ -1,5 +1,6 @@
 import { BorrowedMoney } from '../types';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { hybridDataService } from './hybridDataService';
 
 const BORROWED_MONEY_KEY = 'borrowed_money';
 
@@ -103,7 +104,27 @@ export class BorrowedMoneyService {
     return this.borrowedMoneyList[index];
   }
 
-  public async markAsPaid(id: string): Promise<BorrowedMoney | null> {
+  public async markAsPaid(id: string, walletId: string): Promise<BorrowedMoney | null> {
+    const borrowedMoney = await this.getBorrowedMoneyById(id);
+    if (!borrowedMoney) {
+      throw new Error('Borrowed money record not found');
+    }
+
+    if (borrowedMoney.isPaid) {
+      throw new Error('This borrowed money is already marked as paid');
+    }
+
+    // Create an income transaction for the repayment
+    await hybridDataService.createTransaction({
+      amount: borrowedMoney.amount,
+      description: `Payment received from ${borrowedMoney.personName}`,
+      type: 'INCOME',
+      walletId: walletId,
+      date: new Date().toISOString(),
+      notes: `Borrowed money repayment - ${borrowedMoney.reason}`,
+    });
+
+    // Mark as paid
     return this.updateBorrowedMoney(id, { isPaid: true });
   }
 

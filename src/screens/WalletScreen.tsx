@@ -21,7 +21,7 @@ import { hybridDataService } from '../services/hybridDataService';
 
 const WalletScreen = () => {
   const { theme } = useTheme();
-  const { formatCurrency } = useLocalization();
+  const { formatCurrency, t } = useLocalization();
   
   const [wallets, setWallets] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -43,7 +43,7 @@ const WalletScreen = () => {
       setWallets(fetchedWallets);
     } catch (error) {
       console.error('Error loading wallets:', error);
-      Alert.alert('Error', 'Failed to load wallets');
+      Alert.alert(t('error'), t('wallet_screen_error_loading'));
     } finally {
       setLoading(false);
     }
@@ -84,10 +84,10 @@ const WalletScreen = () => {
       // Refresh the wallet list
       await loadWallets();
       
-      Alert.alert('Success', 'Wallet created successfully!');
+      Alert.alert(t('success'), t('wallet_screen_success_created'));
     } catch (error) {
       console.error('Error creating wallet:', error);
-      Alert.alert('Error', 'Failed to create wallet. Please try again.');
+      Alert.alert(t('error'), t('wallet_screen_error_create'));
     }
   };
 
@@ -98,7 +98,7 @@ const WalletScreen = () => {
       const targetWallet = wallets.find(w => w.id === targetWalletId) || selectedWalletForMoney;
       
       if (!targetWalletId || !targetWallet) {
-        Alert.alert('Error', 'Please select a wallet to add money to.');
+        Alert.alert(t('error'), t('wallet_screen_select_wallet_error'));
         return;
       }
 
@@ -121,10 +121,13 @@ const WalletScreen = () => {
       // Refresh the wallet list to show updated balance
       await loadWallets();
       
-      Alert.alert('Success', `${formatCurrency(moneyData.amount)} added to ${targetWallet.name}!`);
+      Alert.alert(t('success'), t('wallet_screen_success_money_added', {
+        amount: formatCurrency(moneyData.amount),
+        wallet: targetWallet.name
+      }));
     } catch (error) {
       console.error('Error adding money:', error);
-      Alert.alert('Error', 'Failed to add money. Please try again.');
+      Alert.alert(t('error'), t('wallet_screen_error_add_money'));
     }
   };
 
@@ -137,20 +140,23 @@ const WalletScreen = () => {
   const handleDeleteWallet = async (walletId: string, walletName: string, walletBalance: number) => {
     // Check if wallet has balance
     const hasBalance = walletBalance !== 0;
-    const balanceWarning = hasBalance 
-      ? `\n\nWarning: This wallet has a balance of ${formatCurrency(walletBalance)}. Deleting it will remove this balance from your records.`
-      : '';
+    const confirmationMessage = hasBalance 
+      ? t('wallet_screen_delete_confirmation', {
+          name: walletName,
+          balance: formatCurrency(walletBalance)
+        })
+      : t('wallet_screen_delete_no_balance', { name: walletName });
 
     Alert.alert(
-      'Delete Wallet',
-      `Are you sure you want to delete "${walletName}"?${balanceWarning}\n\nThis action cannot be undone.`,
+      t('wallet_screen_delete_wallet'),
+      confirmationMessage,
       [
         {
-          text: 'Cancel',
+          text: t('cancel'),
           style: 'cancel',
         },
         {
-          text: 'Delete',
+          text: t('delete'),
           style: 'destructive',
           onPress: async () => {
             try {
@@ -161,10 +167,10 @@ const WalletScreen = () => {
               // Refresh the wallet list
               await loadWallets();
               
-              Alert.alert('Success', 'Wallet deleted successfully!');
+              Alert.alert(t('success'), t('wallet_screen_success_deleted'));
             } catch (error) {
               console.error('Error deleting wallet:', error);
-              Alert.alert('Error', 'Failed to delete wallet. Please try again.');
+              Alert.alert(t('error'), t('wallet_screen_error_delete'));
             }
           },
         },
@@ -234,22 +240,22 @@ const WalletScreen = () => {
               }}
             >
               <Ionicons name="add" size={16} color="white" />
-              <Text style={styles.walletActionText}>Add Money</Text>
+              <Text style={styles.walletActionText}>{t('wallet_screen_add_money')}</Text>
             </TouchableOpacity>
             <TouchableOpacity 
               style={styles.walletActionButton}
               onPress={() => setIsTransferModalVisible(true)}
             >
               <Ionicons name="swap-horizontal" size={16} color="white" />
-              <Text style={styles.walletActionText}>Transfer</Text>
+              <Text style={styles.walletActionText}>{t('transfer')}</Text>
             </TouchableOpacity>
           </View>
         </LinearGradient>
         
         {/* Recent Transactions for this wallet */}
         <View style={[styles.walletTransactions, { backgroundColor: theme.colors.surface }]}>
-          <Text style={[styles.walletTransactionsTitle, { color: theme.colors.text }]}>Recent Activity</Text>
-          <Text style={[styles.noTransactionsText, { color: theme.colors.textSecondary }]}>No recent transactions</Text>
+          <Text style={[styles.walletTransactionsTitle, { color: theme.colors.text }]}>{t('wallet_screen_recent_activity')}</Text>
+          <Text style={[styles.noTransactionsText, { color: theme.colors.textSecondary }]}>{t('wallet_screen_no_transactions')}</Text>
         </View>
       </View>
     );
@@ -270,12 +276,12 @@ const WalletScreen = () => {
         >
           {/* Header */}
           <View style={styles.header}>
-            <Text style={[styles.title, { color: theme.colors.text }]}>My Wallets</Text>
+            <Text style={[styles.title, { color: theme.colors.text }]}>{t('wallet_screen_title')}</Text>
           </View>
 
           {/* Total Balance Overview */}
           <View style={[styles.overviewCard, { backgroundColor: theme.colors.surface }]}>
-            <Text style={[styles.overviewLabel, { color: theme.colors.textSecondary }]}>Total Balance</Text>
+            <Text style={[styles.overviewLabel, { color: theme.colors.textSecondary }]}>{t('wallet_screen_total_balance')}</Text>
             <Text style={[styles.overviewAmount, { color: theme.colors.text }]}>
               {isBalanceVisible 
                 ? formatCurrency(wallets.reduce((sum, wallet) => sum + wallet.balance, 0))
@@ -285,19 +291,19 @@ const WalletScreen = () => {
             <View style={styles.overviewStats}>
               <View style={styles.statItem}>
                 <Text style={[styles.statValue, { color: theme.colors.text }]}>{formatCurrency(1200)}</Text>
-                <Text style={[styles.statLabel, { color: theme.colors.textSecondary }]}>This Month</Text>
+                <Text style={[styles.statLabel, { color: theme.colors.textSecondary }]}>{t('wallet_screen_this_month')}</Text>
               </View>
               <View style={[styles.statDivider, { backgroundColor: theme.colors.border }]} />
               <View style={styles.statItem}>
                 <Text style={[styles.statValue, { color: theme.colors.text }]}>{wallets.length}</Text>
-                <Text style={[styles.statLabel, { color: theme.colors.textSecondary }]}>Active Wallets</Text>
+                <Text style={[styles.statLabel, { color: theme.colors.textSecondary }]}>{t('wallet_screen_active_wallets')}</Text>
               </View>
             </View>
           </View>
 
           {/* Quick Transfer */}
           <View style={styles.section}>
-            <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>Quick Actions</Text>
+            <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>{t('wallet_screen_quick_actions')}</Text>
             <View style={styles.quickActions}>
               <TouchableOpacity 
                 style={styles.quickActionButton}
@@ -306,13 +312,13 @@ const WalletScreen = () => {
                 <View style={[styles.quickActionIcon, { backgroundColor: '#4A90E2' }]}>
                   <Ionicons name="swap-horizontal" size={20} color="white" />
                 </View>
-                <Text style={[styles.quickActionText, { color: theme.colors.text }]}>Transfer</Text>
+                <Text style={[styles.quickActionText, { color: theme.colors.text }]}>{t('transfer')}</Text>
               </TouchableOpacity>
               <TouchableOpacity 
                 style={styles.quickActionButton}
                 onPress={() => {
                   if (wallets.length === 0) {
-                    Alert.alert('No Wallets', 'Please create a wallet first before adding money.');
+                    Alert.alert(t('wallet_screen_no_wallets'), t('wallet_screen_no_wallets_add_money'));
                   } else {
                     // Always allow wallet selection for quick action
                     setSelectedWalletForMoney(null); // No pre-selection
@@ -323,7 +329,7 @@ const WalletScreen = () => {
                 <View style={[styles.quickActionIcon, { backgroundColor: '#7ED321' }]}>
                   <Ionicons name="add" size={20} color="white" />
                 </View>
-                <Text style={[styles.quickActionText, { color: theme.colors.text }]}>Add Money</Text>
+                <Text style={[styles.quickActionText, { color: theme.colors.text }]}>{t('wallet_screen_add_money')}</Text>
               </TouchableOpacity>
               <TouchableOpacity 
                 style={styles.quickActionButton}
@@ -332,25 +338,25 @@ const WalletScreen = () => {
                 <View style={[styles.quickActionIcon, { backgroundColor: '#FF9500' }]}>
                   <Ionicons name="card" size={20} color="white" />
                 </View>
-                <Text style={[styles.quickActionText, { color: theme.colors.text }]}>New Wallet</Text>
+                <Text style={[styles.quickActionText, { color: theme.colors.text }]}>{t('wallet_screen_new_wallet')}</Text>
               </TouchableOpacity>
             </View>
           </View>
 
           {/* Wallets List */}
           <View style={styles.section}>
-            <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>Your Wallets</Text>
+            <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>{t('wallet_screen_your_wallets')}</Text>
             {loading ? (
               <View style={styles.loadingContainer}>
                 <ActivityIndicator size="large" color={theme.colors.primary} />
-                <Text style={[styles.loadingText, { color: theme.colors.text }]}>Loading wallets...</Text>
+                <Text style={[styles.loadingText, { color: theme.colors.text }]}>{t('wallet_screen_loading')}</Text>
               </View>
             ) : wallets.length > 0 ? (
               wallets.map(renderWalletCard)
             ) : (
               <View style={styles.emptyContainer}>
                 <Text style={[styles.emptyText, { color: theme.colors.textSecondary }]}>
-                  No wallets yet. Create your first wallet to get started!
+                  {t('wallet_screen_no_wallets')}
                 </Text>
               </View>
             )}

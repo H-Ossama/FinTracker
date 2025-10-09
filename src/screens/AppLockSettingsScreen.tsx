@@ -14,7 +14,11 @@ import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../contexts/ThemeContext';
 import { useAuth } from '../contexts/AuthContext';
 import { useNavigation } from '@react-navigation/native';
+import { useLocalization } from '../contexts/LocalizationContext';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import AppLockService from '../services/appLockService';
+import AutoLockDropdown from '../components/AutoLockDropdown';
+import * as LocalAuthentication from 'expo-local-authentication';
 
 interface AppLockSettings {
   isEnabled: boolean;
@@ -28,6 +32,7 @@ const AppLockSettingsScreen = () => {
   const { theme } = useTheme();
   const { biometricEnabled } = useAuth();
   const navigation = useNavigation();
+  const { t } = useLocalization();
   
   const [settings, setSettings] = useState<AppLockSettings>({
     isEnabled: false,
@@ -37,18 +42,46 @@ const AppLockSettingsScreen = () => {
     hasPinSet: false,
   });
 
+  const [isLoading, setIsLoading] = useState(false);
+  const [localBiometricEnabled, setLocalBiometricEnabled] = useState(false);
+  const appLockService = AppLockService.getInstance();
+
   const styles = createStyles(theme);
 
   useEffect(() => {
     loadSettings();
+    initializeAppLockService();
   }, []);
+
+  useEffect(() => {
+    const unsubscribe = navigation.addListener('focus', () => {
+      // Refresh settings when returning to this screen
+      loadSettings();
+    });
+
+    return unsubscribe;
+  }, [navigation]);
+
+  const initializeAppLockService = async () => {
+    await appLockService.initialize();
+    const serviceSettings = appLockService.getSettings();
+    if (serviceSettings) {
+      setSettings(serviceSettings);
+    }
+  };
 
   const loadSettings = async () => {
     try {
       const savedSettings = await AsyncStorage.getItem('appLockSettings');
       if (savedSettings) {
-        setSettings(JSON.parse(savedSettings));
+        const parsedSettings = JSON.parse(savedSettings);
+        setSettings(parsedSettings);
       }
+      
+      // Check if biometric is available
+      const biometricAvailable = await LocalAuthentication.hasHardwareAsync();
+      const biometricEnrolled = await LocalAuthentication.isEnrolledAsync();
+      setLocalBiometricEnabled(biometricAvailable && biometricEnrolled);
     } catch (error) {
       console.error('Failed to load app lock settings:', error);
     }
@@ -57,6 +90,7 @@ const AppLockSettingsScreen = () => {
   const saveSettings = async (newSettings: AppLockSettings) => {
     try {
       await AsyncStorage.setItem('appLockSettings', JSON.stringify(newSettings));
+      await appLockService.updateSettings(newSettings);
       setSettings(newSettings);
     } catch (error) {
       console.error('Failed to save app lock settings:', error);
@@ -67,72 +101,54 @@ const AppLockSettingsScreen = () => {
     navigation.goBack();
   };
 
-  const toggleAppLock = (value: boolean) => {
-    const newSettings = { ...settings, isEnabled: value };
-    saveSettings(newSettings);
-    
-    if (value && !settings.hasPinSet && !biometricEnabled) {
+  const toggleAppLock = async (value: boolean) => {
+    if (value && !settings.hasPinSet && !localBiometricEnabled) {
       Alert.alert(
-        'Setup Required',
-        'Please set up biometric authentication or a PIN to enable app lock.',
-        [{ text: 'OK' }]
+        t('appLock.setupRequired'),
+        t('appLock.setupRequiredDesc'),
+        [
+          { text: t('cancel'), style: 'cancel' },
+          { 
+            text: t('appLock.setupPin'), 
+            onPress: () => {
+              navigation.navigate('PinSetup' as never, { mode: 'setup' } as never);
+            }
+          }
+        ]
       );
+      return;
     }
+    
+    const newSettings = { ...settings, isEnabled: value };
+    await saveSettings(newSettings);
   };
 
-  const toggleLockOnBackground = (value: boolean) => {
+  const toggleLockOnBackground = async (value: boolean) => {
     const newSettings = { ...settings, lockOnBackground: value };
-    saveSettings(newSettings);
+    await saveSettings(newSettings);
   };
 
-  const toggleRequireBiometric = (value: boolean) => {
+  const toggleRequireBiometric = async (value: boolean) => {
+    if (value && !localBiometricEnabled) {
+      Alert.alert(
+        t('appLock.biometricNotAvailable'),
+        t('notificationPrefs.enableInSettings'),
+        [{ text: t('ok') }]
+      );
+      return;
+    }
+    
     const newSettings = { ...settings, requireBiometric: value };
-    saveSettings(newSettings);
+    await saveSettings(newSettings);
   };
 
-  const handleAutoLockTime = () => {
-    const options = [
-      { label: 'Immediately', value: 'immediate' },
-      { label: '30 seconds', value: '30sec' },
-      { label: '1 minute', value: '1min' },
-      { label: '5 minutes', value: '5min' },
-      { label: '15 minutes', value: '15min' },
-      { label: 'Never', value: 'never' },
-    ];
-
-    Alert.alert(
-      'Auto-Lock Timer',
-      'Choose when the app should automatically lock',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        ...options.map(option => ({
-          text: option.label,
-          onPress: () => {
-            const newSettings = { ...settings, autoLockTime: option.value };
-            saveSettings(newSettings);
-          },
-        })),
-      ]
-    );
+  const handleAutoLockTimeChange = async (value: string) => {
+    const newSettings = { ...settings, autoLockTime: value };
+    await saveSettings(newSettings);
   };
 
   const handleSetupPin = () => {
-    Alert.alert(
-      'Setup PIN',
-      'Set up a 4-digit PIN as backup authentication',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Setup PIN',
-          onPress: () => {
-            // In a real app, you would navigate to PIN setup screen
-            const newSettings = { ...settings, hasPinSet: true };
-            saveSettings(newSettings);
-            Alert.alert('Success', 'PIN has been set up successfully!');
-          },
-        },
-      ]
-    );
+    navigation.navigate('PinSetup' as never, { mode: 'setup' } as never);
   };
 
   const handleChangePinOrPassword = () => {
@@ -142,32 +158,37 @@ const AppLockSettingsScreen = () => {
     }
 
     Alert.alert(
-      'Change Authentication',
-      'Choose what you want to change',
+      t('appLock.changeAuthTitle'),
+      t('appLock.changeAuthDesc'),
       [
-        { text: 'Cancel', style: 'cancel' },
+        { text: t('cancel'), style: 'cancel' },
         {
-          text: 'Change PIN',
+          text: t('appLock.changePin'),
           onPress: () => {
-            Alert.alert('Success', 'PIN has been updated successfully!');
+            navigation.navigate('PinSetup' as never, { mode: 'change' } as never);
           },
         },
         {
-          text: 'Remove PIN',
+          text: t('appLock.removePin'),
           style: 'destructive',
           onPress: () => {
             Alert.alert(
-              'Remove PIN',
-              'Are you sure you want to remove your PIN? You will need biometric authentication to unlock the app.',
+              t('appLock.removePinTitle'),
+              t('appLock.removePinDesc'),
               [
-                { text: 'Cancel', style: 'cancel' },
+                { text: t('cancel'), style: 'cancel' },
                 {
-                  text: 'Remove',
+                  text: t('appLock.remove'),
                   style: 'destructive',
-                  onPress: () => {
-                    const newSettings = { ...settings, hasPinSet: false };
-                    saveSettings(newSettings);
-                    Alert.alert('Success', 'PIN has been removed.');
+                  onPress: async () => {
+                    try {
+                      await AsyncStorage.removeItem('app_pin_hash');
+                      const newSettings = { ...settings, hasPinSet: false };
+                      await saveSettings(newSettings);
+                      Alert.alert(t('success'), t('appLock.pinRemoved'));
+                    } catch (error) {
+                      Alert.alert(t('error'), t('appLock.pinRemoved'));
+                    }
                   },
                 },
               ]
@@ -180,13 +201,18 @@ const AppLockSettingsScreen = () => {
 
   const getAutoLockLabel = (value: string) => {
     switch (value) {
-      case 'immediate': return 'Immediately';
-      case '30sec': return '30 seconds';
-      case '1min': return '1 minute';
-      case '5min': return '5 minutes';
-      case '15min': return '15 minutes';
-      case 'never': return 'Never';
-      default: return '5 minutes';
+      case 'immediate': return t('appLock.immediately');
+      case '10sec': return t('appLock.tenSeconds');
+      case '30sec': return t('appLock.thirtySeconds');
+      case '1min': return t('appLock.oneMinute');
+      case '2min': return t('appLock.twoMinutes');
+      case '5min': return t('appLock.fiveMinutes');
+      case '10min': return t('appLock.tenMinutes');
+      case '15min': return t('appLock.fifteenMinutes');
+      case '30min': return t('appLock.thirtyMinutes');
+      case '1hour': return t('appLock.oneHour');
+      case 'never': return t('appLock.never');
+      default: return t('appLock.fiveMinutes');
     }
   };
 
@@ -202,7 +228,7 @@ const AppLockSettingsScreen = () => {
             <TouchableOpacity onPress={handleGoBack} style={styles.backButton}>
               <Ionicons name="arrow-back" size={24} color={theme.colors.text} />
             </TouchableOpacity>
-            <Text style={[styles.title, { color: theme.colors.text }]}>App Lock Settings</Text>
+            <Text style={[styles.title, { color: theme.colors.text }]}>{t('appLock.title')}</Text>
             <View style={styles.placeholder} />
           </View>
 
@@ -214,10 +240,10 @@ const AppLockSettingsScreen = () => {
                   <Ionicons name="shield-checkmark" size={24} color={settings.isEnabled ? theme.colors.primary : theme.colors.textSecondary} />
                   <View style={styles.masterToggleText}>
                     <Text style={[styles.masterToggleTitle, { color: theme.colors.text }]}>
-                      App Lock Protection
+                      {t('appLock.protection')}
                     </Text>
                     <Text style={[styles.masterToggleSubtitle, { color: theme.colors.textSecondary }]}>
-                      {settings.isEnabled ? 'Your app is protected' : 'App is not protected'}
+                      {settings.isEnabled ? t('appLock.protectedStatus') : t('appLock.unprotectedStatus')}
                     </Text>
                   </View>
                 </View>
@@ -234,32 +260,25 @@ const AppLockSettingsScreen = () => {
           {/* Lock Settings */}
           <View style={styles.section}>
             <View style={styles.sectionHeader}>
-              <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>Lock Settings</Text>
+              <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>{t('appLock.lockSettings')}</Text>
             </View>
 
             <View style={styles.card}>
-              <TouchableOpacity
-                style={[styles.settingItem, styles.settingItemBorder]}
-                onPress={handleAutoLockTime}
-                disabled={!settings.isEnabled}
-              >
+              <View style={[styles.settingItem, styles.settingItemBorder]}>
                 <View style={styles.settingContent}>
                   <Ionicons name="time-outline" size={20} color={settings.isEnabled ? theme.colors.text : theme.colors.textSecondary} />
                   <Text style={[styles.settingTitle, { 
                     color: settings.isEnabled ? theme.colors.text : theme.colors.textSecondary 
                   }]}>
-                    Auto-Lock Timer
+                    {t('appLock.autoLockTimer')}
                   </Text>
                 </View>
-                <View style={styles.settingRight}>
-                  <Text style={[styles.settingValue, { 
-                    color: settings.isEnabled ? theme.colors.textSecondary : theme.colors.textSecondary 
-                  }]}>
-                    {getAutoLockLabel(settings.autoLockTime)}
-                  </Text>
-                  <Ionicons name="chevron-forward" size={16} color={theme.colors.textSecondary} />
-                </View>
-              </TouchableOpacity>
+                <AutoLockDropdown
+                  value={settings.autoLockTime}
+                  onValueChange={handleAutoLockTimeChange}
+                  disabled={!settings.isEnabled}
+                />
+              </View>
 
               <View style={[styles.settingItem, styles.settingItemBorder]}>
                 <View style={styles.settingContent}>
@@ -267,7 +286,7 @@ const AppLockSettingsScreen = () => {
                   <Text style={[styles.settingTitle, { 
                     color: settings.isEnabled ? theme.colors.text : theme.colors.textSecondary 
                   }]}>
-                    Lock on Background
+                    {t('appLock.lockOnBackground')}
                   </Text>
                 </View>
                 <Switch
@@ -285,13 +304,13 @@ const AppLockSettingsScreen = () => {
                   <Text style={[styles.settingTitle, { 
                     color: settings.isEnabled ? theme.colors.text : theme.colors.textSecondary 
                   }]}>
-                    Require Biometric
+                    {t('appLock.requireBiometric')}
                   </Text>
                 </View>
                 <Switch
-                  value={settings.requireBiometric && biometricEnabled}
+                  value={settings.requireBiometric && localBiometricEnabled}
                   onValueChange={toggleRequireBiometric}
-                  disabled={!settings.isEnabled || !biometricEnabled}
+                  disabled={!settings.isEnabled || !localBiometricEnabled}
                   trackColor={{ false: theme.colors.border, true: theme.colors.primary }}
                   thumbColor={settings.requireBiometric ? '#fff' : '#f4f3f4'}
                 />
@@ -302,7 +321,7 @@ const AppLockSettingsScreen = () => {
           {/* Authentication Methods */}
           <View style={styles.section}>
             <View style={styles.sectionHeader}>
-              <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>Authentication Methods</Text>
+              <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>{t('appLock.authMethods')}</Text>
             </View>
 
             <View style={styles.card}>
@@ -316,14 +335,14 @@ const AppLockSettingsScreen = () => {
                   <Text style={[styles.settingTitle, { 
                     color: settings.isEnabled ? theme.colors.text : theme.colors.textSecondary 
                   }]}>
-                    {settings.hasPinSet ? 'Change PIN' : 'Setup PIN'}
+                    {settings.hasPinSet ? t('appLock.changePin') : t('appLock.setupPin')}
                   </Text>
                 </View>
                 <View style={styles.settingRight}>
                   <Text style={[styles.settingValue, { 
                     color: settings.hasPinSet ? theme.colors.primary : theme.colors.textSecondary 
                   }]}>
-                    {settings.hasPinSet ? 'Configured' : 'Not Set'}
+                    {settings.hasPinSet ? t('appLock.pinConfigured') : t('appLock.pinNotSet')}
                   </Text>
                   <Ionicons name="chevron-forward" size={16} color={theme.colors.textSecondary} />
                 </View>
@@ -331,18 +350,18 @@ const AppLockSettingsScreen = () => {
 
               <View style={styles.settingItem}>
                 <View style={styles.settingContent}>
-                  <Ionicons name="finger-print" size={20} color={biometricEnabled ? theme.colors.primary : theme.colors.textSecondary} />
+                  <Ionicons name="finger-print" size={20} color={localBiometricEnabled ? theme.colors.primary : theme.colors.textSecondary} />
                   <Text style={[styles.settingTitle, { 
                     color: settings.isEnabled ? theme.colors.text : theme.colors.textSecondary 
                   }]}>
-                    Biometric Authentication
+                    {t('appLock.biometricAuth')}
                   </Text>
                 </View>
                 <View style={styles.settingRight}>
                   <Text style={[styles.settingValue, { 
-                    color: biometricEnabled ? theme.colors.primary : theme.colors.textSecondary 
+                    color: localBiometricEnabled ? theme.colors.primary : theme.colors.textSecondary 
                   }]}>
-                    {biometricEnabled ? 'Available' : 'Not Available'}
+                    {localBiometricEnabled ? t('appLock.biometricAvailable') : t('appLock.biometricNotAvailable')}
                   </Text>
                 </View>
               </View>
@@ -354,8 +373,7 @@ const AppLockSettingsScreen = () => {
             <View style={styles.infoCard}>
               <Ionicons name="information-circle" size={20} color={theme.colors.primary} />
               <Text style={[styles.infoText, { color: theme.colors.textSecondary }]}>
-                App lock helps protect your financial data when your device is unlocked. 
-                We recommend enabling biometric authentication for the best balance of security and convenience.
+                {t('appLock.infoText')}
               </Text>
             </View>
           </View>

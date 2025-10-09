@@ -16,6 +16,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../contexts/ThemeContext';
+import { useLocalization } from '../contexts/LocalizationContext';
 import { useNotification } from '../contexts/NotificationContext';
 import { notificationService } from '../services/notificationService';
 
@@ -34,60 +35,14 @@ interface NotificationItem {
   };
 }
 
-interface NotificationPreferences {
-  enablePushNotifications: boolean;
-  enableEmailNotifications: boolean;
-  quietHours: {
-    enabled: boolean;
-    startTime: string;
-    endTime: string;
-  };
-  categories: {
-    transactions: boolean;
-    budgets: boolean;
-    goals: boolean;
-    reminders: boolean;
-    alerts: boolean;
-  };
-  frequency: {
-    dailyDigest: boolean;
-    weeklyReport: boolean;
-    monthlyReport: boolean;
-  };
-  testNotifications: boolean;
-}
-
-export default function NotificationCenterScreen() {
+export default function NotificationCenterScreen({ navigation }: { navigation: any }) {
   const { isDark } = useTheme();
+  const { t } = useLocalization();
   const { state: notificationState, addNotification, markAsRead, markAsUnread, markAllAsRead, removeNotification } = useNotification();
-  const [preferences, setPreferences] = useState<NotificationPreferences>({
-    enablePushNotifications: true,
-    enableEmailNotifications: false,
-    quietHours: {
-      enabled: false,
-      startTime: '22:00',
-      endTime: '08:00',
-    },
-    categories: {
-      transactions: true,
-      budgets: true,
-      goals: true,
-      reminders: true,
-      alerts: true,
-    },
-    frequency: {
-      dailyDigest: false,
-      weeklyReport: true,
-      monthlyReport: true,
-    },
-    testNotifications: true,
-  });
   
   const [isLoading, setIsLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
-  const [activeTab, setActiveTab] = useState<'notifications' | 'preferences'>('notifications');
   const [filterCategory, setFilterCategory] = useState<'all' | 'info' | 'success' | 'warning' | 'error'>('all');
-  const [testNotificationText, setTestNotificationText] = useState('This is a test notification');
 
   const styles = createStyles(isDark);
 
@@ -124,12 +79,12 @@ export default function NotificationCenterScreen() {
 
   const handleDeleteNotification = (notificationId: string) => {
     Alert.alert(
-      'Delete Notification',
-      'Are you sure you want to delete this notification?',
+      t('delete_notification'),
+      t('delete_notification_confirm'),
       [
-        { text: 'Cancel', style: 'cancel' },
+        { text: t('cancel'), style: 'cancel' },
         {
-          text: 'Delete',
+          text: t('delete'),
           style: 'destructive',
           onPress: () => {
             removeNotification(notificationId);
@@ -141,12 +96,12 @@ export default function NotificationCenterScreen() {
 
   const clearAllNotificationsLocal = () => {
     Alert.alert(
-      'Clear All Notifications',
-      'Are you sure you want to clear all notifications? This action cannot be undone.',
+      t('clear_all_notifications'),
+      t('clear_all_confirm'),
       [
-        { text: 'Cancel', style: 'cancel' },
+        { text: t('cancel'), style: 'cancel' },
         {
-          text: 'Clear All',
+          text: t('clear_all'),
           style: 'destructive',
           onPress: () => {
             // Clear all notifications using context
@@ -163,7 +118,7 @@ export default function NotificationCenterScreen() {
     try {
       const testNotification = {
         title: 'Testing',
-        message: testNotificationText || 'This is a test notification',
+        message: 'This is a test notification',
         type: 'info' as const,
         read: false,
       };
@@ -186,42 +141,6 @@ export default function NotificationCenterScreen() {
         read: false,
       });
     }
-  };
-
-  const updatePreference = <K extends keyof NotificationPreferences>(
-    key: K,
-    value: NotificationPreferences[K]
-  ) => {
-    setPreferences(prev => ({
-      ...prev,
-      [key]: value,
-    }));
-  };
-
-  const updateCategoryPreference = (
-    category: keyof NotificationPreferences['categories'],
-    enabled: boolean
-  ) => {
-    setPreferences(prev => ({
-      ...prev,
-      categories: {
-        ...prev.categories,
-        [category]: enabled,
-      },
-    }));
-  };
-
-  const updateFrequencyPreference = (
-    frequency: keyof NotificationPreferences['frequency'],
-    enabled: boolean
-  ) => {
-    setPreferences(prev => ({
-      ...prev,
-      frequency: {
-        ...prev.frequency,
-        [frequency]: enabled,
-      },
-    }));
   };
 
   const formatTimestamp = (timestamp: Date): string => {
@@ -367,7 +286,7 @@ export default function NotificationCenterScreen() {
                   { color: unreadCount === 0 ? (isDark ? '#6B7280' : '#9CA3AF') : '#10B981' },
                 ]}
               >
-                Mark All Read
+                {t('mark_all_read')}
               </Text>
             </TouchableOpacity>
             
@@ -387,7 +306,7 @@ export default function NotificationCenterScreen() {
                   { color: filteredNotifications.length === 0 ? (isDark ? '#6B7280' : '#9CA3AF') : '#EF4444' },
                 ]}
               >
-                Clear All
+                {t('clear_all')}
               </Text>
             </TouchableOpacity>
           </View>
@@ -399,11 +318,11 @@ export default function NotificationCenterScreen() {
             horizontal
             showsHorizontalScrollIndicator={false}
             data={[
-              { key: 'all', label: 'All' },
-              { key: 'info', label: 'Info' },
-              { key: 'success', label: 'Success' },
-              { key: 'warning', label: 'Warning' },
-              { key: 'error', label: 'Error' },
+              { key: 'all', label: t('all') },
+              { key: 'info', label: t('info') },
+              { key: 'success', label: t('success_type') },
+              { key: 'warning', label: t('warning') },
+              { key: 'error', label: t('error') },
             ]}
             renderItem={({ item }) => (
               <TouchableOpacity
@@ -445,11 +364,11 @@ export default function NotificationCenterScreen() {
               size={64}
               color={styles.emptyIcon.color}
             />
-            <Text style={styles.emptyTitle}>No notifications</Text>
+            <Text style={styles.emptyTitle}>{t('no_notifications')}</Text>
             <Text style={styles.emptyMessage}>
               {filterCategory === 'all'
-                ? 'You\'re all caught up!'
-                : `No ${filterCategory} notifications`}
+                ? t('all_caught_up')
+                : t('no_category_notifications').replace('{category}', t(filterCategory))}
             </Text>
           </View>
         }
@@ -457,180 +376,24 @@ export default function NotificationCenterScreen() {
     </View>
   );
 
-  const renderPreferencesTab = () => (
-    <ScrollView 
-      style={styles.tabContent}
-      showsVerticalScrollIndicator={false}
-      contentContainerStyle={{ paddingBottom: 20 }}
-    >
-      <Text style={styles.sectionTitle}>Notification Preferences</Text>
-
-      <View style={styles.preferencesContainer}>
-        {/* General Settings */}
-        <View style={styles.preferenceSection}>
-          <Text style={styles.preferenceSectionTitle}>General</Text>
-          
-          <View style={styles.preferenceItem}>
-            <View style={styles.preferenceInfo}>
-              <Text style={styles.preferenceLabel}>Push Notifications</Text>
-              <Text style={styles.preferenceDescription}>
-                Receive notifications on your device
-              </Text>
-            </View>
-            <Switch
-              value={preferences.enablePushNotifications}
-              onValueChange={(value) => updatePreference('enablePushNotifications', value)}
-              trackColor={{ false: '#767577', true: '#10B981' }}
-              thumbColor={preferences.enablePushNotifications ? '#FFFFFF' : '#f4f3f4'}
-            />
-          </View>
-
-          <View style={styles.preferenceItem}>
-            <View style={styles.preferenceInfo}>
-              <Text style={styles.preferenceLabel}>Email Notifications</Text>
-              <Text style={styles.preferenceDescription}>
-                Receive notifications via email
-              </Text>
-            </View>
-            <Switch
-              value={preferences.enableEmailNotifications}
-              onValueChange={(value) => updatePreference('enableEmailNotifications', value)}
-              trackColor={{ false: '#767577', true: '#10B981' }}
-              thumbColor={preferences.enableEmailNotifications ? '#FFFFFF' : '#f4f3f4'}
-            />
-          </View>
-        </View>
-
-        {/* Categories */}
-        <View style={styles.preferenceSection}>
-          <Text style={styles.preferenceSectionTitle}>Categories</Text>
-          
-          {Object.entries(preferences.categories).map(([category, enabled]) => (
-            <View key={category} style={styles.preferenceItem}>
-              <View style={styles.preferenceInfo}>
-                <Text style={styles.preferenceLabel}>
-                  {category.charAt(0).toUpperCase() + category.slice(1)}
-                </Text>
-              </View>
-              <Switch
-                value={enabled}
-                onValueChange={(value) => updateCategoryPreference(category as any, value)}
-                trackColor={{ false: '#767577', true: '#10B981' }}
-                thumbColor={enabled ? '#FFFFFF' : '#f4f3f4'}
-              />
-            </View>
-          ))}
-        </View>
-
-        {/* Frequency */}
-        <View style={styles.preferenceSection}>
-          <Text style={styles.preferenceSectionTitle}>Reports</Text>
-          
-          {Object.entries(preferences.frequency).map(([frequency, enabled]) => (
-            <View key={frequency} style={styles.preferenceItem}>
-              <View style={styles.preferenceInfo}>
-                <Text style={styles.preferenceLabel}>
-                  {frequency === 'dailyDigest' ? 'Daily Digest' :
-                   frequency === 'weeklyReport' ? 'Weekly Report' :
-                   frequency === 'monthlyReport' ? 'Monthly Report' : frequency}
-                </Text>
-              </View>
-              <Switch
-                value={enabled}
-                onValueChange={(value) => updateFrequencyPreference(frequency as any, value)}
-                trackColor={{ false: '#767577', true: '#10B981' }}
-                thumbColor={enabled ? '#FFFFFF' : '#f4f3f4'}
-              />
-            </View>
-          ))}
-        </View>
-
-        {/* Test Notifications */}
-        <View style={styles.preferenceSection}>
-          <Text style={styles.preferenceSectionTitle}>Testing</Text>
-          
-          <View style={styles.testContainer}>
-            <TextInput
-              style={styles.testInput}
-              value={testNotificationText}
-              onChangeText={setTestNotificationText}
-              placeholder="Enter test notification message"
-              placeholderTextColor={styles.placeholder.color}
-              multiline
-            />
-            <TouchableOpacity
-              style={styles.testButton}
-              onPress={sendTestNotification}
-            >
-              <Ionicons name="send" size={16} color="#FFFFFF" />
-              <Text style={styles.testButtonText}>Send Test</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </View>
-    </ScrollView>
-  );
-
   return (
     <SafeAreaView style={styles.container}>
       {/* Header */}
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>
-          Notifications {unreadCount > 0 && `(${unreadCount})`}
-        </Text>
-      </View>
-
-      {/* Tab Navigation */}
-      <View style={styles.tabBar}>
-        <TouchableOpacity
-          style={[
-            styles.tabButton,
-            activeTab === 'notifications' && styles.tabButtonActive,
-          ]}
-          onPress={() => setActiveTab('notifications')}
+        <TouchableOpacity 
+          style={styles.backButton}
+          onPress={() => navigation.goBack()}
         >
-          <Ionicons
-            name="notifications-outline"
-            size={20}
-            color={activeTab === 'notifications' ? '#10B981' : styles.tabIcon.color}
-          />
-          <Text
-            style={[
-              styles.tabButtonText,
-              activeTab === 'notifications' && styles.tabButtonTextActive,
-            ]}
-          >
-            Notifications
-          </Text>
-          {unreadCount > 0 && activeTab !== 'notifications' && (
-            <View style={styles.unreadBadge}>
-              <Text style={styles.unreadBadgeText}>
-                {unreadCount > 99 ? '99+' : unreadCount}
-              </Text>
-            </View>
-          )}
+          <Ionicons name="arrow-back" size={24} color={styles.headerIcon.color} />
         </TouchableOpacity>
-
-        <TouchableOpacity
-          style={[
-            styles.tabButton,
-            activeTab === 'preferences' && styles.tabButtonActive,
-          ]}
-          onPress={() => setActiveTab('preferences')}
+        <Text style={styles.headerTitle}>
+          {t('notifications_title')} {unreadCount > 0 && `(${unreadCount})`}
+        </Text>
+        <TouchableOpacity 
+          style={styles.settingsButton}
+          onPress={() => navigation.navigate('NotificationPreferences')}
         >
-          <Ionicons
-            name="settings-outline"
-            size={20}
-            color={activeTab === 'preferences' ? '#10B981' : styles.tabIcon.color}
-          />
-          <Text
-            style={[
-              styles.tabButtonText,
-              activeTab === 'preferences' && styles.tabButtonTextActive,
-            ]}
-          >
-            Preferences
-          </Text>
+          <Ionicons name="settings-outline" size={24} color={styles.settingsIcon.color} />
         </TouchableOpacity>
       </View>
 
@@ -640,7 +403,7 @@ export default function NotificationCenterScreen() {
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
       >
-        {activeTab === 'notifications' ? renderNotificationsTab() : renderPreferencesTab()}
+        {renderNotificationsTab()}
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
@@ -656,6 +419,9 @@ function createStyles(isDark: boolean) {
       flex: 1,
     },
     header: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
       paddingHorizontal: 20,
       paddingVertical: 16,
       backgroundColor: isDark ? '#374151' : '#FFFFFF',
@@ -663,9 +429,28 @@ function createStyles(isDark: boolean) {
       borderBottomColor: isDark ? '#4B5563' : '#E5E7EB',
     },
     headerTitle: {
-      fontSize: 24,
-      fontWeight: '700',
+      fontSize: 20,
+      fontWeight: '600',
       color: isDark ? '#FFFFFF' : '#1F2937',
+      flex: 1,
+      textAlign: 'center',
+      marginHorizontal: 8,
+    },
+    backButton: {
+      padding: 8,
+      borderRadius: 20,
+      backgroundColor: isDark ? '#4B5563' : '#F3F4F6',
+    },
+    headerIcon: {
+      color: isDark ? '#D1D5DB' : '#6B7280',
+    },
+    settingsButton: {
+      padding: 8,
+      borderRadius: 20,
+      backgroundColor: isDark ? '#4B5563' : '#F3F4F6',
+    },
+    settingsIcon: {
+      color: isDark ? '#D1D5DB' : '#6B7280',
     },
     tabBar: {
       flexDirection: 'row',

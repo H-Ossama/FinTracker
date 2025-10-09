@@ -21,6 +21,7 @@ import * as Notifications from 'expo-notifications';
 import { useTheme } from '../contexts/ThemeContext';
 import { useNavigation } from '@react-navigation/native';
 import { useNotification } from '../contexts/NotificationContext';
+import { useLocalization } from '../contexts/LocalizationContext';
 import { notificationService } from '../services/notificationService';
 
 interface NotificationPreferences {
@@ -50,6 +51,7 @@ const NotificationPreferencesScreen = () => {
   const { theme, isDark } = useTheme();
   const navigation = useNavigation();
   const { addNotification } = useNotification();
+  const { t } = useLocalization();
   const [preferences, setPreferences] = useState<NotificationPreferences>({
     enablePushNotifications: true,
     enableEmailNotifications: false,
@@ -74,7 +76,7 @@ const NotificationPreferencesScreen = () => {
   });
   
   const [isLoading, setIsLoading] = useState(false);
-  const [testNotificationText, setTestNotificationText] = useState('This is a test notification');
+  const [testNotificationText, setTestNotificationText] = useState('');
   const [showStartTimePicker, setShowStartTimePicker] = useState(false);
   const [showEndTimePicker, setShowEndTimePicker] = useState(false);
   const [tempStartTime, setTempStartTime] = useState('22:00');
@@ -109,17 +111,17 @@ const NotificationPreferencesScreen = () => {
 
   const showComingSoon = (feature: string) => {
     Alert.alert(
-      '🚧 Coming Soon!',
-      `${feature} functionality is coming in a future update. We're working hard to bring you this feature!`,
+      '🚧 ' + t('notificationPrefs.comingSoon', { feature }),
+      t('notificationPrefs.comingSoonDesc'),
       [
-        { text: 'Got it!', style: 'default' },
+        { text: t('ok'), style: 'default' },
         { 
-          text: 'Notify Me', 
+          text: t('notificationPrefs.notifyMe'), 
           onPress: () => {
             Alert.alert(
-              '🔔 Notification Set',
-              `We'll notify you when ${feature} is available!`,
-              [{ text: 'Thanks!' }]
+              '🔔 ' + t('notificationPrefs.notificationSet'),
+              t('notificationPrefs.notifyWhenAvailable', { feature }),
+              [{ text: t('notificationPrefs.thanks') }]
             );
           }
         }
@@ -129,7 +131,7 @@ const NotificationPreferencesScreen = () => {
 
   const handleEmailNotificationToggle = (value: boolean) => {
     if (value) {
-      showComingSoon('Email Notifications');
+      showComingSoon(t('notificationPrefs.emailEnabled'));
       return;
     }
     updatePreference('enableEmailNotifications', value);
@@ -177,12 +179,12 @@ const NotificationPreferencesScreen = () => {
     try {
       if (!preferences.enablePushNotifications) {
         Alert.alert(
-          'Push Notifications Disabled',
-          'Please enable push notifications first to test them.',
+          t('notificationPrefs.pushDisabled'),
+          t('notificationPrefs.enablePushFirst'),
           [
-            { text: 'Cancel', style: 'cancel' },
+            { text: t('cancel'), style: 'cancel' },
             { 
-              text: 'Enable', 
+              text: t('notificationPrefs.enable'), 
               onPress: () => updatePreference('enablePushNotifications', true)
             }
           ]
@@ -193,11 +195,11 @@ const NotificationPreferencesScreen = () => {
       // Check if we're in quiet hours
       if (preferences.quietHours.enabled && isInQuietHours()) {
         Alert.alert(
-          'Quiet Hours Active',
-          'Test notification will be sent anyway, but normally notifications are silenced during quiet hours.',
+          t('notificationPrefs.quietHoursActive'),
+          t('notificationPrefs.quietHoursTestWarning'),
           [
-            { text: 'Cancel', style: 'cancel' },
-            { text: 'Send Anyway', onPress: () => doSendTestNotification() }
+            { text: t('cancel'), style: 'cancel' },
+            { text: t('notificationPrefs.sendAnyway'), onPress: () => doSendTestNotification() }
           ]
         );
         return;
@@ -206,20 +208,20 @@ const NotificationPreferencesScreen = () => {
       await doSendTestNotification();
     } catch (error) {
       console.error('Test notification error:', error);
-      Alert.alert('Error', 'Failed to schedule test notification.');
+      Alert.alert(t('error'), t('notificationPrefs.testNotificationFailed'));
     }
   };
 
   const doSendTestNotification = async () => {
     await notificationService.scheduleLocalNotification(
-      '🧪 Test Notification',
-      testNotificationText || 'This is a test notification from FinTracker!',
+      '🧪 ' + t('notificationPrefs.testNotificationTitle'),
+      testNotificationText || t('notificationPrefs.testNotificationDefault'),
       2
     );
     Alert.alert(
-      '✅ Test Sent!',
-      'Your test notification will appear in 2 seconds.',
-      [{ text: 'Got it!' }]
+      '✅ ' + t('notificationPrefs.testSent'),
+      t('notificationPrefs.testWillAppear'),
+      [{ text: t('notificationPrefs.gotIt') }]
     );
   };
 
@@ -247,18 +249,17 @@ const NotificationPreferencesScreen = () => {
       const permissionStatus = await Notifications.requestPermissionsAsync();
       if (!permissionStatus.granted) {
         Alert.alert(
-          'Permission Required',
-          'Please enable notifications in your device settings to receive push notifications.',
+          t('notificationPrefs.permissionRequired'),
+          t('notificationPrefs.enableInSettings'),
           [
-            { text: 'Cancel', style: 'cancel' },
+            { text: t('cancel'), style: 'cancel' },
             { 
-              text: 'Open Settings', 
+              text: t('notificationPrefs.openSettings'), 
               onPress: () => {
                 if (Platform.OS === 'ios') {
                   Linking.openURL('app-settings:');
                 } else {
-                  // For Android, we can't directly open notification settings
-                  Alert.alert('Settings', 'Please go to Settings > Apps > FinTracker > Notifications to enable notifications.');
+                  Alert.alert(t('settings'), t('notificationPrefs.androidSettingsInstructions'));
                 }
               }
             }
@@ -284,9 +285,9 @@ const NotificationPreferencesScreen = () => {
     // Show feedback for certain changes
     if (key === 'enablePushNotifications') {
       if (value) {
-        Alert.alert('✅ Push Notifications Enabled', 'You will now receive push notifications.');
+        Alert.alert('✅ ' + t('notificationPrefs.pushEnabledAlert'), t('notificationPrefs.willReceivePush'));
       } else {
-        Alert.alert('🔕 Push Notifications Disabled', 'You will no longer receive push notifications.');
+        Alert.alert('🔕 ' + t('notificationPrefs.pushDisabled'), t('notificationPrefs.wontReceivePush'));
       }
     }
   };
@@ -300,8 +301,8 @@ const NotificationPreferencesScreen = () => {
     
     if (enabled && comingSoonFeatures.includes(category)) {
       const categoryNames = {
-        budgets: 'Budget Notifications',
-        goals: 'Goal Notifications'
+        budgets: t('notificationPrefs.budgets'),
+        goals: t('notificationPrefs.goals')
       };
       showComingSoon(categoryNames[category as keyof typeof categoryNames]);
       return;
@@ -346,7 +347,7 @@ const NotificationPreferencesScreen = () => {
   ) => {
     // Check if this is a coming soon feature
     if (enabled && frequency === 'dailyDigest') {
-      showComingSoon('Daily Digest Reports');
+      showComingSoon(t('notificationPrefs.dailyDigest'));
       return;
     }
 
@@ -531,7 +532,7 @@ const NotificationPreferencesScreen = () => {
             <TouchableOpacity onPress={handleGoBack} style={styles.backButton}>
               <Ionicons name="arrow-back" size={24} color={theme.colors.text} />
             </TouchableOpacity>
-            <Text style={[styles.title, { color: theme.colors.text }]}>Notification Preferences</Text>
+            <Text style={[styles.title, { color: theme.colors.text }]}>{t('notificationPrefs.title')}</Text>
             <View style={styles.placeholder} />
           </View>
 
@@ -543,7 +544,7 @@ const NotificationPreferencesScreen = () => {
           >
           {/* Status Overview */}
           <View style={styles.section}>
-            <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>Current Status</Text>
+            <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>{t('notificationPrefs.currentStatus')}</Text>
             
             <View style={[styles.card, { backgroundColor: theme.colors.surface }]}>
               <View style={styles.statusOverview}>
@@ -554,7 +555,7 @@ const NotificationPreferencesScreen = () => {
                     color={preferences.enablePushNotifications ? "#4CAF50" : "#F44336"} 
                   />
                   <Text style={[styles.statusText, { color: theme.colors.text }]}>
-                    Push: {preferences.enablePushNotifications ? "On" : "Off"}
+                    {t('notificationPrefs.pushEnabled')}: {preferences.enablePushNotifications ? t('notificationPrefs.on') : t('notificationPrefs.off')}
                   </Text>
                 </View>
                 
@@ -565,7 +566,7 @@ const NotificationPreferencesScreen = () => {
                     color={preferences.quietHours.enabled ? "#9C27B0" : "#FF9800"} 
                   />
                   <Text style={[styles.statusText, { color: theme.colors.text }]}>
-                    {preferences.quietHours.enabled ? "Quiet Mode" : "Always Active"}
+                    {preferences.quietHours.enabled ? t('notificationPrefs.quietMode') : t('notificationPrefs.alwaysActive')}
                   </Text>
                 </View>
                 
@@ -576,7 +577,7 @@ const NotificationPreferencesScreen = () => {
                     color="#2196F3" 
                   />
                   <Text style={[styles.statusText, { color: theme.colors.text }]}>
-                    {Object.values(preferences.categories).filter(Boolean).length}/5 Categories
+                    {Object.values(preferences.categories).filter(Boolean).length}/5 {t('notificationPrefs.categories')}
                   </Text>
                 </View>
               </View>
@@ -585,7 +586,10 @@ const NotificationPreferencesScreen = () => {
                 <View style={[styles.quietHoursInfo, { backgroundColor: theme.colors.background }]}>
                   <Ionicons name="time" size={16} color={theme.colors.textSecondary} />
                   <Text style={[styles.quietHoursText, { color: theme.colors.textSecondary }]}>
-                    Quiet hours: {preferences.quietHours.startTime} - {preferences.quietHours.endTime}
+                    {t('notificationPrefs.quietHoursTime', { 
+                      startTime: preferences.quietHours.startTime, 
+                      endTime: preferences.quietHours.endTime 
+                    })}
                   </Text>
                 </View>
               )}
@@ -594,14 +598,14 @@ const NotificationPreferencesScreen = () => {
 
           {/* General Settings */}
           <View style={styles.section}>
-            <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>General Settings</Text>
+            <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>{t('general')}</Text>
             
             <View style={[styles.card, { backgroundColor: theme.colors.surface }]}>
               <View style={styles.preferenceItem}>
                 <View style={styles.preferenceInfo}>
-                  <Text style={[styles.preferenceLabel, { color: theme.colors.text }]}>Push Notifications</Text>
+                  <Text style={[styles.preferenceLabel, { color: theme.colors.text }]}>{t('notificationPrefs.pushEnabled')}</Text>
                   <Text style={[styles.preferenceDescription, { color: theme.colors.textSecondary }]}>
-                    Receive notifications on your device
+                    {t('notificationPrefs.pushDesc')}
                   </Text>
                 </View>
                 <Switch
@@ -614,9 +618,9 @@ const NotificationPreferencesScreen = () => {
 
               <View style={[styles.preferenceItem, styles.preferenceItemBorder]}>
                 <View style={styles.preferenceInfo}>
-                  <Text style={[styles.preferenceLabel, { color: theme.colors.text }]}>Email Notifications</Text>
+                  <Text style={[styles.preferenceLabel, { color: theme.colors.text }]}>{t('notificationPrefs.emailEnabled')}</Text>
                   <Text style={[styles.preferenceDescription, { color: theme.colors.textSecondary }]}>
-                    Receive financial summaries and alerts via email (Coming Soon)
+                    {t('notificationPrefs.emailDesc')}
                   </Text>
                 </View>
                 <Switch
@@ -629,9 +633,9 @@ const NotificationPreferencesScreen = () => {
 
               <View style={styles.preferenceItem}>
                 <View style={styles.preferenceInfo}>
-                  <Text style={[styles.preferenceLabel, { color: theme.colors.text }]}>Quiet Hours</Text>
+                  <Text style={[styles.preferenceLabel, { color: theme.colors.text }]}>{t('notificationPrefs.quietHours')}</Text>
                   <Text style={[styles.preferenceDescription, { color: theme.colors.textSecondary }]}>
-                    Silence notifications during specified hours to avoid interruptions
+                    {t('notificationPrefs.quietHoursDesc')}
                   </Text>
                 </View>
                 <Switch
@@ -644,7 +648,7 @@ const NotificationPreferencesScreen = () => {
               
               {preferences.quietHours.enabled && (
                 <View style={[styles.quietHoursSettings, { borderTopColor: theme.colors.border }]}>
-                  <Text style={[styles.quietHoursTitle, { color: theme.colors.text }]}>Customize Quiet Hours</Text>
+                  <Text style={[styles.quietHoursTitle, { color: theme.colors.text }]}>{t('notificationPrefs.customizeQuietHours')}</Text>
                   
                   <View style={styles.timePickerContainer}>
                     <TouchableOpacity 
@@ -653,7 +657,7 @@ const NotificationPreferencesScreen = () => {
                     >
                       <Ionicons name="moon" size={20} color={theme.colors.primary} />
                       <View style={styles.timePickerText}>
-                        <Text style={[styles.timePickerLabel, { color: theme.colors.textSecondary }]}>Start Time</Text>
+                        <Text style={[styles.timePickerLabel, { color: theme.colors.textSecondary }]}>{t('notificationPrefs.startTime')}</Text>
                         <Text style={[styles.timePickerValue, { color: theme.colors.text }]}>
                           {formatTime(preferences.quietHours.startTime)}
                         </Text>
@@ -667,7 +671,7 @@ const NotificationPreferencesScreen = () => {
                     >
                       <Ionicons name="sunny" size={20} color={theme.colors.primary} />
                       <View style={styles.timePickerText}>
-                        <Text style={[styles.timePickerLabel, { color: theme.colors.textSecondary }]}>End Time</Text>
+                        <Text style={[styles.timePickerLabel, { color: theme.colors.textSecondary }]}>{t('notificationPrefs.endTime')}</Text>
                         <Text style={[styles.timePickerValue, { color: theme.colors.text }]}>
                           {formatTime(preferences.quietHours.endTime)}
                         </Text>
@@ -677,7 +681,7 @@ const NotificationPreferencesScreen = () => {
                   </View>
                   
                   <Text style={[styles.quietHoursNote, { color: theme.colors.textSecondary }]}>
-                    💡 Tip: Emergency notifications and calls will still come through
+                    {t('notificationPrefs.emergencyNote')}
                   </Text>
                 </View>
               )}
@@ -686,41 +690,41 @@ const NotificationPreferencesScreen = () => {
 
           {/* Categories */}
           <View style={styles.section}>
-            <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>Notification Categories</Text>
+            <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>{t('notificationPrefs.categories')}</Text>
             <Text style={[styles.sectionDescription, { color: theme.colors.textSecondary }]}>
-              Choose which types of activities you want to be notified about
+              {t('notificationPrefs.categoriesDesc')}
             </Text>
             
             <View style={[styles.card, { backgroundColor: theme.colors.surface }]}>
               {Object.entries(preferences.categories).map(([category, enabled], index) => {
                 const categoryInfo = {
                   transactions: {
-                    name: 'Transactions',
-                    description: 'Get notified when money comes in or goes out',
+                    name: t('notificationPrefs.transactions'),
+                    description: t('notificationPrefs.transactionsDesc'),
                     icon: 'swap-horizontal',
                     implemented: true
                   },
                   budgets: {
-                    name: 'Budget Alerts',
-                    description: 'Warnings when approaching spending limits (Coming Soon)',
+                    name: t('notificationPrefs.budgets'),
+                    description: t('notificationPrefs.budgetsDesc'),
                     icon: 'pie-chart',
                     implemented: false
                   },
                   goals: {
-                    name: 'Savings Goals',
-                    description: 'Progress updates and milestone celebrations (Coming Soon)',
+                    name: t('notificationPrefs.goals'),
+                    description: t('notificationPrefs.goalsDesc'),
                     icon: 'flag',
                     implemented: false
                   },
                   reminders: {
-                    name: 'Payment Reminders',
-                    description: 'Never miss bills, subscriptions, or important payments',
+                    name: t('notificationPrefs.bills'),
+                    description: t('notificationPrefs.billsDesc'),
                     icon: 'alarm',
                     implemented: true
                   },
                   alerts: {
-                    name: 'Security Alerts',
-                    description: 'Important account security and system notifications',
+                    name: t('notificationPrefs.security'),
+                    description: t('notificationPrefs.securityDesc'),
                     icon: 'shield-checkmark',
                     implemented: true
                   }
@@ -767,29 +771,29 @@ const NotificationPreferencesScreen = () => {
 
           {/* Frequency */}
           <View style={styles.section}>
-            <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>Report Frequency</Text>
+            <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>{t('notificationPrefs.reportFrequency')}</Text>
             <Text style={[styles.sectionDescription, { color: theme.colors.textSecondary }]}>
-              Get regular summaries of your financial activity
+              {t('notificationPrefs.reportFrequencyDesc')}
             </Text>
             
             <View style={[styles.card, { backgroundColor: theme.colors.surface }]}>
               {Object.entries(preferences.frequency).map(([frequency, enabled], index) => {
                 const frequencyInfo = {
                   dailyDigest: {
-                    name: 'Daily Digest',
-                    description: 'Summary of today\'s transactions at 8 PM (Coming Soon)',
+                    name: t('notificationPrefs.dailyDigest'),
+                    description: t('notificationPrefs.dailyDigestDesc'),
                     icon: 'today',
                     implemented: false
                   },
                   weeklyReport: {
-                    name: 'Weekly Report',
-                    description: 'Weekly spending analysis every Sunday at 9 AM',
+                    name: t('notificationPrefs.weeklyReport'),
+                    description: t('notificationPrefs.weeklyReportDesc'),
                     icon: 'calendar',
                     implemented: true
                   },
                   monthlyReport: {
-                    name: 'Monthly Report',
-                    description: 'Comprehensive monthly review on the 1st at 10 AM',
+                    name: t('notificationPrefs.monthlyReport'),
+                    description: t('notificationPrefs.monthlyReportDesc'),
                     icon: 'stats-chart',
                     implemented: true
                   }
@@ -836,7 +840,7 @@ const NotificationPreferencesScreen = () => {
 
           {/* Test Notifications */}
           <View style={styles.section}>
-            <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>Test Notifications</Text>
+            <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>{t('notificationPrefs.testNotifications')}</Text>
             
             <View style={[styles.card, { backgroundColor: theme.colors.surface }]}>
               <View style={styles.testContainer}>
@@ -848,7 +852,7 @@ const NotificationPreferencesScreen = () => {
                   }]}
                   value={testNotificationText}
                   onChangeText={setTestNotificationText}
-                  placeholder="Enter test notification message"
+                  placeholder={t('notificationPrefs.testNotificationPlaceholder')}
                   placeholderTextColor={theme.colors.textSecondary}
                   multiline
                 />
@@ -857,7 +861,7 @@ const NotificationPreferencesScreen = () => {
                   onPress={sendTestNotification}
                 >
                   <Ionicons name="send" size={16} color="#FFFFFF" />
-                  <Text style={styles.testButtonText}>Send Test Notification</Text>
+                  <Text style={styles.testButtonText}>{t('notificationPrefs.sendTest')}</Text>
                 </TouchableOpacity>
               </View>
             </View>
@@ -879,7 +883,7 @@ const NotificationPreferencesScreen = () => {
                 activeOpacity={0.7}
               >
                 <Ionicons name="refresh" size={18} color={theme.colors.textSecondary} />
-                <Text style={[styles.resetButtonText, { color: theme.colors.textSecondary }]}>Reset</Text>
+                <Text style={[styles.resetButtonText, { color: theme.colors.textSecondary }]}>{t('notificationPrefs.reset')}</Text>
               </TouchableOpacity>
 
               <TouchableOpacity
@@ -894,12 +898,12 @@ const NotificationPreferencesScreen = () => {
                 {isLoading ? (
                   <>
                     <Ionicons name="hourglass" size={20} color="#FFFFFF" />
-                    <Text style={styles.saveButtonText}>Saving...</Text>
+                    <Text style={styles.saveButtonText}>{t('notificationPrefs.saving')}</Text>
                   </>
                 ) : (
                   <>
                     <Ionicons name="checkmark-circle" size={20} color="#FFFFFF" />
-                    <Text style={styles.saveButtonText}>Save Preferences</Text>
+                    <Text style={styles.saveButtonText}>{t('notificationPrefs.savePreferences')}</Text>
                   </>
                 )}
               </TouchableOpacity>
@@ -918,14 +922,14 @@ const NotificationPreferencesScreen = () => {
         <View style={styles.modalOverlay}>
           <View style={[styles.timePickerModal, { backgroundColor: theme.colors.surface }]}>
             <View style={styles.modalHeader}>
-              <Text style={[styles.modalTitle, { color: theme.colors.text }]}>Set Start Time</Text>
+              <Text style={[styles.modalTitle, { color: theme.colors.text }]}>{t('notificationPrefs.setStartTime')}</Text>
               <TouchableOpacity onPress={() => setShowStartTimePicker(false)}>
                 <Ionicons name="close" size={24} color={theme.colors.text} />
               </TouchableOpacity>
             </View>
             
             <Text style={[styles.modalDescription, { color: theme.colors.textSecondary }]}>
-              When should quiet hours begin?
+              {t('notificationPrefs.whenShouldQuietHoursBegin')}
             </Text>
             
             <View style={styles.timeButtonsContainer}>
@@ -967,14 +971,14 @@ const NotificationPreferencesScreen = () => {
         <View style={styles.modalOverlay}>
           <View style={[styles.timePickerModal, { backgroundColor: theme.colors.surface }]}>
             <View style={styles.modalHeader}>
-              <Text style={[styles.modalTitle, { color: theme.colors.text }]}>Set End Time</Text>
+              <Text style={[styles.modalTitle, { color: theme.colors.text }]}>{t('notificationPrefs.setEndTime')}</Text>
               <TouchableOpacity onPress={() => setShowEndTimePicker(false)}>
                 <Ionicons name="close" size={24} color={theme.colors.text} />
               </TouchableOpacity>
             </View>
             
             <Text style={[styles.modalDescription, { color: theme.colors.textSecondary }]}>
-              When should quiet hours end?
+              {t('notificationPrefs.whenShouldQuietHoursEnd')}
             </Text>
             
             <View style={styles.timeButtonsContainer}>

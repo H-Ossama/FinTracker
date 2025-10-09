@@ -27,11 +27,109 @@ const centerY = chartSize / 2;
 
 const InsightsScreen = () => {
   const { theme } = useTheme();
-  const { currency, formatCurrency } = useLocalization();
+  const { currency, formatCurrency, t, language } = useLocalization();
   
   const getCurrencySymbol = () => {
     const symbols = { USD: '$', EUR: '€', MAD: 'MAD' };
     return symbols[currency];
+  };
+  
+  const getRecommendationTitle = (title: string) => {
+    // Map common recommendation titles to translation keys
+    const titleMap: { [key: string]: string } = {
+      'Consider reducing utility expenses': 'consider_reducing_utility_expenses',
+      'Great progress on subscriptions!': 'great_progress_on_subscriptions',
+      'Try the 50/30/20 rule': 'try_the_50_30_20_rule',
+      'Track your subscriptions': 'track_your_subscriptions',
+      'Higher spending this month': 'higher_spending_this_month',
+      'Great job saving!': 'great_job_saving',
+    };
+    
+    return t(titleMap[title] || title.toLowerCase().replace(/[^a-z0-9]/g, '_')) || title;
+  };
+  
+  const getRecommendationDescription = (description: string) => {
+    // Handle dynamic descriptions with percentages and values
+    if (description.includes('Your spending is') && description.includes('% higher than last month')) {
+      const percentMatch = description.match(/(\d+)% higher/);
+      const percent = percentMatch ? percentMatch[1] : '';
+      return t('spending_higher_this_month').replace('{percent}', percent);
+    }
+    
+    if (description.includes('You\'ve reduced spending by') && description.includes('% compared to last month')) {
+      const percentMatch = description.match(/(\d+)% compared/);
+      const percent = percentMatch ? percentMatch[1] : '';
+      return t('spending_reduced_this_month').replace('{percent}', percent);
+    }
+    
+    if (description.includes('Your utility spending is') && description.includes('% of total expenses')) {
+      const percentMatch = description.match(/(\d+)% of total/);
+      const percent = percentMatch ? percentMatch[1] : '';
+      return t('utility_spending_percentage_tip').replace('{percent}', percent);
+    }
+    
+    // Map exact descriptions
+    const descriptionMap: { [key: string]: string } = {
+      'Your utility spending is 36% of total expenses. Try switching to energy-efficient appliances.': 'utility_spending_tip',
+      'You\'ve reduced subscription spending by 15% compared to last month.': 'subscription_reduction_tip',
+      'Consider allocating 50% of income to needs, 30% to wants, and 20% to savings.': 'budget_rule_tip',
+      'Review your recurring subscriptions and cancel those you don\'t use often.': 'subscription_review_tip',
+    };
+    
+    return t(descriptionMap[description]) || description;
+  };
+  
+  const getCategoryTranslation = (categoryName: string) => {
+    // Map category names to translation keys
+    const categoryMap: { [key: string]: string } = {
+      'Bills': 'bills',
+      'Bills & Utilities': 'bills',
+      'Utilities': 'utilities',
+      'Food': 'food',
+      'Transport': 'transport',
+      'Shopping': 'shopping',
+      'Entertainment': 'entertainment',
+      'Healthcare': 'healthcare',
+      'Subscriptions': 'subscriptions',
+      'Payments': 'payments',
+      'Expenses': 'expenses',
+      'Other': 'other',
+      'Uncategorized': 'uncategorized',
+    };
+    
+    // Try exact match first, then lowercase
+    const translationKey = categoryMap[categoryName] || categoryMap[categoryName.toLowerCase()] || categoryName.toLowerCase();
+    return t(translationKey) || categoryName;
+  };
+
+  const getIconForCategory = (icon: string, categoryName: string) => {
+    // Map common text-based icons to emojis
+    const iconMap: { [key: string]: string } = {
+      'receipt': '🧾',
+      'medical': '🏥',
+      'call': '📞',
+      'ellipsis-horizontal': '📄',
+      'food': '🍔',
+      'transport': '🚗',
+      'shopping': '🛍️',
+      'entertainment': '🎬',
+      'healthcare': '🏥',
+      'utilities': '💡',
+      'subscriptions': '📱',
+      'bills': '🧾',
+      'payments': '💳',
+      'other': '📄',
+      'uncategorized': '🏷️',
+    };
+    
+    // If icon is already an emoji (contains unicode), return it
+    if (/[\u{1F600}-\u{1F6FF}]|[\u{2600}-\u{27BF}]|[\u{1F300}-\u{1F5FF}]|[\u{1F680}-\u{1F6FF}]|[\u{1F1E0}-\u{1F1FF}]/u.test(icon)) {
+      return icon;
+    }
+    
+    // Try to map text-based icon to emoji
+    const mappedIcon = iconMap[icon.toLowerCase()] || iconMap[categoryName.toLowerCase()];
+    return mappedIcon || '🏷️'; // Default fallback for uncategorized
   };
   
   const formatDate = (dateString: string, groupBy: 'day' | 'week' | 'month') => {
@@ -209,8 +307,9 @@ const InsightsScreen = () => {
           fontSize="14"
           fill="#888888"
           fontWeight="500"
+          fontFamily={language === 'ar' ? 'Arial' : 'System'}
         >
-          {selectedCat ? selectedCat.name : 'Total Spent'}
+          {selectedCat ? getCategoryTranslation(selectedCat.name) : t('total_spent')}
         </SvgText>
         
         {/* Formatted amount with currency */}
@@ -221,6 +320,7 @@ const InsightsScreen = () => {
           fontSize={currency === 'MAD' ? "24" : "28"}
           fontWeight="bold"
           fill={theme.colors.text}
+          fontFamily={language === 'ar' ? 'Arial' : 'System'}
         >
           {formatCurrency(parseFloat(amount))}
         </SvgText>
@@ -233,8 +333,12 @@ const InsightsScreen = () => {
           fontSize="12"
           fill={theme.colors.textSecondary}
           fontWeight="500"
+          fontFamily={language === 'ar' ? 'Arial' : 'System'}
         >
-          {selectedPeriod === 'Month' ? 'this month' : selectedPeriod.toLowerCase()}
+          {selectedPeriod === 'Month' ? t('this_month') : 
+           selectedPeriod === 'Week' ? t('this_week') : 
+           selectedPeriod === 'Year' ? t('this_year') : 
+           t('this_month')}
         </SvgText>
         
         {/* Percentage for selected category */}
@@ -246,6 +350,7 @@ const InsightsScreen = () => {
             fontSize="16"
             fill={selectedCat.color}
             fontWeight="bold"
+            fontFamily={language === 'ar' ? 'Arial' : 'System'}
           >
             {selectedCat.percentage}%
           </SvgText>
@@ -293,12 +398,14 @@ const InsightsScreen = () => {
             </Text>
             <Text style={[styles.categoryPercentage, { color: theme.colors.textSecondary }]}>{category.percentage}%</Text>
           </View>
-          <Text style={[styles.categoryName, { color: theme.colors.text }, isSelected && { color: category.color, fontWeight: '600' }]}>
-            {category.name}
+          <Text style={[styles.categoryName, { color: theme.colors.text }, isSelected && { color: category.color, fontWeight: '600' }, language === 'ar' && styles.arabicText]}>
+            {getCategoryTranslation(category.name)}
           </Text>
         </View>
         <View style={[styles.categoryIcon, { backgroundColor: category.color + '20' }]}>
-          <Text style={styles.categoryEmoji}>{category.icon}</Text>
+          <Text style={[styles.categoryEmoji, language === 'ar' && styles.arabicEmoji]}>
+            {getIconForCategory(category.icon || '📄', category.name)}
+          </Text>
         </View>
         {isSelected && (
           <View style={[styles.selectedIndicator, { backgroundColor: category.color }]} />
@@ -313,7 +420,7 @@ const InsightsScreen = () => {
       return (
         <View style={styles.loaderContainer}>
           <ActivityIndicator size="large" color={theme.colors.primary} />
-          <Text style={[styles.loaderText, { color: theme.colors.text }]}>Loading insights...</Text>
+          <Text style={[styles.loaderText, { color: theme.colors.text }]}>{t('loading_insights')}</Text>
         </View>
       );
     }
@@ -326,7 +433,7 @@ const InsightsScreen = () => {
             style={[styles.retryButton, { backgroundColor: theme.colors.primary }]}
             onPress={fetchData}
           >
-            <Text style={styles.retryText}>Retry</Text>
+            <Text style={styles.retryText}>{t('retry')}</Text>
           </TouchableOpacity>
         </View>
       );
@@ -336,7 +443,7 @@ const InsightsScreen = () => {
       <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
         {/* Header */}
         <View style={styles.header}>
-          <Text style={[styles.title, { color: theme.colors.text }]}>Insights</Text>
+          <Text style={[styles.title, { color: theme.colors.text }]}>{t('insights_title')}</Text>
         </View>
 
         {/* Period Selector */}
@@ -357,7 +464,7 @@ const InsightsScreen = () => {
                   ? { color: 'white' }
                   : { color: theme.colors.textSecondary }
               ]}>
-                {period}
+                {t(period.toLowerCase())}
               </Text>
             </TouchableOpacity>
           ))}
@@ -397,14 +504,14 @@ const InsightsScreen = () => {
             
             {/* Tap instruction */}
             {!selectedCategory && (
-              <Text style={[styles.tapInstruction, { color: theme.colors.textSecondary }]}>Tap segments to view details</Text>
+              <Text style={[styles.tapInstruction, { color: theme.colors.textSecondary }, language === 'ar' && styles.arabicText]}>{t('tap_segments')}</Text>
             )}
           </View>
         </View>
 
         {/* Spending Categories */}
         <View style={styles.section}>
-          <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>Spending Categories</Text>
+          <Text style={[styles.sectionTitle, { color: theme.colors.text }, language === 'ar' && styles.arabicText]}>{t('spending_categories')}</Text>
           <View style={styles.categoriesGrid}>
             {getOrderedCategories().map((category, index) => 
               renderCategoryCard(category, index)
@@ -414,22 +521,22 @@ const InsightsScreen = () => {
 
         {/* Additional Insights */}
         <View style={styles.section}>
-          <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>This Month's Overview</Text>
+          <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>{t('month_overview')}</Text>
           {/* Overview Cards */}
           <View style={[styles.overviewCard, { backgroundColor: theme.colors.surface }]}>
               <View style={styles.overviewItem}>
-                <Text style={[styles.overviewLabel, { color: theme.colors.textSecondary }]}>Total Transactions</Text>
-                <Text style={[styles.overviewValue, { color: theme.colors.text }]}>{statistics.transactionCount}</Text>
+                <Text style={[styles.overviewLabel, { color: theme.colors.textSecondary }, language === 'ar' && styles.arabicText]}>{t('total_transactions')}</Text>
+                <Text style={[styles.overviewValue, { color: theme.colors.text }, language === 'ar' && styles.arabicText]}>{statistics.transactionCount}</Text>
               </View>
               <View style={[styles.overviewDivider, { backgroundColor: theme.colors.border }]} />
               <View style={styles.overviewItem}>
-                <Text style={[styles.overviewLabel, { color: theme.colors.textSecondary }]}>Average per Day</Text>
-                <Text style={[styles.overviewValue, { color: theme.colors.text }]}>{formatCurrency(statistics.averagePerDay)}</Text>
+                <Text style={[styles.overviewLabel, { color: theme.colors.textSecondary }, language === 'ar' && styles.arabicText]}>{t('average_per_day')}</Text>
+                <Text style={[styles.overviewValue, { color: theme.colors.text }, language === 'ar' && styles.arabicText]}>{formatCurrency(statistics.averagePerDay)}</Text>
               </View>
               <View style={[styles.overviewDivider, { backgroundColor: theme.colors.border }]} />
               <View style={styles.overviewItem}>
-                <Text style={[styles.overviewLabel, { color: theme.colors.textSecondary }]}>Highest Category</Text>
-                <Text style={[styles.overviewValue, { color: theme.colors.text }]}>{statistics.highestCategory}</Text>
+                <Text style={[styles.overviewLabel, { color: theme.colors.textSecondary }, language === 'ar' && styles.arabicText]}>{t('highest_category')}</Text>
+                <Text style={[styles.overviewValue, { color: theme.colors.text }, language === 'ar' && styles.arabicText]}>{getCategoryTranslation(statistics.highestCategory)}</Text>
               </View>
             </View>
         </View>
@@ -437,7 +544,7 @@ const InsightsScreen = () => {
         {/* Spending Trends */}
         <View style={styles.section}>
           <View style={styles.sectionTitleRow}>
-            <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>Spending Trends</Text>
+            <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>{t('spending_trends')}</Text>
             <View style={styles.trendViewSelector}>
               <TouchableOpacity 
                 style={[styles.trendViewButton, selectedTrendView === 'expense' && styles.trendViewButtonActive]} 
@@ -445,7 +552,7 @@ const InsightsScreen = () => {
               >
                 <Text style={[styles.trendViewText, 
                   selectedTrendView === 'expense' ? {color: theme.colors.primary} : {color: theme.colors.textSecondary}
-                ]}>Expenses</Text>
+                ]}>{t('expenses_trend')}</Text>
               </TouchableOpacity>
               <TouchableOpacity 
                 style={[styles.trendViewButton, selectedTrendView === 'income' && styles.trendViewButtonActive]} 
@@ -453,7 +560,7 @@ const InsightsScreen = () => {
               >
                 <Text style={[styles.trendViewText, 
                   selectedTrendView === 'income' ? {color: theme.colors.primary} : {color: theme.colors.textSecondary}
-                ]}>Income</Text>
+                ]}>{t('income_trend')}</Text>
               </TouchableOpacity>
               <TouchableOpacity 
                 style={[styles.trendViewButton, selectedTrendView === 'net' && styles.trendViewButtonActive]} 
@@ -461,7 +568,7 @@ const InsightsScreen = () => {
               >
                 <Text style={[styles.trendViewText, 
                   selectedTrendView === 'net' ? {color: theme.colors.primary} : {color: theme.colors.textSecondary}
-                ]}>Net</Text>
+                ]}>{t('net_trend')}</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -513,26 +620,26 @@ const InsightsScreen = () => {
                 </View>
               ) : (
                 <View style={styles.noTrendData}>
-                  <Text style={{ color: theme.colors.textSecondary }}>No trend data available for this period</Text>
+                  <Text style={{ color: theme.colors.textSecondary }}>{t('no_trend_data')}</Text>
                 </View>
               )}
               <Text style={[styles.trendCaption, { color: theme.colors.textSecondary }]}>
-                {selectedTrendView === 'expense' ? 'Expenses over time' : 
-                 selectedTrendView === 'income' ? 'Income over time' : 
-                 'Net balance over time'} ({selectedPeriod.toLowerCase()})
+                {selectedTrendView === 'expense' ? t('expenses_over_time') : 
+                 selectedTrendView === 'income' ? t('income_over_time') : 
+                 t('net_balance_over_time')} ({t(selectedPeriod.toLowerCase())})
               </Text>
             </View>
           ) : (
             <View style={[styles.trendChartContainer, { backgroundColor: theme.colors.surface }]}>
               <ActivityIndicator size="small" color={theme.colors.primary} />
-              <Text style={{ color: theme.colors.textSecondary, marginTop: 10 }}>Loading trend data...</Text>
+              <Text style={{ color: theme.colors.textSecondary, marginTop: 10 }}>{t('loading_trend_data')}</Text>
             </View>
           )}
         </View>
         
         {/* Recommendations */}
         <View style={styles.section}>
-          <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>Recommendations</Text>
+          <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>{t('recommendations')}</Text>
           {recommendations.length > 0 ? (
             recommendations.map((recommendation, index) => (
               <View key={`recommendation-${index}`} style={[styles.recommendationCard, { backgroundColor: theme.colors.surface }]}>
@@ -540,9 +647,11 @@ const InsightsScreen = () => {
                   <Text style={styles.recommendationEmoji}>{recommendation.emoji}</Text>
                 </View>
                 <View style={styles.recommendationContent}>
-                  <Text style={[styles.recommendationTitle, { color: theme.colors.text }]}>{recommendation.title}</Text>
-                  <Text style={[styles.recommendationText, { color: theme.colors.textSecondary }]}>
-                    {recommendation.description}
+                  <Text style={[styles.recommendationTitle, { color: theme.colors.text }, language === 'ar' && styles.arabicText]}>
+                    {getRecommendationTitle(recommendation.title)}
+                  </Text>
+                  <Text style={[styles.recommendationText, { color: theme.colors.textSecondary }, language === 'ar' && styles.arabicText]}>
+                    {getRecommendationDescription(recommendation.description)}
                   </Text>
                 </View>
               </View>
@@ -553,9 +662,9 @@ const InsightsScreen = () => {
                 <Text style={styles.recommendationEmoji}>📊</Text>
               </View>
               <View style={styles.recommendationContent}>
-                <Text style={[styles.recommendationTitle, { color: theme.colors.text }]}>No recommendations yet</Text>
+                <Text style={[styles.recommendationTitle, { color: theme.colors.text }]}>{t('no_recommendations_title')}</Text>
                 <Text style={[styles.recommendationText, { color: theme.colors.textSecondary }]}>
-                  Keep using the app to get personalized spending insights and tips.
+                  {t('no_recommendations_desc')}
                 </Text>
               </View>
             </View>
@@ -760,6 +869,10 @@ const styles = StyleSheet.create({
   },
   categoryEmoji: {
     fontSize: 18,
+    textAlign: 'center',
+  },
+  arabicEmoji: {
+    fontSize: 16,
   },
   selectedIndicator: {
     position: 'absolute',
@@ -939,6 +1052,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     padding: 20,
+  },
+  arabicText: {
+    fontFamily: 'System',
+    textAlign: 'right',
+    writingDirection: 'rtl',
   },
 });
 

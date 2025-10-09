@@ -20,39 +20,9 @@ import * as yup from 'yup';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../contexts/AuthContext';
 import { useTheme } from '../contexts/ThemeContext';
+import { useLocalization } from '../contexts/LocalizationContext';
 import { useCustomAlert } from '../hooks/useCustomAlert';
 import CustomAlert from '../components/CustomAlert';
-
-// Validation schemas
-const profileSchema = yup.object().shape({
-  name: yup
-    .string()
-    .required('Full name is required')
-    .min(2, 'Name must be at least 2 characters')
-    .max(50, 'Name must be less than 50 characters'),
-  email: yup
-    .string()
-    .required('Email is required')
-    .email('Please enter a valid email address'),
-});
-
-const passwordSchema = yup.object().shape({
-  currentPassword: yup
-    .string()
-    .required('Current password is required'),
-  newPassword: yup
-    .string()
-    .required('New password is required')
-    .min(8, 'Password must be at least 8 characters')
-    .matches(
-      /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]/,
-      'Password must contain uppercase, lowercase, number and special character'
-    ),
-  confirmPassword: yup
-    .string()
-    .required('Please confirm your new password')
-    .oneOf([yup.ref('newPassword')], 'Passwords must match'),
-});
 
 interface ProfileFormData {
   name: string;
@@ -79,6 +49,7 @@ const UserProfileScreen: React.FC<UserProfileScreenProps> = ({ navigation }) => 
   const [biometricEnabled, setBiometricEnabled] = useState(false);
 
   const { theme } = useTheme();
+  const { t } = useLocalization();
   const { alertState, hideAlert, showSuccess, showError, showDestructive } = useCustomAlert();
   const {
     user,
@@ -96,7 +67,6 @@ const UserProfileScreen: React.FC<UserProfileScreenProps> = ({ navigation }) => 
 
   // Profile form
   const profileForm = useForm<ProfileFormData>({
-    resolver: yupResolver(profileSchema),
     defaultValues: {
       name: user?.name || '',
       email: user?.email || '',
@@ -105,7 +75,6 @@ const UserProfileScreen: React.FC<UserProfileScreenProps> = ({ navigation }) => 
 
   // Password form
   const passwordForm = useForm<PasswordFormData>({
-    resolver: yupResolver(passwordSchema),
     defaultValues: {
       currentPassword: '',
       newPassword: '',
@@ -133,12 +102,12 @@ const UserProfileScreen: React.FC<UserProfileScreenProps> = ({ navigation }) => 
           name: data.name,
           email: data.email,
         });
-        showSuccess('Profile Updated', 'Your profile has been updated successfully.');
+        showSuccess(t('profile_screen_profile_updated'), t('profile_screen_profile_updated_success'));
       } else {
-        showError('Update Failed', result.error || 'Failed to update profile');
+        showError(t('profile_screen_update_failed'), result.error || t('profile_screen_update_failed'));
       }
     } catch (error) {
-      showError('Error', 'An unexpected error occurred. Please try again.');
+      showError(t('error'), t('profile_screen_unexpected_error'));
     } finally {
       setIsLoading(false);
     }
@@ -153,12 +122,12 @@ const UserProfileScreen: React.FC<UserProfileScreenProps> = ({ navigation }) => 
       if (result.success) {
         setShowChangePassword(false);
         passwordForm.reset();
-        Alert.alert('Success', 'Your password has been changed successfully.');
+        Alert.alert(t('success'), t('profile_screen_password_changed'));
       } else {
-        Alert.alert('Password Change Failed', result.error || 'Failed to change password');
+        Alert.alert(t('profile_screen_password_change_failed'), result.error || t('profile_screen_password_change_failed'));
       }
     } catch (error) {
-      Alert.alert('Error', 'An unexpected error occurred. Please try again.');
+      Alert.alert(t('error'), t('profile_screen_unexpected_error'));
     } finally {
       setIsLoading(false);
     }
@@ -170,8 +139,8 @@ const UserProfileScreen: React.FC<UserProfileScreenProps> = ({ navigation }) => 
         const isAvailable = await checkBiometricAvailability();
         if (!isAvailable) {
           Alert.alert(
-            'Biometric Not Available',
-            'Biometric authentication is not available on this device or not set up.'
+            t('profile_screen_biometric_not_available'),
+            t('profile_screen_biometric_not_setup')
           );
           return;
         }
@@ -179,14 +148,14 @@ const UserProfileScreen: React.FC<UserProfileScreenProps> = ({ navigation }) => 
         const result = await enableBiometric();
         if (result.success) {
           setBiometricEnabled(true);
-          Alert.alert('Success', 'Biometric authentication has been enabled.');
+          Alert.alert(t('success'), t('profile_screen_biometric_enabled'));
         } else {
-          Alert.alert('Failed', result.error || 'Failed to enable biometric authentication');
+          Alert.alert(t('profile_screen_biometric_failed'), result.error || t('profile_screen_biometric_failed'));
         }
       } else {
         await disableBiometric();
         setBiometricEnabled(false);
-        Alert.alert('Success', 'Biometric authentication has been disabled.');
+        Alert.alert(t('success'), t('profile_screen_biometric_disabled'));
       }
     } catch (error) {
       Alert.alert('Error', 'An unexpected error occurred.');
@@ -195,12 +164,12 @@ const UserProfileScreen: React.FC<UserProfileScreenProps> = ({ navigation }) => 
 
   const handleDeleteAccount = () => {
     Alert.alert(
-      'Delete Account',
-      'Are you sure you want to delete your account? This action cannot be undone and all your data will be permanently removed.',
+      t('profile_screen_delete_account_title'),
+      t('profile_screen_delete_account_warning'),
       [
-        { text: 'Cancel', style: 'cancel' },
+        { text: t('cancel'), style: 'cancel' },
         {
-          text: 'Delete Account',
+          text: t('profile_screen_delete_account'),
           style: 'destructive',
           onPress: confirmDeleteAccount,
         },
@@ -216,21 +185,21 @@ const UserProfileScreen: React.FC<UserProfileScreenProps> = ({ navigation }) => 
 
       if (result.success) {
         Alert.alert(
-          'Account Deleted',
-          'Your account has been deleted successfully.',
+          t('profile_screen_account_deleted'),
+          t('profile_screen_account_deleted_success'),
           [
             {
-              text: 'OK',
+              text: t('ok'),
               style: 'default',
               // Navigation will be handled automatically by auth state change
             },
           ]
         );
       } else {
-        Alert.alert('Deletion Failed', result.error || 'Failed to delete account');
+        Alert.alert(t('profile_screen_deletion_failed'), result.error || t('profile_screen_deletion_failed'));
       }
     } catch (error) {
-      Alert.alert('Error', 'An unexpected error occurred. Please try again.');
+      Alert.alert(t('error'), t('profile_screen_unexpected_error'));
     } finally {
       setIsLoading(false);
     }
@@ -238,14 +207,14 @@ const UserProfileScreen: React.FC<UserProfileScreenProps> = ({ navigation }) => 
 
   const handleSignOut = () => {
     showDestructive(
-      'Sign Out',
-      'Are you sure you want to sign out of your account?',
+      t('profile_screen_sign_out'),
+      t('profile_screen_sign_out_confirmation'),
       async () => {
         await signOut();
         // Navigation will be handled automatically by auth state change
       },
       undefined,
-      'Sign Out'
+      t('profile_screen_sign_out')
     );
   };
 
@@ -268,7 +237,7 @@ const UserProfileScreen: React.FC<UserProfileScreenProps> = ({ navigation }) => 
         >
           <Ionicons name="arrow-back" size={24} color={theme.colors.text} />
         </TouchableOpacity>
-        <Text style={[styles.headerTitle, { color: theme.colors.text }]}>Profile</Text>
+        <Text style={[styles.headerTitle, { color: theme.colors.text }]}>{t('profile_screen_title')}</Text>
         <TouchableOpacity
           style={styles.headerAction}
           onPress={() => setIsEditing(!isEditing)}
@@ -317,7 +286,7 @@ const UserProfileScreen: React.FC<UserProfileScreenProps> = ({ navigation }) => 
               </Text>
               <View style={styles.verificationBadge}>
                 <Ionicons name="shield-checkmark" size={16} color="#10B981" />
-                <Text style={styles.verifiedText}>Verified Account</Text>
+                <Text style={styles.verifiedText}>{t('profile_screen_verified_account')}</Text>
               </View>
             </View>
           </View>
@@ -326,7 +295,7 @@ const UserProfileScreen: React.FC<UserProfileScreenProps> = ({ navigation }) => 
           <View style={styles.statsRow}>
             <View style={styles.statItem}>
               <Ionicons name="calendar-outline" size={20} color="#3B82F6" />
-              <Text style={[styles.statLabel, { color: theme.colors.textSecondary }]}>Joined</Text>
+              <Text style={[styles.statLabel, { color: theme.colors.textSecondary }]}>{t('profile_screen_joined')}</Text>
               <Text style={[styles.statValue, { color: theme.colors.text }]}>
                 {new Date(user?.createdAt || '').toLocaleDateString('en-US', { 
                   month: 'short', 
@@ -337,9 +306,9 @@ const UserProfileScreen: React.FC<UserProfileScreenProps> = ({ navigation }) => 
             <View style={styles.statDivider} />
             <View style={styles.statItem}>
               <Ionicons name="shield" size={20} color="#10B981" />
-              <Text style={[styles.statLabel, { color: theme.colors.textSecondary }]}>Security</Text>
+              <Text style={[styles.statLabel, { color: theme.colors.textSecondary }]}>{t('profile_screen_security')}</Text>
               <Text style={[styles.statValue, { color: theme.colors.text }]}>
-                {biometricEnabled ? 'Enhanced' : 'Standard'}
+                {biometricEnabled ? t('profile_screen_enhanced') : t('profile_screen_standard')}
               </Text>
             </View>
           </View>
@@ -352,7 +321,7 @@ const UserProfileScreen: React.FC<UserProfileScreenProps> = ({ navigation }) => 
             <View style={styles.cardHeader}>
               <View style={styles.cardTitleRow}>
                 <Ionicons name="person-outline" size={20} color="#3B82F6" />
-                <Text style={[styles.cardTitle, { color: theme.colors.text }]}>Personal Information</Text>
+                <Text style={[styles.cardTitle, { color: theme.colors.text }]}>{t('profile_screen_personal_info')}</Text>
               </View>
               {isEditing && (
                 <TouchableOpacity 
@@ -363,7 +332,7 @@ const UserProfileScreen: React.FC<UserProfileScreenProps> = ({ navigation }) => 
                   {isLoading ? (
                     <ActivityIndicator color="#FFF" size="small" />
                   ) : (
-                    <Text style={styles.saveButtonText}>Save</Text>
+                    <Text style={styles.saveButtonText}>{t('profile_screen_save')}</Text>
                   )}
                 </TouchableOpacity>
               )}
@@ -372,14 +341,14 @@ const UserProfileScreen: React.FC<UserProfileScreenProps> = ({ navigation }) => 
             {isEditing ? (
               <View style={styles.editForm}>
                 <View style={styles.formField}>
-                  <Text style={[styles.fieldLabel, { color: theme.colors.text }]}>Full Name</Text>
+                  <Text style={[styles.fieldLabel, { color: theme.colors.text }]}>{t('profile_screen_full_name')}</Text>
                   <Controller
                     control={profileForm.control}
                     name="name"
                     render={({ field: { onChange, onBlur, value } }) => (
                       <TextInput
                         style={[styles.modernInput, { backgroundColor: theme.colors.background, borderColor: theme.colors.border, color: theme.colors.text }]}
-                        placeholder="Enter your full name"
+                        placeholder={t('profile_screen_enter_full_name')}
                         placeholderTextColor={theme.colors.textSecondary}
                         value={value}
                         onChangeText={onChange}
@@ -391,14 +360,14 @@ const UserProfileScreen: React.FC<UserProfileScreenProps> = ({ navigation }) => 
                 </View>
 
                 <View style={styles.formField}>
-                  <Text style={[styles.fieldLabel, { color: theme.colors.text }]}>Email Address</Text>
+                  <Text style={[styles.fieldLabel, { color: theme.colors.text }]}>{t('profile_screen_email_address')}</Text>
                   <Controller
                     control={profileForm.control}
                     name="email"
                     render={({ field: { onChange, onBlur, value } }) => (
                       <TextInput
                         style={[styles.modernInput, { backgroundColor: theme.colors.background, borderColor: theme.colors.border, color: theme.colors.text }]}
-                        placeholder="Enter your email"
+                        placeholder={t('profile_screen_enter_email')}
                         placeholderTextColor={theme.colors.textSecondary}
                         value={value}
                         onChangeText={onChange}
@@ -413,12 +382,12 @@ const UserProfileScreen: React.FC<UserProfileScreenProps> = ({ navigation }) => 
             ) : (
               <View style={styles.infoList}>
                 <View style={styles.infoRow}>
-                  <Text style={[styles.infoLabel, { color: theme.colors.textSecondary }]}>Full Name</Text>
-                  <Text style={[styles.infoValue, { color: theme.colors.text }]}>{user?.name || 'Not set'}</Text>
+                  <Text style={[styles.infoLabel, { color: theme.colors.textSecondary }]}>{t('profile_screen_full_name')}</Text>
+                  <Text style={[styles.infoValue, { color: theme.colors.text }]}>{user?.name || t('profile_screen_not_set')}</Text>
                 </View>
                 <View style={styles.infoRow}>
-                  <Text style={[styles.infoLabel, { color: theme.colors.textSecondary }]}>Email Address</Text>
-                  <Text style={[styles.infoValue, { color: theme.colors.text }]}>{user?.email || 'Not set'}</Text>
+                  <Text style={[styles.infoLabel, { color: theme.colors.textSecondary }]}>{t('profile_screen_email_address')}</Text>
+                  <Text style={[styles.infoValue, { color: theme.colors.text }]}>{user?.email || t('profile_screen_not_set')}</Text>
                 </View>
               </View>
             )}
@@ -429,7 +398,7 @@ const UserProfileScreen: React.FC<UserProfileScreenProps> = ({ navigation }) => 
             <View style={styles.cardHeader}>
               <View style={styles.cardTitleRow}>
                 <Ionicons name="shield-outline" size={20} color="#10B981" />
-                <Text style={[styles.cardTitle, { color: theme.colors.text }]}>Security & Privacy</Text>
+                <Text style={[styles.cardTitle, { color: theme.colors.text }]}>{t('profile_screen_security_privacy')}</Text>
               </View>
             </View>
 
@@ -442,7 +411,7 @@ const UserProfileScreen: React.FC<UserProfileScreenProps> = ({ navigation }) => 
                   <View style={[styles.settingIcon, { backgroundColor: '#FEF3C7' }]}>
                     <Ionicons name="key-outline" size={18} color="#F59E0B" />
                   </View>
-                  <Text style={[styles.settingLabel, { color: theme.colors.text }]}>Change Password</Text>
+                  <Text style={[styles.settingLabel, { color: theme.colors.text }]}>{t('profile_screen_change_password')}</Text>
                 </View>
                 <Ionicons name={showChangePassword ? "chevron-up" : "chevron-forward"} size={20} color={theme.colors.textSecondary} />
               </TouchableOpacity>
@@ -453,9 +422,9 @@ const UserProfileScreen: React.FC<UserProfileScreenProps> = ({ navigation }) => 
                     <Ionicons name="finger-print-outline" size={18} color="#3B82F6" />
                   </View>
                   <View>
-                    <Text style={[styles.settingLabel, { color: theme.colors.text }]}>Biometric Authentication</Text>
+                    <Text style={[styles.settingLabel, { color: theme.colors.text }]}>{t('profile_screen_biometric_auth')}</Text>
                     <Text style={[styles.settingDescription, { color: theme.colors.textSecondary }]}>
-                      Use fingerprint or face ID to sign in
+                      {t('profile_screen_biometric_desc')}
                     </Text>
                   </View>
                 </View>
@@ -474,7 +443,7 @@ const UserProfileScreen: React.FC<UserProfileScreenProps> = ({ navigation }) => 
             <View style={styles.cardHeader}>
               <View style={styles.cardTitleRow}>
                 <Ionicons name="settings-outline" size={20} color="#6B7280" />
-                <Text style={[styles.cardTitle, { color: theme.colors.text }]}>Account</Text>
+                <Text style={[styles.cardTitle, { color: theme.colors.text }]}>{t('profile_screen_account')}</Text>
               </View>
             </View>
 
@@ -484,7 +453,7 @@ const UserProfileScreen: React.FC<UserProfileScreenProps> = ({ navigation }) => 
                   <View style={[styles.settingIcon, { backgroundColor: '#FEE2E2' }]}>
                     <Ionicons name="log-out-outline" size={18} color="#EF4444" />
                   </View>
-                  <Text style={[styles.settingLabel, { color: theme.colors.text }]}>Sign Out</Text>
+                  <Text style={[styles.settingLabel, { color: theme.colors.text }]}>{t('profile_screen_sign_out')}</Text>
                 </View>
                 <Ionicons name="chevron-forward" size={20} color={theme.colors.textSecondary} />
               </TouchableOpacity>
@@ -494,7 +463,7 @@ const UserProfileScreen: React.FC<UserProfileScreenProps> = ({ navigation }) => 
                   <View style={[styles.settingIcon, { backgroundColor: '#FEE2E2' }]}>
                     <Ionicons name="trash-outline" size={18} color="#EF4444" />
                   </View>
-                  <Text style={[styles.dangerSettingLabel, { color: '#EF4444' }]}>Delete Account</Text>
+                  <Text style={[styles.dangerSettingLabel, { color: '#EF4444' }]}>{t('profile_screen_delete_account')}</Text>
                 </View>
                 <Ionicons name="chevron-forward" size={20} color={theme.colors.textSecondary} />
               </TouchableOpacity>

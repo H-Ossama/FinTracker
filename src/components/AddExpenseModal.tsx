@@ -16,6 +16,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { useTheme } from '../contexts/ThemeContext';
+import { useLocalization } from '../contexts/LocalizationContext';
 import { hybridDataService, HybridWallet } from '../services/hybridDataService';
 import { LocalCategory } from '../services/localStorageService';
 
@@ -51,6 +52,7 @@ const AddExpenseModal: React.FC<AddExpenseModalProps> = ({
   onAddExpense,
 }) => {
   const { theme } = useTheme();
+  const { t } = useLocalization();
   const [title, setTitle] = useState('');
   const [amount, setAmount] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('');
@@ -81,14 +83,14 @@ const AddExpenseModal: React.FC<AddExpenseModalProps> = ({
       
       // Use local categories with emojis instead of fetching from service
       const localCategories: LocalCategory[] = [
-        { id: 'food', name: 'Food', icon: '🍔', color: '#9013FE', isCustom: false, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
-        { id: 'utilities', name: 'Utilities', icon: '💡', color: '#F5A623', isCustom: false, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
-        { id: 'transport', name: 'Transport', icon: '🚗', color: '#4A90E2', isCustom: false, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
-        { id: 'shopping', name: 'Shopping', icon: '🛍️', color: '#D0021B', isCustom: false, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
-        { id: 'entertainment', name: 'Entertainment', icon: '🎬', color: '#7ED321', isCustom: false, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
-        { id: 'healthcare', name: 'Healthcare', icon: '🏥', color: '#BD10E0', isCustom: false, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
-        { id: 'subscriptions', name: 'Subscriptions', icon: '📱', color: '#B8E986', isCustom: false, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
-        { id: 'other', name: 'Other', icon: '📄', color: '#8E8E93', isCustom: false, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
+        { id: 'food', name: t('food'), icon: '🍔', color: '#9013FE', isCustom: false, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
+        { id: 'utilities', name: t('utilities'), icon: '💡', color: '#F5A623', isCustom: false, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
+        { id: 'transport', name: t('transport'), icon: '🚗', color: '#4A90E2', isCustom: false, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
+        { id: 'shopping', name: t('shopping'), icon: '🛍️', color: '#D0021B', isCustom: false, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
+        { id: 'entertainment', name: t('entertainment'), icon: '🎬', color: '#7ED321', isCustom: false, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
+        { id: 'healthcare', name: t('healthcare'), icon: '🏥', color: '#BD10E0', isCustom: false, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
+        { id: 'subscriptions', name: t('subscriptions'), icon: '📱', color: '#B8E986', isCustom: false, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
+        { id: 'other', name: t('other'), icon: '📄', color: '#8E8E93', isCustom: false, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
       ];
       setCategories(localCategories);
       
@@ -103,14 +105,14 @@ const AddExpenseModal: React.FC<AddExpenseModalProps> = ({
       console.error('Error loading data for expense modal:', error);
       // Fallback to local categories even if wallet fetch fails
       const localCategories: LocalCategory[] = [
-        { id: 'food', name: 'Food', icon: '🍔', color: '#9013FE', isCustom: false, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
-        { id: 'utilities', name: 'Utilities', icon: '💡', color: '#F5A623', isCustom: false, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
-        { id: 'transport', name: 'Transport', icon: '🚗', color: '#4A90E2', isCustom: false, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
-        { id: 'shopping', name: 'Shopping', icon: '🛍️', color: '#D0021B', isCustom: false, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
-        { id: 'entertainment', name: 'Entertainment', icon: '🎬', color: '#7ED321', isCustom: false, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
-        { id: 'healthcare', name: 'Healthcare', icon: '🏥', color: '#BD10E0', isCustom: false, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
-        { id: 'subscriptions', name: 'Subscriptions', icon: '📱', color: '#B8E986', isCustom: false, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
-        { id: 'other', name: 'Other', icon: '📄', color: '#8E8E93', isCustom: false, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
+        { id: 'food', name: t('food'), icon: '🍔', color: '#9013FE', isCustom: false, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
+        { id: 'utilities', name: t('utilities'), icon: '💡', color: '#F5A623', isCustom: false, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
+        { id: 'transport', name: t('transport'), icon: '🚗', color: '#4A90E2', isCustom: false, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
+        { id: 'shopping', name: t('shopping'), icon: '🛍️', color: '#D0021B', isCustom: false, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
+        { id: 'entertainment', name: t('entertainment'), icon: '🎬', color: '#7ED321', isCustom: false, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
+        { id: 'healthcare', name: t('healthcare'), icon: '🏥', color: '#BD10E0', isCustom: false, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
+        { id: 'subscriptions', name: t('subscriptions'), icon: '📱', color: '#B8E986', isCustom: false, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
+        { id: 'other', name: t('other'), icon: '📄', color: '#8E8E93', isCustom: false, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
       ];
       setCategories(localCategories);
       if (localCategories.length > 0 && !selectedCategory) {
@@ -140,13 +142,13 @@ const AddExpenseModal: React.FC<AddExpenseModalProps> = ({
     const newErrors: { [key: string]: string } = {};
 
     if (!title.trim()) {
-      newErrors.title = 'Title is required';
+      newErrors.title = t('title_required');
     }
 
     if (!amount.trim()) {
-      newErrors.amount = 'Amount is required';
+      newErrors.amount = t('amount_required');
     } else if (isNaN(parseFloat(amount)) || parseFloat(amount) <= 0) {
-      newErrors.amount = 'Please enter a valid amount';
+      newErrors.amount = t('valid_amount');
     }
 
     setErrors(newErrors);
@@ -205,9 +207,9 @@ const AddExpenseModal: React.FC<AddExpenseModalProps> = ({
           <TouchableOpacity onPress={handleClose} style={styles.headerButton}>
             <Ionicons name="close" size={24} color={theme.colors.text} />
           </TouchableOpacity>
-          <Text style={[styles.headerTitle, { color: theme.colors.text }]}>Add Expense</Text>
+          <Text style={[styles.headerTitle, { color: theme.colors.text }]}>{t('add_expense_title')}</Text>
           <TouchableOpacity onPress={handleSubmit} style={styles.headerButton}>
-            <Text style={[styles.saveButtonText, { color: theme.colors.primary }]}>Save</Text>
+            <Text style={[styles.saveButtonText, { color: theme.colors.primary }]}>{t('save')}</Text>
           </TouchableOpacity>
         </View>
 
@@ -225,13 +227,13 @@ const AddExpenseModal: React.FC<AddExpenseModalProps> = ({
           {loading ? (
             <View style={styles.loadingContainer}>
               <ActivityIndicator size="large" color={theme.colors.primary} />
-              <Text style={[styles.loadingText, { color: theme.colors.text }]}>Loading...</Text>
+              <Text style={[styles.loadingText, { color: theme.colors.text }]}>{t('loading')}</Text>
             </View>
           ) : (
             <>
               {/* Amount Input */}
           <View style={styles.section}>
-            <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>Amount</Text>
+            <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>{t('amount')}</Text>
             <View style={[styles.amountContainer, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }, errors.amount && styles.inputError]}>
               <Text style={[styles.currencySymbol, { color: theme.colors.text }]}>$</Text>
               <TextInput
@@ -249,10 +251,10 @@ const AddExpenseModal: React.FC<AddExpenseModalProps> = ({
 
           {/* Title Input */}
           <View style={styles.section}>
-            <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>Title</Text>
+            <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>{t('title')}</Text>
             <TextInput
               style={[styles.input, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border, color: theme.colors.text }, errors.title && styles.inputError]}
-              placeholder="What did you spend on?"
+              placeholder={t('what_spend_on')}
               placeholderTextColor={theme.colors.textSecondary}
               value={title}
               onChangeText={setTitle}
@@ -262,7 +264,7 @@ const AddExpenseModal: React.FC<AddExpenseModalProps> = ({
 
           {/* Category Selection */}
           <View style={styles.section}>
-            <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>Category</Text>
+            <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>{t('category')}</Text>
             <ScrollView
               horizontal
               showsHorizontalScrollIndicator={false}
@@ -302,7 +304,7 @@ const AddExpenseModal: React.FC<AddExpenseModalProps> = ({
 
           {/* Wallet Selection */}
           <View style={styles.section}>
-            <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>Pay From</Text>
+            <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>{t('pay_from')}</Text>
             <View style={[styles.walletsContainer, { backgroundColor: theme.colors.surface }]}>
               {wallets.map((wallet) => (
                 <TouchableOpacity
@@ -343,7 +345,7 @@ const AddExpenseModal: React.FC<AddExpenseModalProps> = ({
 
           {/* Date Selection */}
           <View style={styles.section}>
-            <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>Date</Text>
+            <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>{t('date')}</Text>
             <TouchableOpacity style={[styles.dateButton, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]} onPress={() => setShowDatePicker(true)}>
               <Ionicons name="calendar-outline" size={20} color={theme.colors.textSecondary} />
               <Text style={[styles.dateText, { color: theme.colors.text }]}>{formatDate(date)}</Text>
@@ -353,10 +355,10 @@ const AddExpenseModal: React.FC<AddExpenseModalProps> = ({
 
           {/* Description Input */}
           <View style={styles.section}>
-            <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>Description (Optional)</Text>
+            <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>{t('description_optional')}</Text>
             <TextInput
               style={[styles.input, styles.descriptionInput, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border, color: theme.colors.text }]}
-              placeholder="Add a note..."
+              placeholder={t('add_note')}
               placeholderTextColor={theme.colors.textSecondary}
               value={description}
               onChangeText={setDescription}
