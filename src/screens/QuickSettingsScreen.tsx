@@ -435,12 +435,12 @@ const QuickSettingsScreen = () => {
 
   const quickActions = [
     {
-      id: 'test-notification',
-      title: 'Test Notification',
-      subtitle: 'Send a test notification',
+      id: 'notification-preferences',
+      title: 'Notification Preferences',
+      subtitle: 'Configure notification settings',
       icon: 'notifications-outline',
       color: '#4CAF50',
-      onPress: handleTestNotification,
+      onPress: () => navigation.navigate('NotificationPreferences' as never),
     },
     {
       id: 'share-app',

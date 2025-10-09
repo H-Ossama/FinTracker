@@ -11,6 +11,7 @@ import RemindersScreen from './src/screens/RemindersScreen';
 import BorrowedMoneyHistoryScreen from './src/screens/BorrowedMoneyHistoryScreen';
 import TransactionsHistoryScreen from './src/screens/TransactionsHistoryScreen';
 import NotificationCenterScreen from './src/screens/NotificationCenterScreen';
+import NotificationPreferencesScreen from './src/screens/NotificationPreferencesScreen';
 import SignUpScreen from './src/screens/SignUpScreen';
 import SignInScreen from './src/screens/SignInScreen';
 import UserProfileScreen from './src/screens/UserProfileScreen';
@@ -71,6 +72,14 @@ const AppNavigator = () => {
             <Stack.Screen 
               name="NotificationCenter" 
               component={NotificationCenterScreen}
+              options={{ 
+                headerShown: false,
+                presentation: 'modal',
+              }}
+            />
+            <Stack.Screen 
+              name="NotificationPreferences" 
+              component={NotificationPreferencesScreen}
               options={{ 
                 headerShown: false,
                 presentation: 'modal',

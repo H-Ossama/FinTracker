@@ -37,6 +37,7 @@ const MoreScreen = () => {
   const [goalsLoading, setGoalsLoading] = useState(true);
   const [enhancedReminders, setEnhancedReminders] = useState<Reminder[]>([]);
   const [remindersLoading, setRemindersLoading] = useState(true);
+  const [reminderDropdownVisible, setReminderDropdownVisible] = useState(false);
 
   const styles = createStyles(theme);
 
@@ -183,47 +184,23 @@ const MoreScreen = () => {
     navigation.navigate('QuickSettings' as never);
   };
 
-  const handleManageReminders = () => {
-    const options = [
-      'View All Reminders',
-      'Add New Reminder',
-      'Reminder Settings',
-      'Cancel'
-    ];
-    
-    const actions = [
-      () => navigation.navigate('Reminders' as never),
-      () => navigation.navigate('Reminders' as never), // Will trigger add modal
-      () => navigation.navigate('NotificationCenter' as never),
-      () => {}, // Cancel
-    ];
+  const toggleReminderDropdown = () => {
+    setReminderDropdownVisible(!reminderDropdownVisible);
+  };
 
-    if (Platform.OS === 'ios') {
-      ActionSheetIOS.showActionSheetWithOptions(
-        {
-          options,
-          cancelButtonIndex: options.length - 1,
-          title: 'Manage Reminders',
-          message: 'Choose an action for your reminders',
-        },
-        (buttonIndex) => {
-          if (buttonIndex < actions.length - 1) {
-            actions[buttonIndex]();
-          }
-        }
-      );
-    } else {
-      // Android Alert fallback
-      Alert.alert(
-        'Manage Reminders',
-        'Choose an action',
-        [
-          { text: 'View All', onPress: actions[0] },
-          { text: 'Add New', onPress: actions[1] },
-          { text: 'Settings', onPress: actions[2] },
-          { text: 'Cancel', style: 'cancel' },
-        ]
-      );
+  const handleDropdownAction = (action: string) => {
+    setReminderDropdownVisible(false);
+    
+    switch (action) {
+      case 'viewAll':
+        navigation.navigate('Reminders' as never);
+        break;
+      case 'addNew':
+        navigation.navigate('Reminders' as never); // Will trigger add modal
+        break;
+      case 'settings':
+        navigation.navigate('QuickSettings' as never);
+        break;
     }
   };
 
@@ -396,74 +373,107 @@ const MoreScreen = () => {
       return `${Math.abs(diffDays)} days ago`;
     };
     
-    const getStatusColor = () => {
-      if (isOverdue) return '#EF4444';
-      if (isPending) return '#F59E0B';
-      if (isCompleted) return '#10B981';
-      return '#6B7280';
+    const getStatusConfig = () => {
+      if (isOverdue) return {
+        color: '#FF6B6B',
+        bgColor: '#FFE4E1',
+        icon: 'warning',
+        gradient: ['#FF6B6B', '#FF5252']
+      };
+      if (isPending) return {
+        color: '#FF9800',
+        bgColor: '#FFF3E0',
+        icon: 'time',
+        gradient: ['#FF9800', '#F57C00']
+      };
+      return {
+        color: '#4CAF50',
+        bgColor: '#E8F5E8',
+        icon: 'checkmark-circle',
+        gradient: ['#4CAF50', '#388E3C']
+      };
     };
     
-    const getStatusIcon = () => {
-      if (isOverdue) return 'warning';
-      if (isPending) return 'time';
-      if (isCompleted) return 'checkmark-circle';
-      return 'time';
-    };
+    const statusConfig = getStatusConfig();
     
     return (
       <TouchableOpacity 
         key={reminder.id} 
-        style={[styles.enhancedReminderCard, { borderLeftColor: getStatusColor() }]}
+        style={[styles.modernReminderCard, { backgroundColor: theme.colors.card, borderColor: theme.colors.border }]}
         onPress={() => navigation.navigate('Reminders' as never)}
       >
-        <View style={styles.reminderCardHeader}>
-          <View style={styles.reminderTitleContainer}>
-            <View style={[styles.reminderStatusIcon, { backgroundColor: getStatusColor() }]}>
-              <Ionicons name={getStatusIcon() as any} size={14} color="white" />
+        <LinearGradient
+          colors={theme.isDark ? [theme.colors.card, theme.colors.surface] : ['#FFFFFF', '#FAFAFA']}
+          style={styles.reminderCardGradient}
+        >
+          {/* Status indicator bar */}
+          <View style={[styles.statusIndicatorBar, { backgroundColor: statusConfig.color }]} />
+          
+          {/* Header */}
+          <View style={styles.reminderCardHeader}>
+            <View style={styles.reminderMainInfo}>
+              <View style={[styles.statusIconContainer, { backgroundColor: statusConfig.bgColor }]}>
+                <Ionicons name={statusConfig.icon as any} size={16} color={statusConfig.color} />
+              </View>
+              <View style={styles.reminderTextContent}>
+                <Text style={[styles.reminderTitleModern, { color: theme.colors.text }]} numberOfLines={1}>
+                  {reminder.title}
+                </Text>
+                <View style={styles.reminderMetaInfo}>
+                  <Text style={[styles.reminderFrequency, { color: theme.colors.textSecondary }]}>
+                    {reminder.frequency.toLowerCase()}
+                  </Text>
+                  <View style={styles.metaDivider} />
+                  <Text style={[styles.reminderDueDate, { 
+                    color: isOverdue ? '#FF6B6B' : theme.colors.textSecondary 
+                  }]}>
+                    {formatDateDistance(new Date(reminder.dueDate))}
+                  </Text>
+                </View>
+              </View>
             </View>
-            <View style={styles.reminderTitleContent}>
-              <Text style={[styles.enhancedReminderTitle, { color: theme.colors.text }]} numberOfLines={1}>
-                {reminder.title}
-              </Text>
-              <Text style={[styles.reminderFrequency, { color: theme.colors.textSecondary }]}>
-                {reminder.frequency.toLowerCase()} • {formatDateDistance(new Date(reminder.dueDate))}
-              </Text>
-            </View>
-          </View>
-          {reminder.amount && (
-            <Text style={[styles.enhancedReminderAmount, { color: theme.colors.text }]}>
-              {formatCurrency(reminder.amount)}
-            </Text>
-          )}
-        </View>
-        
-        {reminder.category && (
-          <View style={styles.reminderCategoryContainer}>
-            <View style={[styles.reminderCategoryIcon, { backgroundColor: reminder.category.color + '20' }]}>
-              <Ionicons 
-                name={reminder.category.icon as any} 
-                size={12} 
-                color={reminder.category.color} 
-              />
-            </View>
-            <Text style={[styles.reminderCategoryName, { color: theme.colors.textSecondary }]}>
-              {reminder.category.name}
-            </Text>
-            {reminder.isRecurring && (
-              <View style={styles.recurringBadge}>
-                <Ionicons name="repeat" size={10} color="#8B5CF6" />
-                <Text style={styles.recurringText}>Recurring</Text>
+            {reminder.amount && (
+              <View style={styles.amountContainer}>
+                <Text style={[styles.reminderAmountModern, { color: theme.colors.text }]}>
+                  {formatCurrency(reminder.amount)}
+                </Text>
               </View>
             )}
           </View>
-        )}
-        
-        {isOverdue && (
-          <View style={styles.overdueIndicator}>
-            <Ionicons name="warning" size={12} color="#EF4444" />
-            <Text style={styles.overdueText}>Overdue</Text>
+          
+          {/* Footer with category and badges */}
+          <View style={styles.reminderCardFooter}>
+            {reminder.category && (
+              <View style={styles.categoryInfo}>
+                <View style={[styles.categoryIconContainer, { backgroundColor: reminder.category.color + '20' }]}>
+                  <Ionicons 
+                    name={reminder.category.icon as any} 
+                    size={12} 
+                    color={reminder.category.color} 
+                  />
+                </View>
+                <Text style={[styles.categoryName, { color: theme.colors.textSecondary }]}>
+                  {reminder.category.name}
+                </Text>
+              </View>
+            )}
+            
+            <View style={styles.badgeContainer}>
+              {reminder.isRecurring && (
+                <View style={styles.recurringBadgeModern}>
+                  <Ionicons name="repeat" size={10} color="#6C63FF" />
+                  <Text style={styles.recurringTextModern}>Recurring</Text>
+                </View>
+              )}
+              {isOverdue && (
+                <View style={styles.overdueBadge}>
+                  <Ionicons name="alert-circle" size={10} color="#FF6B6B" />
+                  <Text style={styles.overdueTextModern}>Overdue</Text>
+                </View>
+              )}
+            </View>
           </View>
-        )}
+        </LinearGradient>
       </TouchableOpacity>
     );
   };
@@ -554,87 +564,162 @@ const MoreScreen = () => {
           {/* Upcoming Reminders */}
           <View style={styles.section}>
             <View style={styles.sectionHeader}>
-              <Text style={styles.sectionTitle}>Upcoming Reminders</Text>
-              <TouchableOpacity 
-                style={styles.manageButton}
-                onPress={handleManageReminders}
-              >
-                <Ionicons name="settings-outline" size={16} color="#4A90E2" />
-                <Text style={styles.manageButtonText}>Manage</Text>
-              </TouchableOpacity>
-            </View>
-            
-            {/* Quick Stats */}
-            {!remindersLoading && enhancedReminders.length > 0 && (
-              <View style={styles.reminderStatsContainer}>
-                <View style={styles.reminderStat}>
-                  <Text style={[styles.reminderStatValue, { color: '#F59E0B' }]}>
-                    {enhancedReminders.filter(r => r.status === 'PENDING').length}
-                  </Text>
-                  <Text style={[styles.reminderStatLabel, { color: theme.colors.textSecondary }]}>Pending</Text>
-                </View>
-                <View style={styles.reminderStat}>
-                  <Text style={[styles.reminderStatValue, { color: '#EF4444' }]}>
-                    {enhancedReminders.filter(r => r.status === 'OVERDUE').length}
-                  </Text>
-                  <Text style={[styles.reminderStatLabel, { color: theme.colors.textSecondary }]}>Overdue</Text>
-                </View>
-                <View style={styles.reminderStat}>
-                  <Text style={[styles.reminderStatValue, { color: '#10B981' }]}>
-                    {enhancedReminders.filter(r => r.status === 'COMPLETED').length}
-                  </Text>
-                  <Text style={[styles.reminderStatLabel, { color: theme.colors.textSecondary }]}>Completed</Text>
-                </View>
-                <View style={styles.reminderStat}>
-                  <Text style={[styles.reminderStatValue, { color: '#8B5CF6' }]}>
-                    {enhancedReminders.filter(r => r.isRecurring).length}
-                  </Text>
-                  <Text style={[styles.reminderStatLabel, { color: theme.colors.textSecondary }]}>Recurring</Text>
-                </View>
-              </View>
-            )}
-            
-            {remindersLoading ? (
-              <View style={styles.loadingContainer}>
-                <Text style={[styles.loadingText, { color: theme.colors.textSecondary }]}>Loading reminders...</Text>
-              </View>
-            ) : enhancedReminders.length === 0 ? (
-              <View style={styles.emptyRemindersContainer}>
-                <Ionicons name="alarm-outline" size={48} color={theme.colors.textSecondary} />
-                <Text style={[styles.emptyRemindersText, { color: theme.colors.textSecondary }]}>No reminders set</Text>
+              <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>Upcoming Reminders</Text>
+              <View style={styles.manageReminderContainer}>
                 <TouchableOpacity 
-                  style={styles.addReminderButton}
-                  onPress={() => navigation.navigate('Reminders' as never)}
+                  style={[styles.manageButton, { backgroundColor: theme.colors.primary }]}
+                  onPress={toggleReminderDropdown}
                 >
-                  <Ionicons name="add" size={16} color="white" />
-                  <Text style={styles.addReminderButtonText}>Add Reminder</Text>
+                  <Ionicons name="settings-outline" size={16} color="white" />
+                  <Text style={[styles.manageButtonText, { color: 'white' }]}>Manage</Text>
+                  <Ionicons 
+                    name={reminderDropdownVisible ? "chevron-up" : "chevron-down"} 
+                    size={16} 
+                    color="white" 
+                  />
                 </TouchableOpacity>
-              </View>
-            ) : (
-              <View style={styles.enhancedRemindersContainer}>
-                {enhancedReminders
-                  .filter(r => r.status === 'PENDING' || r.status === 'OVERDUE')
-                  .sort((a, b) => {
-                    // Sort by status (overdue first) then by due date
-                    if (a.status === 'OVERDUE' && b.status !== 'OVERDUE') return -1;
-                    if (b.status === 'OVERDUE' && a.status !== 'OVERDUE') return 1;
-                    return new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime();
-                  })
-                  .slice(0, 4)
-                  .map(renderEnhancedReminderCard)}
-                
-                {enhancedReminders.filter(r => r.status === 'PENDING' || r.status === 'OVERDUE').length > 4 && (
-                  <TouchableOpacity 
-                    style={styles.showMoreReminders}
-                    onPress={() => navigation.navigate('Reminders' as never)}
-                  >
-                    <Text style={styles.showMoreText}>
-                      +{enhancedReminders.filter(r => r.status === 'PENDING' || r.status === 'OVERDUE').length - 4} more reminders
-                    </Text>
-                    <Ionicons name="chevron-forward" size={16} color="#4A90E2" />
-                  </TouchableOpacity>
+                {reminderDropdownVisible && (
+                  <View style={[styles.reminderDropdown, { backgroundColor: theme.colors.card, borderColor: theme.colors.border }]}>
+                    <TouchableOpacity
+                      style={[styles.dropdownItem, { borderBottomColor: theme.colors.border }]}
+                      onPress={() => handleDropdownAction('viewAll')}
+                      activeOpacity={0.7}
+                    >
+                      <Ionicons name="list-outline" size={18} color={theme.colors.text} />
+                      <Text style={[styles.dropdownItemText, { color: theme.colors.text }]}>View All Reminders</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={[styles.dropdownItem, { borderBottomColor: theme.colors.border }]}
+                      onPress={() => handleDropdownAction('addNew')}
+                      activeOpacity={0.7}
+                    >
+                      <Ionicons name="add-outline" size={18} color={theme.colors.text} />
+                      <Text style={[styles.dropdownItemText, { color: theme.colors.text }]}>Add New Reminder</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={styles.dropdownItem}
+                      onPress={() => handleDropdownAction('settings')}
+                      activeOpacity={0.7}
+                    >
+                      <Ionicons name="settings-outline" size={18} color={theme.colors.text} />
+                      <Text style={[styles.dropdownItemText, { color: theme.colors.text }]}>Settings</Text>
+                    </TouchableOpacity>
+                  </View>
                 )}
               </View>
+            </View>
+            
+            {remindersLoading ? (
+              <View style={styles.reminderLoadingCard}>
+                <View style={styles.loadingIndicator}>
+                  <View style={styles.loadingDot} />
+                  <View style={styles.loadingDot} />
+                  <View style={styles.loadingDot} />
+                </View>
+                <Text style={[styles.loadingText, { color: theme.colors.textSecondary }]}>Loading your reminders...</Text>
+              </View>
+            ) : enhancedReminders.length === 0 ? (
+              <View style={styles.emptyRemindersCard}>
+                <LinearGradient
+                  colors={['#F8F9FA', '#E9ECEF']}
+                  style={styles.emptyStateGradient}
+                >
+                  <View style={styles.emptyIconContainer}>
+                    <Ionicons name="notifications-outline" size={40} color="#6C63FF" />
+                  </View>
+                  <Text style={styles.emptyRemindersTitle}>No upcoming reminders</Text>
+                  <Text style={styles.emptyRemindersSubtitle}>Stay on top of your bills and payments</Text>
+                  <TouchableOpacity 
+                    style={styles.addReminderButton}
+                    onPress={() => navigation.navigate('Reminders' as never)}
+                  >
+                    <LinearGradient
+                      colors={['#6C63FF', '#5A52FF']}
+                      style={styles.addButtonGradient}
+                    >
+                      <Ionicons name="add" size={18} color="white" />
+                      <Text style={styles.addReminderButtonText}>Add Your First Reminder</Text>
+                    </LinearGradient>
+                  </TouchableOpacity>
+                </LinearGradient>
+              </View>
+            ) : (
+              <>
+                {/* Quick Overview Stats */}
+                <View style={styles.reminderStatsCard}>
+                  <LinearGradient
+                    colors={theme.isDark ? [theme.colors.card, theme.colors.surface] : ['#FFFFFF', '#F8F9FA']}
+                    style={styles.statsGradient}
+                  >
+                    <View style={styles.statsRow}>
+                      <View style={styles.statItem}>
+                        <View style={[styles.statIcon, { backgroundColor: '#FFE4E1' }]}>
+                          <Ionicons name="time" size={16} color="#FF6B6B" />
+                        </View>
+                        <Text style={[styles.statValue, { color: theme.colors.text }]}>
+                          {enhancedReminders.filter(r => r.status === 'PENDING').length}
+                        </Text>
+                        <Text style={[styles.statLabel, { color: theme.colors.textSecondary }]}>Pending</Text>
+                      </View>
+                      
+                      <View style={styles.statDivider} />
+                      
+                      <View style={styles.statItem}>
+                        <View style={[styles.statIcon, { backgroundColor: '#FFF3E0' }]}>
+                          <Ionicons name="warning" size={16} color="#FF9800" />
+                        </View>
+                        <Text style={[styles.statValue, { color: theme.colors.text }]}>
+                          {enhancedReminders.filter(r => r.status === 'OVERDUE').length}
+                        </Text>
+                        <Text style={[styles.statLabel, { color: theme.colors.textSecondary }]}>Overdue</Text>
+                      </View>
+                      
+                      <View style={styles.statDivider} />
+                      
+                      <View style={styles.statItem}>
+                        <View style={[styles.statIcon, { backgroundColor: '#E8F5E8' }]}>
+                          <Ionicons name="repeat" size={16} color="#4CAF50" />
+                        </View>
+                        <Text style={[styles.statValue, { color: theme.colors.text }]}>
+                          {enhancedReminders.filter(r => r.isRecurring).length}
+                        </Text>
+                        <Text style={[styles.statLabel, { color: theme.colors.textSecondary }]}>Recurring</Text>
+                      </View>
+                    </View>
+                  </LinearGradient>
+                </View>
+
+                {/* Reminder Cards */}
+                <View style={styles.reminderCardsContainer}>
+                  {enhancedReminders
+                    .filter(r => r.status === 'PENDING' || r.status === 'OVERDUE')
+                    .sort((a, b) => {
+                      // Sort by status (overdue first) then by due date
+                      if (a.status === 'OVERDUE' && b.status !== 'OVERDUE') return -1;
+                      if (b.status === 'OVERDUE' && a.status !== 'OVERDUE') return 1;
+                      return new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime();
+                    })
+                    .slice(0, 3)
+                    .map(renderEnhancedReminderCard)}
+                </View>
+                
+                {enhancedReminders.filter(r => r.status === 'PENDING' || r.status === 'OVERDUE').length > 3 && (
+                  <TouchableOpacity 
+                    style={styles.viewAllRemindersButton}
+                    onPress={() => navigation.navigate('Reminders' as never)}
+                  >
+                    <LinearGradient
+                      colors={theme.isDark ? [theme.colors.surface, theme.colors.card] : ['#F8F9FA', '#E9ECEF']}
+                      style={styles.viewAllGradient}
+                    >
+                      <Text style={[styles.viewAllText, { color: theme.colors.text }]}>
+                        View all {enhancedReminders.filter(r => r.status === 'PENDING' || r.status === 'OVERDUE').length} reminders
+                      </Text>
+                      <Ionicons name="arrow-forward" size={16} color={theme.colors.primary} />
+                    </LinearGradient>
+                  </TouchableOpacity>
+                )}
+              </>
             )}
           </View>
 
@@ -1220,18 +1305,51 @@ const createStyles = (theme: any) => StyleSheet.create({
   manageButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#4A90E2' + '15',
+    backgroundColor: '#6C63FF' + '15',
     paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
     borderWidth: 1,
-    borderColor: '#4A90E2' + '30',
+    borderColor: '#6C63FF' + '30',
   },
   manageButtonText: {
     fontSize: 13,
-    color: '#4A90E2',
+    color: '#6C63FF',
     fontWeight: '600',
     marginLeft: 4,
+  },
+  manageReminderContainer: {
+    position: 'relative',
+  },
+  reminderDropdown: {
+    position: 'absolute',
+    top: '100%',
+    right: 0,
+    marginTop: 8,
+    borderRadius: 12,
+    borderWidth: 1,
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 4,
+    },
+    shadowOpacity: 0.15,
+    shadowRadius: 12,
+    elevation: 8,
+    zIndex: 1000,
+    minWidth: 180,
+  },
+  dropdownItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    gap: 12,
+    borderBottomWidth: 1,
+  },
+  dropdownItemText: {
+    fontSize: 14,
+    fontWeight: '500',
   },
   emptyRemindersContainer: {
     backgroundColor: theme.colors.card,
@@ -1301,6 +1419,272 @@ const createStyles = (theme: any) => StyleSheet.create({
     fontSize: 11,
     textTransform: 'uppercase',
     fontWeight: '500',
+  },
+
+  // New Modern Reminder Styles
+  reminderLoadingCard: {
+    backgroundColor: theme.colors.card,
+    borderRadius: 16,
+    padding: 32,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  loadingIndicator: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  loadingDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#6C63FF',
+    marginHorizontal: 4,
+  },
+  emptyRemindersCard: {
+    backgroundColor: theme.colors.card,
+    borderRadius: 16,
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  emptyStateGradient: {
+    padding: 32,
+    alignItems: 'center',
+  },
+  emptyIconContainer: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: '#6C63FF20',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 16,
+  },
+  emptyRemindersTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: theme.colors.text,
+    marginBottom: 8,
+    textAlign: 'center',
+  },
+  emptyRemindersSubtitle: {
+    fontSize: 14,
+    color: theme.colors.textSecondary,
+    textAlign: 'center',
+    marginBottom: 24,
+    lineHeight: 20,
+  },
+  addButtonGradient: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    borderRadius: 25,
+  },
+  reminderStatsCard: {
+    backgroundColor: theme.colors.card,
+    borderRadius: 16,
+    overflow: 'hidden',
+    marginBottom: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  statsGradient: {
+    padding: 16,
+  },
+  statsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  statItem: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  statIcon: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 8,
+  },
+  statValue: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: theme.colors.text,
+    marginBottom: 4,
+  },
+  statLabel: {
+    fontSize: 12,
+    color: theme.colors.textSecondary,
+    fontWeight: '500',
+  },
+  statDivider: {
+    width: 1,
+    height: 40,
+    backgroundColor: theme.colors.border,
+    marginHorizontal: 16,
+  },
+  reminderCardsContainer: {
+    marginBottom: 16,
+  },
+  modernReminderCard: {
+    marginBottom: 12,
+    borderRadius: 16,
+    borderWidth: 1,
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  reminderCardGradient: {
+    padding: 16,
+    position: 'relative',
+  },
+  statusIndicatorBar: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    height: 4,
+  },
+  reminderMainInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+    marginRight: 12,
+  },
+  statusIconContainer: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
+  },
+  reminderTextContent: {
+    flex: 1,
+  },
+  reminderTitleModern: {
+    fontSize: 16,
+    fontWeight: '600',
+    marginBottom: 4,
+  },
+  reminderMetaInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  metaDivider: {
+    width: 4,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: theme.colors.textSecondary,
+    marginHorizontal: 8,
+  },
+  reminderDueDate: {
+    fontSize: 13,
+    fontWeight: '500',
+  },
+  amountContainer: {
+    alignItems: 'flex-end',
+  },
+  reminderAmountModern: {
+    fontSize: 18,
+    fontWeight: 'bold',
+  },
+  reminderCardFooter: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginTop: 12,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: theme.colors.border + '50',
+  },
+  categoryInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  categoryIconContainer: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 8,
+  },
+  categoryName: {
+    fontSize: 13,
+    fontWeight: '500',
+  },
+  badgeContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  recurringBadgeModern: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#6C63FF20',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+    marginLeft: 8,
+  },
+  recurringTextModern: {
+    fontSize: 11,
+    color: '#6C63FF',
+    fontWeight: '600',
+    marginLeft: 3,
+  },
+  overdueBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FF6B6B20',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+    marginLeft: 8,
+  },
+  overdueTextModern: {
+    fontSize: 11,
+    color: '#FF6B6B',
+    fontWeight: '600',
+    marginLeft: 3,
+  },
+  viewAllRemindersButton: {
+    borderRadius: 12,
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  viewAllGradient: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 16,
+    paddingHorizontal: 20,
+  },
+  viewAllText: {
+    fontSize: 14,
+    fontWeight: '600',
+    marginRight: 8,
   },
 });
 
