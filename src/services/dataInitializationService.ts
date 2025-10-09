@@ -6,94 +6,46 @@ class DataInitializationService {
   async initializeSampleData(): Promise<void> {
     try {
       if (__DEV__) {
-        console.log('🔧 Initializing sample data...');
+        console.log('🔧 Initializing sample data for demo mode...');
       }
       
       // Initialize services first (this will set up categories in storage)
       await billsService.initializeCategories();
       await budgetService.initializeCategories();
       
-      // Check if data already exists to avoid duplicates
-      const existingBills = await billsService.getAllBills();
-      const existingBudgets = await budgetService.getAllBudgets();
-      
+      // Add sample bills for demo mode
       if (__DEV__) {
-        console.log('📊 Current data state:', {
-          billsCount: existingBills.length,
-          budgetsCount: existingBudgets.length
-        });
+        console.log('📄 Adding sample bills for demo...');
       }
+      await billsService.seedTestBillsForDemo();
       
-      // Add sample bills if none exist
-      if (existingBills.length === 0) {
-        if (__DEV__) {
-          console.log('📄 Adding sample bills...');
-        }
-        for (const billData of mockBills) {
-          try {
-            await billsService.createBill({
-              title: billData.title,
-              description: billData.description,
-              amount: billData.amount,
-              dueDate: billData.dueDate,
-              frequency: billData.frequency,
-              category: billData.category,
-              categoryId: billData.categoryId,
-              isRecurring: billData.isRecurring,
-              isAutoPay: billData.isAutoPay,
-              status: billData.status,
-              reminderDays: billData.reminderDays,
-              remindersPerDay: billData.remindersPerDay,
-              notes: billData.notes,
-            });
-          } catch (error) {
-            if (__DEV__) {
-              console.warn('Failed to create sample bill:', billData.title, error);
-            }
+      // Add sample budgets for demo mode
+      if (__DEV__) {
+        console.log('💰 Adding sample budgets for demo...');
+      }
+      for (const budgetData of mockBudgets) {
+        try {
+          await budgetService.createBudget({
+            categoryId: budgetData.categoryId,
+            categoryName: budgetData.categoryName,
+            monthYear: budgetData.monthYear,
+            budgetAmount: budgetData.budgetAmount,
+            warningThreshold: budgetData.warningThreshold,
+            notes: budgetData.notes,
+          });
+          
+          // Add sample transactions to the budget
+          for (const transaction of budgetData.transactions) {
+            await budgetService.addTransactionToBudget(transaction);
+          }
+        } catch (error) {
+          if (__DEV__) {
+            console.warn('Failed to create sample budget:', budgetData.categoryName, error);
           }
         }
-        if (__DEV__) {
-          console.log('✅ Sample bills added');
-        }
-      } else {
-        if (__DEV__) {
-          console.log('📄 Bills already exist, skipping sample bills');
-        }
       }
-      
-      // Add sample budgets if none exist
-      if (existingBudgets.length === 0) {
-        if (__DEV__) {
-          console.log('💰 Adding sample budgets...');
-        }
-        for (const budgetData of mockBudgets) {
-          try {
-            await budgetService.createBudget({
-              categoryId: budgetData.categoryId,
-              categoryName: budgetData.categoryName,
-              monthYear: budgetData.monthYear,
-              budgetAmount: budgetData.budgetAmount,
-              warningThreshold: budgetData.warningThreshold,
-              notes: budgetData.notes,
-            });
-            
-            // Add sample transactions to the budget
-            for (const transaction of budgetData.transactions) {
-              await budgetService.addTransactionToBudget(transaction);
-            }
-          } catch (error) {
-            if (__DEV__) {
-              console.warn('Failed to create sample budget:', budgetData.categoryName, error);
-            }
-          }
-        }
-        if (__DEV__) {
-          console.log('✅ Sample budgets added');
-        }
-      } else {
-        if (__DEV__) {
-          console.log('💰 Budgets already exist, skipping sample budgets');
-        }
+      if (__DEV__) {
+        console.log('✅ Sample budgets added for demo');
       }
       
       if (__DEV__) {

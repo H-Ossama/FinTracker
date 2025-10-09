@@ -13,6 +13,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import AddWalletModal from '../components/AddWalletModal';
+import { useWalletVisibility } from '../hooks/useWalletVisibility';
 import AddMoneyModal from '../components/AddMoneyModal';
 import TransferModal from '../components/TransferModal';
 import { useTheme } from '../contexts/ThemeContext';
@@ -22,6 +23,7 @@ import { hybridDataService } from '../services/hybridDataService';
 const WalletScreen = () => {
   const { theme } = useTheme();
   const { formatCurrency, t } = useLocalization();
+  const { formatWalletBalance, shouldShowBalance, getTotalVisibleBalance } = useWalletVisibility();
   
   const [wallets, setWallets] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -228,7 +230,9 @@ const WalletScreen = () => {
           </View>
           
           <Text style={styles.walletBalance}>
-            {isBalanceVisible ? formatCurrency(wallet.balance) : '••••••'}
+            {(isBalanceVisible && shouldShowBalance(wallet.id)) 
+              ? formatWalletBalance(wallet.balance, wallet.id) 
+              : '••••••'}
           </Text>
           
           <View style={styles.walletActions}>
@@ -284,7 +288,7 @@ const WalletScreen = () => {
             <Text style={[styles.overviewLabel, { color: theme.colors.textSecondary }]}>{t('wallet_screen_total_balance')}</Text>
             <Text style={[styles.overviewAmount, { color: theme.colors.text }]}>
               {isBalanceVisible 
-                ? formatCurrency(wallets.reduce((sum, wallet) => sum + wallet.balance, 0))
+                ? formatCurrency(getTotalVisibleBalance(wallets))
                 : '••••••'
               }
             </Text>

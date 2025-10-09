@@ -10,11 +10,19 @@
     "splash": {
       "image": "./assets/splash.png",
       "resizeMode": "contain",
-      "backgroundColor": "#ffffff"
+      "backgroundColor": "#20C6F7"
     },
     "assetBundlePatterns": [
-      "**/*"
+      "assets/**/*",
+      "src/**/*.{js,ts,tsx,json}"
     ],
+    "optimization": {
+      "minify": true,
+      "treeshake": true
+    },
+    "updates": {
+      "fallbackToCacheTimeout": 0
+    },
     "ios": {
       "bundleIdentifier": "com.oussamaaaaa.fintracker",
       "supportsTablet": true
@@ -23,7 +31,18 @@
       "package": "com.oussamaaaaa.fintracker",
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
-        "backgroundColor": "#FFFFFF"
+        "backgroundColor": "#20C6F7"
+      },
+      "versionCode": 1,
+      "compileSdkVersion": 34,
+      "targetSdkVersion": 34,
+      "minSdkVersion": 21,
+      "buildToolsVersion": "34.0.0",
+      "enableProguardInReleaseBuilds": true,
+      "enableSeparateBuildPerCPUArchitecture": true,
+      "bundleInRelease": true,
+      "config": {
+        "useCleartextTraffic": false
       }
     },
     "web": {
@@ -31,8 +50,7 @@
     },
     "platforms": [
       "ios",
-      "android",
-      "web"
+      "android"
     ],
     "plugins": [
       "expo-dev-client",
@@ -41,7 +59,7 @@
         "expo-notifications",
         {
           "icon": "./assets/adaptive-icon.png",
-          "color": "#ffffff",
+          "color": "#20C6F7",
           "defaultChannel": "default"
         }
       ]

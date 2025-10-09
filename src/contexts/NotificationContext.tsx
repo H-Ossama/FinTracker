@@ -1,4 +1,5 @@
-import React, { createContext, useContext, useReducer, useEffect, ReactNode } from 'react';
+import React, { createContext, useContext, useReducer, useEffect, useState, ReactNode } from 'react';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { NotificationService } from '../services/notificationService';
 import { hybridDataService } from '../services/hybridDataService';
 
@@ -72,6 +73,8 @@ const initialState: NotificationState = {
     spendingAlertThreshold: 100,
   },
 };
+
+const NOTIFICATION_STORAGE_KEY = 'notification_state';
 
 function notificationReducer(state: NotificationState, action: NotificationAction): NotificationState {
   switch (action.type) {
@@ -188,18 +191,84 @@ interface NotificationContextType {
   
   // Test functionality
   testNotification: () => Promise<void>;
+  
+  // Debug functionality
+  clearNotificationStorage: () => Promise<void>;
+  debugNotificationState: () => void;
 }
 
 const NotificationContext = createContext<NotificationContextType | undefined>(undefined);
 
 export function NotificationProvider({ children }: { children: ReactNode }) {
   const [state, dispatch] = useReducer(notificationReducer, initialState);
+  const [isInitialized, setIsInitialized] = useState(false);
 
-  // Initialize notifications on app start
+  // Initialize notifications on app start - load saved state first
   useEffect(() => {
-    initializeNotifications();
-    loadPreferences();
+    const initializeApp = async () => {
+      await loadStateFromStorage();
+      await initializeNotifications();
+      await loadPreferences();
+      setIsInitialized(true);
+    };
+    initializeApp();
   }, []);
+
+  // Save state to AsyncStorage whenever it changes (but only after initialization)
+  useEffect(() => {
+    if (isInitialized) {
+      saveStateToStorage(state);
+    }
+  }, [state.inAppNotifications, state.unreadCount, isInitialized]);
+
+  const saveStateToStorage = async (currentState: NotificationState) => {
+    try {
+      const stateToSave = {
+        inAppNotifications: currentState.inAppNotifications.map(notification => ({
+          ...notification,
+          timestamp: notification.timestamp.toISOString(), // Convert Date to string for storage
+        })),
+        unreadCount: currentState.unreadCount,
+        lastSaved: new Date().toISOString(), // Add timestamp for debugging
+      };
+      await AsyncStorage.setItem(NOTIFICATION_STORAGE_KEY, JSON.stringify(stateToSave));
+      console.log('Notification state saved:', { count: stateToSave.inAppNotifications.length, unread: stateToSave.unreadCount });
+    } catch (error) {
+      console.error('Error saving notification state:', error);
+    }
+  };
+
+  const loadStateFromStorage = async () => {
+    try {
+      const savedState = await AsyncStorage.getItem(NOTIFICATION_STORAGE_KEY);
+      if (savedState) {
+        const { inAppNotifications, unreadCount, lastSaved } = JSON.parse(savedState);
+        console.log('Loading notification state:', { count: inAppNotifications.length, unread: unreadCount, lastSaved });
+        
+        // Convert timestamp strings back to Date objects and ensure read status is preserved
+        const notifications = inAppNotifications.map((n: any) => ({
+          ...n,
+          timestamp: new Date(n.timestamp),
+          read: n.read || false, // Ensure read property exists
+        }));
+        
+        // Calculate actual unread count to ensure consistency
+        const actualUnreadCount = notifications.filter(n => !n.read).length;
+        
+        dispatch({ type: 'SET_NOTIFICATIONS', payload: notifications });
+        
+        console.log('Notification state loaded successfully:', { 
+          totalNotifications: notifications.length, 
+          unreadCount: actualUnreadCount,
+          readNotifications: notifications.filter(n => n.read).length
+        });
+      } else {
+        console.log('No saved notification state found');
+      }
+    } catch (error) {
+      console.error('Error loading notification state:', error);
+    }
+  };
 
   const initializeNotifications = async () => {
     try {
@@ -278,14 +347,17 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
   };
 
   const markAsRead = (id: string) => {
+    console.log('Marking notification as read:', id);
     dispatch({ type: 'MARK_AS_READ', payload: id });
   };
 
   const markAsUnread = (id: string) => {
+    console.log('Marking notification as unread:', id);
     dispatch({ type: 'MARK_AS_UNREAD', payload: id });
   };
 
   const markAllAsRead = () => {
+    console.log('Marking all notifications as read');
     dispatch({ type: 'MARK_ALL_AS_READ' });
   };
 
@@ -383,6 +455,31 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  const clearNotificationStorage = async () => {
+    try {
+      await AsyncStorage.removeItem(NOTIFICATION_STORAGE_KEY);
+      dispatch({ type: 'SET_NOTIFICATIONS', payload: [] });
+      console.log('Notification storage cleared');
+    } catch (error) {
+      console.error('Error clearing notification storage:', error);
+    }
+  };
+
+  const debugNotificationState = () => {
+    console.log('=== NOTIFICATION DEBUG STATE ===');
+    console.log('Total notifications:', state.inAppNotifications.length);
+    console.log('Unread count:', state.unreadCount);
+    console.log('Read notifications:', state.inAppNotifications.filter(n => n.read).length);
+    console.log('Unread notifications:', state.inAppNotifications.filter(n => !n.read).length);
+    console.log('Notification details:', state.inAppNotifications.map(n => ({
+      id: n.id,
+      title: n.title,
+      read: n.read,
+      timestamp: n.timestamp
+    })));
+    console.log('================================');
+  };
+
   const value: NotificationContextType = {
     state,
     initializeNotifications,
@@ -399,6 +496,8 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
     scheduleReminder,
     cancelReminder,
     testNotification,
+    clearNotificationStorage,
+    debugNotificationState,
   };
 
   return (

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -13,7 +13,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import DateTimePicker from '@react-native-community/datetimepicker';
-import { mockWallets } from '../data/mockData';
+import { hybridDataService, HybridWallet } from '../services/hybridDataService';
 import { useTheme } from '../contexts/ThemeContext';
 
 interface AddIncomeModalProps {
@@ -51,20 +51,41 @@ const AddIncomeModal: React.FC<AddIncomeModalProps> = ({
   const [title, setTitle] = useState('');
   const [amount, setAmount] = useState('');
   const [selectedCategory, setSelectedCategory] = useState(incomeCategories[0]);
-  const [selectedWallet, setSelectedWallet] = useState(mockWallets[0]);
-  const [description, setDescription] = useState('');
+  const [selectedWallet, setSelectedWallet] = useState<HybridWallet | null>(null);
   const [date, setDate] = useState(new Date());
   const [showDatePicker, setShowDatePicker] = useState(false);
+  const [description, setDescription] = useState('');
+  const [wallets, setWallets] = useState<HybridWallet[]>([]);
   const [errors, setErrors] = useState<{ [key: string]: string }>({});
+
+  useEffect(() => {
+    if (visible) {
+      loadWallets();
+    }
+  }, [visible]);
+
+  const loadWallets = async () => {
+    try {
+      const walletsData = await hybridDataService.getWallets();
+      setWallets(walletsData);
+      if (walletsData.length > 0 && !selectedWallet) {
+        setSelectedWallet(walletsData[0]);
+      }
+    } catch (error) {
+      console.error('Error loading wallets:', error);
+    }
+  };
 
   const resetForm = () => {
     setTitle('');
     setAmount('');
     setSelectedCategory(incomeCategories[0]);
-    setSelectedWallet(mockWallets[0]);
     setDescription('');
     setDate(new Date());
     setErrors({});
+    if (wallets.length > 0) {
+      setSelectedWallet(wallets[0]);
+    }
   };
 
   const validateForm = () => {
@@ -85,7 +106,7 @@ const AddIncomeModal: React.FC<AddIncomeModalProps> = ({
   };
 
   const handleSubmit = () => {
-    if (validateForm()) {
+    if (validateForm() && selectedWallet) {
       const income = {
         title: title.trim(),
         amount: parseFloat(amount),
@@ -226,13 +247,13 @@ const AddIncomeModal: React.FC<AddIncomeModalProps> = ({
           <View style={styles.section}>
             <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>Add To</Text>
             <View style={[styles.walletsContainer, { backgroundColor: theme.colors.surface }]}>
-              {mockWallets.map((wallet) => (
+              {wallets.map((wallet: HybridWallet) => (
                 <TouchableOpacity
                   key={wallet.id}
                   style={[
                     styles.walletItem,
                     { borderBottomColor: theme.colors.border },
-                    selectedWallet.id === wallet.id && { backgroundColor: theme.isDark ? theme.colors.card : '#E8F5E8' },
+                    selectedWallet?.id === wallet.id && { backgroundColor: theme.isDark ? theme.colors.card : '#E8F5E8' },
                   ]}
                   onPress={() => setSelectedWallet(wallet)}
                 >
@@ -240,9 +261,9 @@ const AddIncomeModal: React.FC<AddIncomeModalProps> = ({
                     <View style={[styles.walletIcon, { backgroundColor: wallet.color }]}>
                       <Ionicons
                         name={
-                          wallet.type === 'bank'
+                          wallet.type === 'BANK'
                             ? 'card'
-                            : wallet.type === 'cash'
+                            : wallet.type === 'CASH'
                             ? 'cash'
                             : 'wallet'
                         }
@@ -255,7 +276,7 @@ const AddIncomeModal: React.FC<AddIncomeModalProps> = ({
                       <Text style={[styles.walletBalance, { color: theme.colors.textSecondary }]}>${wallet.balance.toFixed(2)}</Text>
                     </View>
                   </View>
-                  {selectedWallet.id === wallet.id && (
+                  {selectedWallet?.id === wallet.id && (
                     <Ionicons name="checkmark-circle" size={20} color={theme.colors.success} />
                   )}
                 </TouchableOpacity>

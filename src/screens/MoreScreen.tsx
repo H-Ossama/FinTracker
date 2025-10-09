@@ -10,11 +10,11 @@ import {
   Alert,
   ActionSheetIOS,
   Platform,
+  ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
-import { mockReminders } from '../data/mockData';
 import { useTheme } from '../contexts/ThemeContext';
 import { useLocalization } from '../contexts/LocalizationContext';
 import { useAuth } from '../contexts/AuthContext';
@@ -40,6 +40,8 @@ const MoreScreen = () => {
   const [billsLoading, setBillsLoading] = useState(true);
   const [billsDropdownVisible, setBillsDropdownVisible] = useState(false);
   const [dataStats, setDataStats] = useState<any>(null);
+  const [isDemoMode, setIsDemoMode] = useState(false);
+  const [demoModeLoading, setDemoModeLoading] = useState(false);
 
   const styles = createStyles(theme);
 
@@ -47,7 +49,8 @@ const MoreScreen = () => {
     loadGoals();
     loadBills();
     loadDataStats();
-    initializeSampleData();
+    checkDemoMode();
+    // Remove automatic sample data initialization - only seed when user explicitly requests it
   }, []);
 
   const loadGoals = async () => {
@@ -77,6 +80,78 @@ const MoreScreen = () => {
       await loadDataStats(); // Refresh stats after initialization
     } catch (error) {
       console.error('Error initializing sample data:', error);
+    }
+  };
+
+  const checkDemoMode = async () => {
+    try {
+      const { hybridDataService } = await import('../services/hybridDataService');
+      const demoModeEnabled = await hybridDataService.isDemoModeEnabled();
+      setIsDemoMode(demoModeEnabled);
+    } catch (error) {
+      console.error('Error checking demo mode:', error);
+    }
+  };
+
+  const handleClearTestAccounts = async () => {
+    Alert.alert(
+      'Clear All Test Accounts',
+      'This will remove all registered test accounts. This action cannot be undone.\n\nNote: This is a development feature for testing the authentication system.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Clear All',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              const AsyncStorage = await import('@react-native-async-storage/async-storage');
+              await AsyncStorage.default.removeItem('registered_users');
+              Alert.alert('Success', 'All test accounts have been cleared. You can now test user registration from scratch.');
+            } catch (error) {
+              Alert.alert('Error', 'Failed to clear test accounts');
+            }
+          }
+        }
+      ]
+    );
+  };
+
+  const handleDemoModeToggle = async () => {
+    try {
+      setDemoModeLoading(true);
+      const { hybridDataService } = await import('../services/hybridDataService');
+      
+      let result;
+      if (isDemoMode) {
+        result = await hybridDataService.disableDemoMode();
+      } else {
+        result = await hybridDataService.enableDemoMode();
+      }
+      
+      if (result.success) {
+        setIsDemoMode(!isDemoMode);
+        // Refresh all data
+        await Promise.all([
+          loadGoals(),
+          loadBills(),
+          loadDataStats()
+        ]);
+        
+        Alert.alert(
+          isDemoMode ? 'Demo Mode Disabled' : 'Demo Mode Enabled',
+          isDemoMode 
+            ? 'All demo data has been cleared. You now have a fresh start.'
+            : 'Sample data has been added to help you explore the app features.',
+          [{ text: 'OK' }]
+        );
+      } else {
+        Alert.alert('Error', result.error || 'Failed to toggle demo mode');
+      }
+    } catch (error) {
+      console.error('Error toggling demo mode:', error);
+      Alert.alert('Error', 'Failed to toggle demo mode');
+    } finally {
+      setDemoModeLoading(false);
     }
   };
 
@@ -167,6 +242,29 @@ const MoreScreen = () => {
       ],
     },
     {
+      title: 'Demo Mode',
+      items: [
+        {
+          id: 'demo_mode',
+          title: isDemoMode ? 'Disable Demo Mode' : 'Enable Demo Mode',
+          subtitle: isDemoMode 
+            ? 'Clear sample data and start fresh'
+            : 'Add sample data to explore features',
+          icon: isDemoMode ? 'close-circle' : 'play-circle',
+          color: isDemoMode ? '#FF6B6B' : '#32D74B',
+          isToggle: true,
+          toggleValue: isDemoMode,
+        },
+        ...(isDemoMode ? [{
+          id: 'clear_accounts',
+          title: 'Clear All Test Accounts',
+          subtitle: 'Remove all registered test accounts (Dev Only)',
+          icon: 'trash',
+          color: '#FF6B6B',
+        }] : []),
+      ],
+    },
+    {
       title: t('more_screen_reports_export'),
       items: [
         {
@@ -199,7 +297,11 @@ const MoreScreen = () => {
       key={item.id} 
       style={styles.menuItem}
       onPress={() => {
-        if (item.id === 'backup') {
+        if (item.id === 'demo_mode') {
+          handleDemoModeToggle();
+        } else if (item.id === 'clear_accounts') {
+          handleClearTestAccounts();
+        } else if (item.id === 'backup') {
           setShowSyncModal(true);
         } else if (item.id === 'goals') {
           navigation.navigate('SavingsGoals' as never);
@@ -210,6 +312,7 @@ const MoreScreen = () => {
         }
         // Add other navigation handlers here as needed
       }}
+      disabled={item.id === 'demo_mode' && demoModeLoading}
     >
       <View style={styles.menuItemLeft}>
         <View style={[styles.menuIcon, { backgroundColor: item.color }]}>
@@ -226,7 +329,11 @@ const MoreScreen = () => {
             <Text style={styles.badgeText}>{item.badge}</Text>
           </View>
         )}
-        <Ionicons name="chevron-forward" size={16} color="#C7C7CC" />
+        {item.id === 'demo_mode' && demoModeLoading ? (
+          <ActivityIndicator size="small" color={theme.colors.primary} />
+        ) : (
+          <Ionicons name="chevron-forward" size={16} color="#C7C7CC" />
+        )}
       </View>
     </TouchableOpacity>
   );
@@ -441,10 +548,6 @@ const MoreScreen = () => {
               <Text style={styles.overviewTitle}>{t('more_screen_pending_bills')}</Text>
               <Text style={styles.overviewValue}>{dataStats?.pendingBills || 0}</Text>
             </View>
-            <View style={styles.overviewCard}>
-              <Text style={styles.overviewTitle}>{t('more_screen_monthly_budget')}</Text>
-              <Text style={styles.overviewValue}>${dataStats?.totalBudgetAmount?.toFixed(0) || '0'}</Text>
-            </View>
           </View>
 
           {/* Recent Goals */}
@@ -536,7 +639,7 @@ const MoreScreen = () => {
             ) : bills.length === 0 ? (
               <View style={styles.emptyRemindersCard}>
                 <LinearGradient
-                  colors={['#F8F9FA', '#E9ECEF']}
+                  colors={theme.isDark ? [theme.colors.card, theme.colors.surface] : ['#F8F9FA', '#E9ECEF']}
                   style={styles.emptyStateGradient}
                 >
                   <View style={styles.emptyIconContainer}>
@@ -696,9 +799,9 @@ const createStyles = (theme: any) => StyleSheet.create({
   overviewCard: {
     backgroundColor: theme.colors.card,
     borderRadius: 12,
-    padding: 16,
-    flex: 0.31,
-    minWidth: 100,
+    padding: 20,
+    flex: 0.47,
+    minWidth: 140,
     alignItems: 'center',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
@@ -1289,12 +1392,14 @@ const createStyles = (theme: any) => StyleSheet.create({
     textAlign: 'center',
   },
   addReminderButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#4A90E2',
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 8,
+    marginTop: 8,
+    overflow: 'hidden',
+    borderRadius: 25,
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
   },
   addReminderButtonText: {
     color: 'white',

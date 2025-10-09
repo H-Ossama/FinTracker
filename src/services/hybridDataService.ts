@@ -34,16 +34,24 @@ class HybridDataService {
         await localStorageService.seedDefaultCategories();
       }
 
-      // Seed default wallets if needed
-      const wallets = await localStorageService.getWallets();
-      if (wallets.length === 0) {
-        await this.seedDefaultWallets();
-      }
+      // Only seed demo data if explicitly requested or this is a demo account
+      const shouldSeedDemoData = await this.shouldSeedDemoData();
+      
+      if (shouldSeedDemoData) {
+        console.log('🎭 Seeding demo data...');
+        // Seed default wallets if needed
+        const wallets = await localStorageService.getWallets();
+        if (wallets.length === 0) {
+          await this.seedDefaultWallets();
+        }
 
-      // Seed sample transactions if needed (only for demo purposes)
-      const transactions = await localStorageService.getTransactions();
-      if (transactions.length === 0) {
-        await this.seedSampleTransactions();
+        // Seed sample transactions if needed (only for demo purposes)
+        const transactions = await localStorageService.getTransactions();
+        if (transactions.length === 0) {
+          await this.seedSampleTransactions();
+        }
+      } else {
+        console.log('✨ New user - starting with clean data');
       }
 
       // Check sync status
@@ -80,6 +88,27 @@ class HybridDataService {
           pendingItems: 0,
         },
       };
+    }
+  }
+
+  // Check if we should seed demo data
+  private async shouldSeedDemoData(): Promise<boolean> {
+    try {
+      // Import AsyncStorage to check demo settings
+      const AsyncStorage = await import('@react-native-async-storage/async-storage');
+      
+      // Check if this is a demo account or if user explicitly wants demo data
+      const isDemoAccount = await AsyncStorage.default.getItem('is_demo_account');
+      const seedDemoData = await AsyncStorage.default.getItem('seed_demo_data');
+      
+      // Only seed demo data if explicitly requested:
+      // 1. It's marked as a demo account, OR
+      // 2. User explicitly requested demo data
+      // NEW USERS should start with empty data for privacy and clean experience
+      return isDemoAccount === 'true' || seedDemoData === 'true';
+    } catch (error) {
+      console.log('Could not check demo settings, defaulting to no demo data');
+      return false;
     }
   }
 
@@ -640,6 +669,127 @@ class HybridDataService {
       console.log('Could not update notification preferences on backend:', error);
       // Store locally for later sync
       // You could implement local storage for preferences here
+    }
+  }
+
+  // Clear all user data (for account deletion)
+  async clearAllData(): Promise<void> {
+    try {
+      console.log('🗑️ Clearing all user data...');
+      
+      // Clear local database (wallets, transactions, categories)
+      await localStorageService.clearAllData();
+      
+      // Clear bills data
+      try {
+        const { billsService } = await import('./billsService');
+        await billsService.clearAllBills();
+        console.log('✅ Bills data cleared');
+      } catch (error) {
+        console.log('⚠️ Error clearing bills data:', error);
+      }
+      
+      // Clear goals data
+      try {
+        const { GoalsService } = await import('./goalsService');
+        await GoalsService.clearAllGoals();
+        console.log('✅ Goals data cleared');
+      } catch (error) {
+        console.log('⚠️ Error clearing goals data:', error);
+      }
+      
+      // Clear budget data
+      try {
+        const { budgetService } = await import('./budgetService');
+        await budgetService.clearAllBudgets();
+        console.log('✅ Budget data cleared');
+      } catch (error) {
+        console.log('⚠️ Error clearing budget data:', error);
+      }
+      
+      // Clear sync status
+      await cloudSyncService.clearSyncData();
+      
+      // Reset initialization state
+      this.isInitialized = false;
+      
+      console.log('✅ All user data cleared successfully');
+    } catch (error) {
+      console.error('❌ Error clearing user data:', error);
+      throw error;
+    }
+  }
+
+  // Enable demo mode - seeds sample data for users who want to try the app
+  async enableDemoMode(): Promise<{ success: boolean; error?: string }> {
+    try {
+      console.log('🎭 Enabling demo mode...');
+      
+      // Set demo flag
+      const AsyncStorage = await import('@react-native-async-storage/async-storage');
+      await AsyncStorage.default.setItem('is_demo_account', 'true');
+      await AsyncStorage.default.setItem('seed_demo_data', 'true');
+      
+      // Clear existing data first
+      await this.clearAllData();
+      
+      // Re-initialize with demo data
+      await this.initializeApp();
+      
+      // Import and seed demo goals
+      const { GoalsService } = await import('./goalsService');
+      await GoalsService.seedDemoGoals();
+      
+      // Import and seed demo reminders, bills, budgets
+      const { dataInitializationService } = await import('./dataInitializationService');
+      await dataInitializationService.initializeSampleData();
+      
+      console.log('✅ Demo mode enabled successfully');
+      return { success: true };
+    } catch (error) {
+      console.error('❌ Error enabling demo mode:', error);
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Failed to enable demo mode'
+      };
+    }
+  }
+
+  // Disable demo mode - clears all data and resets to fresh state
+  async disableDemoMode(): Promise<{ success: boolean; error?: string }> {
+    try {
+      console.log('🚫 Disabling demo mode...');
+      
+      // Clear demo flags
+      const AsyncStorage = await import('@react-native-async-storage/async-storage');
+      await AsyncStorage.default.removeItem('is_demo_account');
+      await AsyncStorage.default.removeItem('seed_demo_data');
+      
+      // Clear all data
+      await this.clearAllData();
+      
+      // Re-initialize as fresh app
+      await this.initializeApp();
+      
+      console.log('✅ Demo mode disabled successfully');
+      return { success: true };
+    } catch (error) {
+      console.error('❌ Error disabling demo mode:', error);
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Failed to disable demo mode'
+      };
+    }
+  }
+
+  // Check if demo mode is enabled
+  async isDemoModeEnabled(): Promise<boolean> {
+    try {
+      const AsyncStorage = await import('@react-native-async-storage/async-storage');
+      const isDemoAccount = await AsyncStorage.default.getItem('is_demo_account');
+      return isDemoAccount === 'true';
+    } catch (error) {
+      return false;
     }
   }
 }

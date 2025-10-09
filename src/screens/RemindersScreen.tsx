@@ -70,87 +70,9 @@ export default function RemindersScreen() {
   const loadReminders = async () => {
     try {
       setIsLoading(true);
-      // For now, we'll use mock data since the backend integration is optional
-      const mockReminders: Reminder[] = [
-        {
-          id: '1',
-          title: 'Monthly Rent',
-          description: 'Pay monthly rent',
-          amount: 1200,
-          dueDate: new Date(2025, 9, 15), // October 15, 2025
-          frequency: 'MONTHLY',
-          status: 'PENDING',
-          isActive: true,
-          isRecurring: true,
-          autoCreateTransaction: true,
-          transactionType: 'EXPENSE',
-          walletId: 'wallet1',
-          categoryId: 'category1',
-          notifyBefore: 60,
-          enablePushNotification: true,
-          enableEmailNotification: false,
-          completedCount: 8,
-          nextDue: new Date(2025, 10, 15), // November 15, 2025
-          category: {
-            id: 'category1',
-            name: 'Housing',
-            icon: 'home',
-            color: '#3B82F6',
-          },
-          wallet: {
-            id: 'wallet1',
-            name: 'Main Checking',
-            type: 'BANK',
-          },
-        },
-        {
-          id: '2',
-          title: 'Gym Membership',
-          description: 'Monthly gym payment',
-          amount: 45,
-          dueDate: new Date(2025, 9, 20), // October 20, 2025
-          frequency: 'MONTHLY',
-          status: 'OVERDUE',
-          isActive: true,
-          isRecurring: true,
-          autoCreateTransaction: false,
-          notifyBefore: 120,
-          enablePushNotification: true,
-          enableEmailNotification: false,
-          completedCount: 3,
-          category: {
-            id: 'category2',
-            name: 'Health & Fitness',
-            icon: 'fitness',
-            color: '#10B981',
-          },
-        },
-        {
-          id: '3',
-          title: 'Weekly Groceries',
-          description: 'Grocery shopping reminder',
-          dueDate: new Date(2025, 9, 12), // October 12, 2025
-          frequency: 'WEEKLY',
-          status: 'COMPLETED',
-          isActive: true,
-          isRecurring: true,
-          autoCreateTransaction: false,
-          notifyBefore: 30,
-          enablePushNotification: true,
-          enableEmailNotification: false,
-          completedCount: 15,
-          lastCompleted: new Date(2025, 9, 12),
-          nextDue: new Date(2025, 9, 19), // October 19, 2025
-          category: {
-            id: 'category3',
-            name: 'Groceries',
-            icon: 'basket',
-            color: '#F59E0B',
-          },
-        },
-      ];
-
-      setReminders(mockReminders);
+      // For new users, start with empty reminders - they can add their own
+      // Future enhancement: integrate with a proper reminders service
+      setReminders([]);
     } catch (error) {
       console.error('Error loading reminders:', error);
       addNotification({

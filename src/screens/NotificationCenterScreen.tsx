@@ -38,7 +38,7 @@ interface NotificationItem {
 export default function NotificationCenterScreen({ navigation }: { navigation: any }) {
   const { isDark } = useTheme();
   const { t } = useLocalization();
-  const { state: notificationState, addNotification, markAsRead, markAsUnread, markAllAsRead, removeNotification } = useNotification();
+  const { state: notificationState, addNotification, markAsRead, markAsUnread, markAllAsRead, removeNotification, debugNotificationState } = useNotification();
   
   const [isLoading, setIsLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
@@ -309,6 +309,28 @@ export default function NotificationCenterScreen({ navigation }: { navigation: a
                 {t('clear_all')}
               </Text>
             </TouchableOpacity>
+            
+            {/* Debug button (development only) */}
+            {__DEV__ && (
+              <TouchableOpacity
+                style={[styles.headerActionButton]}
+                onPress={debugNotificationState}
+              >
+                <Ionicons
+                  name="bug-outline"
+                  size={16}
+                  color={isDark ? '#10B981' : '#059669'}
+                />
+                <Text
+                  style={[
+                    styles.headerActionText,
+                    { color: isDark ? '#10B981' : '#059669' },
+                  ]}
+                >
+                  Debug
+                </Text>
+              </TouchableOpacity>
+            )}
           </View>
         </View>
 

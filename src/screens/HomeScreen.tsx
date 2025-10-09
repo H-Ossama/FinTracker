@@ -28,6 +28,7 @@ import { useLocalization } from '../contexts/LocalizationContext';
 import { useNotification } from '../contexts/NotificationContext';
 import borrowedMoneyService from '../services/borrowedMoneyService';
 import useSafeAreaHelper from '../hooks/useSafeAreaHelper';
+import { useWalletVisibility } from '../hooks/useWalletVisibility';
 import { hybridDataService, HybridWallet, HybridTransaction } from '../services/hybridDataService';
 
 const HomeScreen = () => {
@@ -36,6 +37,7 @@ const HomeScreen = () => {
   const { t, formatCurrency: formatCurrencyLoc } = useLocalization();
   const { state: notificationState, addNotification } = useNotification();
   const { headerPadding } = useSafeAreaHelper();
+  const { formatWalletBalance, shouldShowBalance } = useWalletVisibility();
   const [isBalanceVisible, setIsBalanceVisible] = useState(true);
   const [showAddExpenseModal, setShowAddExpenseModal] = useState(false);
   const [showAddIncomeModal, setShowAddIncomeModal] = useState(false);
@@ -573,7 +575,7 @@ const HomeScreen = () => {
                         {wallet.name}
                       </Text>
                       <Text style={[styles.walletBalance, { color: theme.colors.textSecondary }]}>
-                        Balance: {formatCurrency(wallet.balance)}
+                        Balance: {formatWalletBalance(wallet.balance, wallet.id)}
                       </Text>
                     </View>
                     {selectedWallet === wallet.id && (
@@ -688,7 +690,9 @@ const HomeScreen = () => {
             </View>
             <TouchableOpacity onPress={toggleBalanceVisibility} style={styles.balanceRow}>
               <Text style={[styles.balanceAmount, { color: theme.colors.text }]}>
-                {isBalanceVisible ? formatCurrency(currentWallet?.balance || 0) : '••••••'}
+                {(isBalanceVisible && shouldShowBalance(currentWallet?.id)) 
+                  ? formatWalletBalance(currentWallet?.balance || 0, currentWallet?.id) 
+                  : '••••••'}
               </Text>
               <Ionicons 
                 name={isBalanceVisible ? 'eye-outline' : 'eye-off-outline'} 

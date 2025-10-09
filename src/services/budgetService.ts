@@ -561,6 +561,29 @@ class BudgetService {
       throw error;
     }
   }
+
+  // Clear all budgets - used for demo mode reset and account deletion
+  async clearAllBudgets(): Promise<void> {
+    try {
+      if (__DEV__) {
+        console.log('🗑️ Clearing all budgets...');
+      }
+      
+      await AsyncStorage.removeItem(BUDGETS_STORAGE_KEY);
+      // Don't clear categories as they are defaults that should persist
+      
+      // Clear cache
+      cache.invalidate(CACHE_KEYS.BUDGETS);
+      cache.invalidate(CACHE_KEYS.BUDGET_CATEGORIES);
+      
+      if (__DEV__) {
+        console.log('✅ All budgets cleared');
+      }
+    } catch (error) {
+      console.error('❌ Error clearing budgets:', error);
+      throw error;
+    }
+  }
 }
 
 export const budgetService = new BudgetService();

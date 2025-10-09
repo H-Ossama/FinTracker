@@ -12,8 +12,18 @@ export class GoalsService {
         return JSON.parse(goalsJson);
       }
       
-      // Initialize with default goals if none exist
-      const defaultGoals: Goal[] = [
+      // Return empty array for new users - they should start with no goals
+      return [];
+    } catch (error) {
+      console.error('Error getting goals:', error);
+      return [];
+    }
+  }
+
+  // Seed demo goals - only called when user explicitly requests demo data
+  static async seedDemoGoals(): Promise<Goal[]> {
+    try {
+      const demoGoals: Goal[] = [
         {
           id: Date.now().toString(),
           title: 'Emergency Fund',
@@ -40,11 +50,21 @@ export class GoalsService {
         }
       ];
       
-      await this.saveGoals(defaultGoals);
-      return defaultGoals;
+      await this.saveGoals(demoGoals);
+      return demoGoals;
     } catch (error) {
-      console.error('Error getting goals:', error);
+      console.error('Error seeding demo goals:', error);
       return [];
+    }
+  }
+
+  // Clear all goals
+  static async clearAllGoals(): Promise<void> {
+    try {
+      await AsyncStorage.removeItem(GOALS_STORAGE_KEY);
+    } catch (error) {
+      console.error('Error clearing goals:', error);
+      throw error;
     }
   }
 

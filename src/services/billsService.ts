@@ -54,24 +54,20 @@ class BillsService {
         }
       }
       
-      // Add test bills if none exist
-      await this.seedTestBillsIfEmpty();
+      // Only seed test bills if demo mode is enabled
+      // Remove automatic seeding for new users - they should start with empty bills
     } catch (error) {
       console.error('❌ Error initializing bill categories:', error);
       throw error;
     }
   }
 
-  // Add test bills for development/testing
-  async seedTestBillsIfEmpty(): Promise<void> {
+  // Add test bills for demo mode only - called explicitly when demo mode is enabled
+  async seedTestBillsForDemo(): Promise<void> {
     try {
-      const existingBills = await this.getAllBills();
-      
-      // Only add test bills if no bills exist
-      if (existingBills.length === 0) {
-        if (__DEV__) {
-          console.log('📋 No bills found, adding test bills...');
-        }
+      if (__DEV__) {
+        console.log('🎭 Seeding test bills for demo mode...');
+      }
         
         // Get current date for realistic due dates
         const today = new Date();
@@ -193,16 +189,11 @@ class BillsService {
         }
         
         if (__DEV__) {
-          console.log(`✅ Added ${testBills.length} test bills for testing`);
+          console.log(`✅ Added ${testBills.length} test bills for demo mode`);
         }
-      } else {
-        if (__DEV__) {
-          console.log(`📊 Found ${existingBills.length} existing bills, skipping test data`);
-        }
-      }
     } catch (error) {
-      console.error('❌ Error seeding test bills:', error);
-      // Don't throw error for test data, just log it
+      console.error('❌ Error seeding test bills for demo:', error);
+      throw error;
     }
   }
 
@@ -231,7 +222,7 @@ class BillsService {
         console.log('🔄 Resetting bills with fresh test data...');
       }
       await this.clearAllBills();
-      await this.seedTestBillsIfEmpty();
+      await this.seedTestBillsForDemo();
       if (__DEV__) {
         console.log('✅ Test bills reset complete');
       }

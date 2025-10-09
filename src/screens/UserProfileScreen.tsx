@@ -165,7 +165,13 @@ const UserProfileScreen: React.FC<UserProfileScreenProps> = ({ navigation }) => 
   const handleDeleteAccount = () => {
     Alert.alert(
       t('profile_screen_delete_account_title'),
-      t('profile_screen_delete_account_warning'),
+      t('profile_screen_delete_account_warning') + '\n\n' + 
+      '⚠️ This action will:\n' +
+      '• Delete all your financial data\n' + 
+      '• Remove all transactions and wallets\n' +
+      '• Clear all reminders and goals\n' +
+      '• Sign you out permanently\n\n' +
+      'This cannot be undone!',
       [
         { text: t('cancel'), style: 'cancel' },
         {
@@ -185,8 +191,8 @@ const UserProfileScreen: React.FC<UserProfileScreenProps> = ({ navigation }) => 
 
       if (result.success) {
         Alert.alert(
-          t('profile_screen_account_deleted'),
-          t('profile_screen_account_deleted_success'),
+          '✅ Account Deleted',
+          'Your account and all data have been permanently deleted. Thank you for using FinTracker.',
           [
             {
               text: t('ok'),
@@ -196,10 +202,16 @@ const UserProfileScreen: React.FC<UserProfileScreenProps> = ({ navigation }) => 
           ]
         );
       } else {
-        Alert.alert(t('profile_screen_deletion_failed'), result.error || t('profile_screen_deletion_failed'));
+        Alert.alert(
+          'Deletion Failed', 
+          result.error || 'Failed to delete account. Please try again.'
+        );
       }
     } catch (error) {
-      Alert.alert(t('error'), t('profile_screen_unexpected_error'));
+      Alert.alert(
+        'Error', 
+        'An unexpected error occurred while deleting your account. Please try again.'
+      );
     } finally {
       setIsLoading(false);
     }

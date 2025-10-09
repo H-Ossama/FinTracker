@@ -56,69 +56,137 @@ export const useAuth = (): AuthContextType => {
   return context;
 };
 
-// Mock API functions (replace with actual API calls)
+// Mock API functions with proper user management
 const API = {
   signUp: async (email: string, password: string, name: string) => {
     // Simulate API delay
     await new Promise(resolve => setTimeout(resolve, 1500));
     
-    // Simulate validation
-    if (email === 'test@existing.com') {
-      throw new Error('Email already exists');
+    // Basic email validation
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      throw new Error('Please enter a valid email address');
     }
     
-    // Mock successful registration
-    const user: User = {
-      id: Math.random().toString(36).substr(2, 9),
-      email,
-      name,
-      createdAt: new Date().toISOString(),
-      lastLogin: new Date().toISOString(),
-    };
+    // Password validation
+    if (password.length < 6) {
+      throw new Error('Password must be at least 6 characters long');
+    }
     
-    return {
-      user,
-      token: 'mock_jwt_token_' + Math.random().toString(36).substr(2, 9),
-    };
+    // Name validation
+    if (name.trim().length < 2) {
+      throw new Error('Name must be at least 2 characters long');
+    }
+    
+    // Check if user already exists
+    try {
+      const existingUsers = await AsyncStorage.getItem('registered_users');
+      const users = existingUsers ? JSON.parse(existingUsers) : [];
+      
+      const userExists = users.find((u: any) => u.email.toLowerCase() === email.toLowerCase());
+      if (userExists) {
+        throw new Error('An account with this email already exists');
+      }
+      
+      // Clear any existing data before creating new account
+      try {
+        await AsyncStorage.removeItem('app_initialized');
+        await AsyncStorage.removeItem('default_data_seeded');
+        await AsyncStorage.removeItem('onboarding_completed');
+        await AsyncStorage.removeItem('is_demo_account');
+        await AsyncStorage.removeItem('seed_demo_data');
+        
+        // Clear any existing user data to ensure fresh start
+        const { hybridDataService } = await import('../services/hybridDataService');
+        await hybridDataService.clearAllData();
+      } catch (error) {
+        console.log('No existing data to clear');
+      }
+      
+      // Create new user
+      const newUser: User = {
+        id: Math.random().toString(36).substr(2, 9),
+        email: email.toLowerCase(),
+        name: name.trim(),
+        createdAt: new Date().toISOString(),
+        lastLogin: new Date().toISOString(),
+      };
+      
+      // Store user in registered users list
+      const updatedUsers = [...users, { 
+        ...newUser, 
+        password: password // In real app, this would be hashed
+      }];
+      await AsyncStorage.setItem('registered_users', JSON.stringify(updatedUsers));
+      
+      return {
+        user: newUser,
+        token: 'jwt_token_' + newUser.id,
+      };
+    } catch (error) {
+      if (error instanceof Error) {
+        throw error;
+      }
+      throw new Error('Registration failed. Please try again.');
+    }
   },
 
   signIn: async (email: string, password: string) => {
     // Simulate API delay
     await new Promise(resolve => setTimeout(resolve, 1000));
     
-    // Simulate validation
-    if (email === 'wrong@email.com' || password === 'wrongpassword') {
-      throw new Error('Invalid email or password');
+    // Basic email validation
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      throw new Error('Please enter a valid email address');
     }
     
-    // Try to get existing user data from storage
-    let existingUser: User | null = null;
+    if (password.length === 0) {
+      throw new Error('Please enter your password');
+    }
+    
     try {
-      const userData = await AsyncStorage.getItem(STORAGE_KEYS.USER_DATA);
-      if (userData) {
-        existingUser = JSON.parse(userData);
+      // Get registered users
+      const existingUsers = await AsyncStorage.getItem('registered_users');
+      const users = existingUsers ? JSON.parse(existingUsers) : [];
+      
+      // Find user by email
+      const user = users.find((u: any) => u.email.toLowerCase() === email.toLowerCase());
+      
+      if (!user) {
+        throw new Error('No account found with this email address');
       }
+      
+      // Check password
+      if (user.password !== password) {
+        throw new Error('Incorrect password');
+      }
+      
+      // Update last login
+      const updatedUser = {
+        ...user,
+        lastLogin: new Date().toISOString(),
+      };
+      
+      // Update user in storage
+      const updatedUsers = users.map((u: any) => 
+        u.email.toLowerCase() === email.toLowerCase() ? updatedUser : u
+      );
+      await AsyncStorage.setItem('registered_users', JSON.stringify(updatedUsers));
+      
+      // Return user data (without password)
+      const { password: _, ...userWithoutPassword } = updatedUser;
+      
+      return {
+        user: userWithoutPassword,
+        token: 'jwt_token_' + userWithoutPassword.id,
+      };
     } catch (error) {
-      console.log('No existing user data found');
+      if (error instanceof Error) {
+        throw error;
+      }
+      throw new Error('Login failed. Please check your credentials.');
     }
-    
-    // Mock successful login - use existing user data if available, otherwise create default
-    const user: User = existingUser || {
-      id: 'user123',
-      email,
-      name: 'John Doe', // Default name only for new users
-      createdAt: '2024-01-01T00:00:00Z',
-      lastLogin: new Date().toISOString(),
-    };
-    
-    // Always update the last login time
-    user.lastLogin = new Date().toISOString();
-    user.email = email; // Update email in case it changed
-    
-    return {
-      user,
-      token: 'mock_jwt_token_' + Math.random().toString(36).substr(2, 9),
-    };
   },
 
   updateProfile: async (token: string, updates: Partial<User>) => {
@@ -326,6 +394,53 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     }
   };
 
+  const clearAllUserData = async () => {
+    try {
+      // Clear all secure storage
+      await SecureStore.deleteItemAsync(STORAGE_KEYS.USER_TOKEN);
+      
+      // Clear all AsyncStorage data
+      await AsyncStorage.removeItem(STORAGE_KEYS.USER_DATA);
+      await AsyncStorage.removeItem(STORAGE_KEYS.REMEMBER_ME);
+      await AsyncStorage.removeItem(STORAGE_KEYS.BIOMETRIC_ENABLED);
+      await AsyncStorage.removeItem(STORAGE_KEYS.HAS_LOGGED_IN_BEFORE);
+      
+      // Clear app-specific data
+      await AsyncStorage.removeItem('app_initialized');
+      await AsyncStorage.removeItem('default_data_seeded');
+      await AsyncStorage.removeItem('onboarding_completed');
+      await AsyncStorage.removeItem('sync_settings');
+      await AsyncStorage.removeItem('app_settings');
+      await AsyncStorage.removeItem('notification_preferences');
+      await AsyncStorage.removeItem('reminders_data');
+      await AsyncStorage.removeItem('bills_data');
+      await AsyncStorage.removeItem('budget_data');
+      await AsyncStorage.removeItem('goals_data');
+      
+      // Clear demo mode flags
+      await AsyncStorage.removeItem('is_demo_account');
+      await AsyncStorage.removeItem('seed_demo_data');
+      
+      // Clear database by calling the service
+      const { hybridDataService } = await import('../services/hybridDataService');
+      await hybridDataService.clearAllData();
+      
+      console.log('✅ All user data cleared successfully');
+    } catch (error) {
+      console.error('Error clearing user data:', error);
+      throw error;
+    }
+  };
+
+  const clearUserAccounts = async () => {
+    try {
+      await AsyncStorage.removeItem('registered_users');
+      console.log('All user accounts cleared');
+    } catch (error) {
+      console.error('Error clearing user accounts:', error);
+    }
+  };
+
   const deleteAccount = async () => {
     try {
       const token = await SecureStore.getItemAsync(STORAGE_KEYS.USER_TOKEN);
@@ -334,7 +449,18 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       }
 
       await API.deleteAccount(token);
-      await signOut(); // Clear local data
+      
+      // Clear ALL user data from local storage
+      await clearAllUserData();
+      
+      // Sign out user
+      setState({
+        user: null,
+        isAuthenticated: false,
+        isLoading: false,
+        biometricEnabled: false,
+        rememberMe: false,
+      });
       
       return { success: true };
     } catch (error) {

@@ -588,6 +588,27 @@ class CloudSyncService {
       throw new Error('Failed to update notification preferences');
     }
   }
+
+  // Clear sync data (for account deletion)
+  async clearSyncData(): Promise<void> {
+    try {
+      console.log('🗑️ Clearing sync data...');
+      
+      // Clear sync settings from AsyncStorage
+      const AsyncStorage = await import('@react-native-async-storage/async-storage');
+      await AsyncStorage.default.removeItem('sync_enabled');
+      await AsyncStorage.default.removeItem('sync_settings');
+      await AsyncStorage.default.removeItem('last_sync_date');
+      await AsyncStorage.default.removeItem('sync_auth_token');
+      await AsyncStorage.default.removeItem('sync_user_id');
+      await AsyncStorage.default.removeItem('cloud_sync_config');
+      
+      console.log('✅ Sync data cleared successfully');
+    } catch (error) {
+      console.error('❌ Error clearing sync data:', error);
+      throw error;
+    }
+  }
 }
 
 export const cloudSyncService = new CloudSyncService();

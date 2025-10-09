@@ -700,6 +700,39 @@ class LocalStorageService {
       return null;
     }
   }
+
+  // Clear all data from database (for account deletion)
+  async clearAllData(): Promise<void> {
+    try {
+      console.log('🗑️ Clearing local database...');
+      
+      // Delete all data from tables
+      db.execSync('DELETE FROM transactions');
+      db.execSync('DELETE FROM wallets');
+      db.execSync('DELETE FROM categories');
+      
+      // Clear sync log as well
+      try {
+        db.execSync('DELETE FROM sync_log');
+      } catch (error) {
+        // Sync log table might not exist yet, that's okay
+        console.log('Sync log table not found, skipping');
+      }
+      
+      // Reset any auto-increment sequences if they exist
+      try {
+        db.execSync('DELETE FROM sqlite_sequence WHERE name IN ("transactions", "wallets", "categories", "sync_log")');
+      } catch (error) {
+        // This might fail if sequences don't exist, that's okay
+        console.log('No sequences to reset');
+      }
+      
+      console.log('✅ Local database cleared successfully');
+    } catch (error) {
+      console.error('❌ Error clearing local database:', error);
+      throw error;
+    }
+  }
 }
 
 export const localStorageService = new LocalStorageService();

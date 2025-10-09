@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -11,6 +11,7 @@ import {
   Linking,
   Modal,
 } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
@@ -19,6 +20,7 @@ import { useLocalization, Language, Currency } from '../contexts/LocalizationCon
 import { useAuth } from '../contexts/AuthContext';
 import { useNavigation } from '@react-navigation/native';
 import { notificationService } from '../services/notificationService';
+import { hybridDataService } from '../services/hybridDataService';
 
 const QuickSettingsScreen = () => {
   const { theme, isDark, toggleTheme } = useTheme();
@@ -27,10 +29,65 @@ const QuickSettingsScreen = () => {
   const navigation = useNavigation();
   const [notificationsEnabled, setNotificationsEnabled] = useState(true);
   const [isBalanceMasked, setIsBalanceMasked] = useState(false);
+  const [hiddenWallets, setHiddenWallets] = useState<string[]>([]);
+  const [wallets, setWallets] = useState<any[]>([]);
+  const [showHideBalanceDropdown, setShowHideBalanceDropdown] = useState(false);
   const [showLanguageModal, setShowLanguageModal] = useState(false);
   const [showCurrencyModal, setShowCurrencyModal] = useState(false);
 
   const styles = createStyles(theme);
+
+  useEffect(() => {
+    loadWallets();
+    loadHiddenWallets();
+  }, []);
+
+  const loadWallets = async () => {
+    try {
+      const walletsData = await hybridDataService.getWallets();
+      setWallets(walletsData);
+    } catch (error) {
+      console.error('Error loading wallets:', error);
+    }
+  };
+
+  const loadHiddenWallets = async () => {
+    try {
+      const hidden = await AsyncStorage.getItem('hiddenWallets');
+      if (hidden) {
+        setHiddenWallets(JSON.parse(hidden));
+      }
+    } catch (error) {
+      console.error('Error loading hidden wallets:', error);
+    }
+  };
+
+  const saveHiddenWallets = async (hidden: string[]) => {
+    try {
+      await AsyncStorage.setItem('hiddenWallets', JSON.stringify(hidden));
+      setHiddenWallets(hidden);
+      // Trigger re-render in other screens by updating a timestamp or using navigation events
+      // This ensures other screens refresh their wallet visibility
+    } catch (error) {
+      console.error('Error saving hidden wallets:', error);
+    }
+  };
+
+  const handleToggleWalletVisibility = (walletId: string) => {
+    const newHidden = hiddenWallets.includes(walletId)
+      ? hiddenWallets.filter(id => id !== walletId)
+      : [...hiddenWallets, walletId];
+    saveHiddenWallets(newHidden);
+  };
+
+  const handleHideAllWallets = () => {
+    const allWalletIds = wallets.map(w => w.id);
+    saveHiddenWallets(allWalletIds);
+  };
+
+  const handleShowAllWallets = () => {
+    saveHiddenWallets([]);
+  };
 
   const handleGoBack = () => {
     navigation.goBack();
@@ -604,20 +661,73 @@ const QuickSettingsScreen = () => {
             </View>
 
             <View style={styles.card}>
-              <View style={[styles.settingItem, styles.settingItemBorder]}>
+              <TouchableOpacity 
+                style={[styles.settingItem, styles.settingItemBorder]}
+                onPress={() => setShowHideBalanceDropdown(!showHideBalanceDropdown)}
+              >
                 <View style={styles.settingContent}>
                   <Ionicons name="eye-off-outline" size={20} color={theme.colors.text} />
                   <Text style={[styles.settingTitle, { color: theme.colors.text }]}>
                     {t('settings_screen_hide_balance')}
                   </Text>
                 </View>
-                <Switch
-                  value={isBalanceMasked}
-                  onValueChange={setIsBalanceMasked}
-                  trackColor={{ false: theme.colors.border, true: theme.colors.primary }}
-                  thumbColor={isBalanceMasked ? '#fff' : '#f4f3f4'}
-                />
-              </View>
+                <View style={styles.settingRight}>
+                  <Text style={[styles.settingValue, { color: theme.colors.textSecondary }]}>
+                    {hiddenWallets.length === 0 ? 'None' : 
+                     hiddenWallets.length === wallets.length ? 'All' : 
+                     `${hiddenWallets.length} wallet${hiddenWallets.length > 1 ? 's' : ''}`}
+                  </Text>
+                  <Ionicons 
+                    name={showHideBalanceDropdown ? "chevron-up" : "chevron-down"} 
+                    size={16} 
+                    color={theme.colors.textSecondary} 
+                  />
+                </View>
+              </TouchableOpacity>
+              
+              {showHideBalanceDropdown && (
+                <View style={[styles.dropdown, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
+                  <TouchableOpacity
+                    style={[styles.dropdownItem, { borderBottomColor: theme.colors.border }]}
+                    onPress={handleHideAllWallets}
+                  >
+                    <Ionicons name="eye-off-outline" size={16} color={theme.colors.text} />
+                    <Text style={[styles.dropdownItemText, { color: theme.colors.text }]}>{t('settings_screen_hide_all_wallets')}</Text>
+                    {hiddenWallets.length === wallets.length && (
+                      <Ionicons name="checkmark" size={16} color={theme.colors.primary} />
+                    )}
+                  </TouchableOpacity>
+                  
+                  <TouchableOpacity
+                    style={[styles.dropdownItem, { borderBottomColor: theme.colors.border }]}
+                    onPress={handleShowAllWallets}
+                  >
+                    <Ionicons name="eye-outline" size={16} color={theme.colors.text} />
+                    <Text style={[styles.dropdownItemText, { color: theme.colors.text }]}>{t('settings_screen_show_all_wallets')}</Text>
+                    {hiddenWallets.length === 0 && (
+                      <Ionicons name="checkmark" size={16} color={theme.colors.primary} />
+                    )}
+                  </TouchableOpacity>
+                  
+                  {wallets.map((wallet) => (
+                    <TouchableOpacity
+                      key={wallet.id}
+                      style={styles.dropdownItem}
+                      onPress={() => handleToggleWalletVisibility(wallet.id)}
+                    >
+                      <Ionicons 
+                        name={hiddenWallets.includes(wallet.id) ? "eye-off-outline" : "eye-outline"} 
+                        size={16} 
+                        color={theme.colors.text} 
+                      />
+                      <Text style={[styles.dropdownItemText, { color: theme.colors.text }]}>{wallet.name}</Text>
+                      {hiddenWallets.includes(wallet.id) && (
+                        <Ionicons name="checkmark" size={16} color={theme.colors.primary} />
+                      )}
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              )}
 
               <TouchableOpacity 
                 style={[styles.settingItem, styles.settingItemBorder]}
@@ -1072,6 +1182,22 @@ const createStyles = (theme: any) =>
       fontSize: 12,
       textAlign: 'center',
       marginBottom: 4,
+    },
+    dropdown: {
+      borderTopWidth: 1,
+      marginTop: 0,
+    },
+    dropdownItem: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      paddingHorizontal: 16,
+      paddingVertical: 12,
+      borderBottomWidth: 1,
+    },
+    dropdownItemText: {
+      fontSize: 14,
+      marginLeft: 12,
+      flex: 1,
     },
   });
 

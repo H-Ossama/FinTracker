@@ -25,8 +25,7 @@ const signUpSchema = yup.object().shape({
     .string()
     .required('Full name is required')
     .min(2, 'Name must be at least 2 characters')
-    .max(50, 'Name must be less than 50 characters')
-    .matches(/^[a-zA-Z\s]+$/, 'Name can only contain letters and spaces'),
+    .max(50, 'Name must be less than 50 characters'),
   email: yup
     .string()
     .required('Email is required')
@@ -35,11 +34,7 @@ const signUpSchema = yup.object().shape({
   password: yup
     .string()
     .required('Password is required')
-    .min(8, 'Password must be at least 8 characters')
-    .matches(
-      /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]/,
-      'Password must contain uppercase, lowercase, number and special character'
-    ),
+    .min(6, 'Password must be at least 6 characters'),
   confirmPassword: yup
     .string()
     .required('Please confirm your password')
@@ -47,7 +42,7 @@ const signUpSchema = yup.object().shape({
   agreeToTerms: yup
     .boolean()
     .required('You must agree to the Terms of Service and Privacy Policy')
-    .oneOf([true], 'You must agree to the Terms of Service and Privacy Policy'),
+    .test('agree-terms', 'You must agree to the Terms of Service and Privacy Policy', (value) => value === true),
 });
 
 interface SignUpFormData {
@@ -66,7 +61,6 @@ const SignUpScreen: React.FC<SignUpScreenProps> = ({ navigation }) => {
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
-  const [acceptTerms, setAcceptTerms] = useState(false);
   
   const { signUp } = useAuth();
   const { theme } = useTheme();
@@ -77,6 +71,7 @@ const SignUpScreen: React.FC<SignUpScreenProps> = ({ navigation }) => {
     handleSubmit,
     formState: { errors, isValid },
     watch,
+    setValue,
   } = useForm<SignUpFormData>({
     resolver: yupResolver(signUpSchema),
     mode: 'onChange',
@@ -90,6 +85,7 @@ const SignUpScreen: React.FC<SignUpScreenProps> = ({ navigation }) => {
   });
 
   const password = watch('password');
+  const agreeToTerms = watch('agreeToTerms');
 
   // Password strength indicator
   const getPasswordStrength = (password: string) => {
@@ -318,27 +314,34 @@ const SignUpScreen: React.FC<SignUpScreenProps> = ({ navigation }) => {
 
           {/* Terms and Privacy */}
           <View style={styles.termsContainer}>
-            <TouchableOpacity
-              style={styles.termsCheckboxContainer}
-              onPress={() => setAcceptTerms(!acceptTerms)}
-            >
-              <View style={[styles.modernCheckbox, acceptTerms && styles.checkboxChecked]}>
-                {acceptTerms && <Ionicons name="checkmark" size={14} color="#FFF" />}
-              </View>
-              <Text style={[styles.termsText, { color: theme.colors.textSecondary }]}>
-                I agree to the{' '}
-                <Text style={styles.linkText}>Terms of Service</Text>
-                {' '}and{' '}
-                <Text style={styles.linkText}>Privacy Policy</Text>
-              </Text>
-            </TouchableOpacity>
+            <Controller
+              control={control}
+              name="agreeToTerms"
+              render={({ field: { onChange, value } }) => (
+                <TouchableOpacity
+                  style={styles.termsCheckboxContainer}
+                  onPress={() => onChange(!value)}
+                >
+                  <View style={[styles.modernCheckbox, value && styles.checkboxChecked]}>
+                    {value && <Ionicons name="checkmark" size={14} color="#FFF" />}
+                  </View>
+                  <Text style={[styles.termsText, { color: theme.colors.textSecondary }]}>
+                    I agree to the{' '}
+                    <Text style={styles.linkText} onPress={openTermsOfService}>Terms of Service</Text>
+                    {' '}and{' '}
+                    <Text style={styles.linkText} onPress={openPrivacyPolicy}>Privacy Policy</Text>
+                  </Text>
+                </TouchableOpacity>
+              )}
+            />
+            {errors.agreeToTerms && <Text style={styles.errorText}>{errors.agreeToTerms.message}</Text>}
           </View>
 
           {/* Sign Up Button */}
           <TouchableOpacity
-            style={[styles.modernSignUpButton, (!isValid || isLoading || !acceptTerms) && styles.buttonDisabled]}
+            style={[styles.modernSignUpButton, (!isValid || isLoading) && styles.buttonDisabled]}
             onPress={handleSubmit(onSubmit)}
-            disabled={!isValid || isLoading || !acceptTerms}
+            disabled={!isValid || isLoading}
           >
             {isLoading ? (
               <ActivityIndicator color="#FFF" size="small" />
