@@ -1,3 +1,6 @@
+// Import console override first to silence production logs
+import './src/utils/consoleOverride';
+
 import React, { useEffect, useState } from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { createStackNavigator } from '@react-navigation/stack';
@@ -7,7 +10,6 @@ import { View, Text, ActivityIndicator, StyleSheet } from 'react-native';
 
 import SwipeableBottomTabNavigator from './src/components/SwipeableBottomTabNavigator';
 import AddIncomeScreen from './src/screens/AddIncomeScreen';
-import RemindersScreen from './src/screens/RemindersScreen';
 import BorrowedMoneyHistoryScreen from './src/screens/BorrowedMoneyHistoryScreen';
 import TransactionsHistoryScreen from './src/screens/TransactionsHistoryScreen';
 import NotificationCenterScreen from './src/screens/NotificationCenterScreen';
@@ -18,6 +20,8 @@ import UserProfileScreen from './src/screens/UserProfileScreen';
 import SavingsGoalsScreen from './src/screens/SavingsGoalsScreen';
 import QuickSettingsScreen from './src/screens/QuickSettingsScreen';
 import AppLockSettingsScreen from './src/screens/AppLockSettingsScreen';
+import BillsTrackerScreen from './src/screens/BillsTrackerScreen';
+import BudgetPlannerScreen from './src/screens/BudgetPlannerScreen';
 import { ThemeProvider, useTheme } from './src/contexts/ThemeContext';
 import { LocalizationProvider } from './src/contexts/LocalizationContext';
 import { AuthProvider, useAuth } from './src/contexts/AuthContext';
@@ -44,17 +48,6 @@ const AppNavigator = () => {
           <>
             <Stack.Screen name="TabNavigator" component={SwipeableBottomTabNavigator} />
             <Stack.Screen name="AddIncome" component={AddIncomeScreen} />
-            <Stack.Screen 
-              name="Reminders" 
-              component={RemindersScreen}
-              options={{ 
-                headerShown: true,
-                title: 'Reminders',
-                headerStyle: { backgroundColor: isDark ? '#374151' : '#FFFFFF' },
-                headerTitleStyle: { color: isDark ? '#FFFFFF' : '#1F2937' },
-                headerTintColor: isDark ? '#FFFFFF' : '#1F2937',
-              }}
-            />
             <Stack.Screen 
               name="BorrowedMoneyHistory" 
               component={BorrowedMoneyHistoryScreen}
@@ -114,6 +107,20 @@ const AppNavigator = () => {
               options={{ 
                 headerShown: false,
                 presentation: 'modal',
+              }}
+            />
+            <Stack.Screen 
+              name="BillsReminder" 
+              component={BillsTrackerScreen}
+              options={{ 
+                headerShown: false,
+              }}
+            />
+            <Stack.Screen 
+              name="BudgetPlanner" 
+              component={BudgetPlannerScreen}
+              options={{ 
+                headerShown: false,
               }}
             />
           </>

@@ -929,9 +929,9 @@ const NotificationPreferencesScreen = () => {
             </Text>
             
             <View style={styles.timeButtonsContainer}>
-              {['20:00', '21:00', '22:00', '23:00', '00:00'].map((time) => (
+              {['20:00', '21:00', '22:00', '23:00', '00:00'].map((time, index) => (
                 <TouchableOpacity
-                  key={time}
+                  key={`evening-time-${time}-${index}`}
                   style={[
                     styles.timeButton,
                     { 
@@ -978,9 +978,9 @@ const NotificationPreferencesScreen = () => {
             </Text>
             
             <View style={styles.timeButtonsContainer}>
-              {['06:00', '07:00', '08:00', '09:00', '10:00'].map((time) => (
+              {['06:00', '07:00', '08:00', '09:00', '10:00'].map((time, index) => (
                 <TouchableOpacity
-                  key={time}
+                  key={`morning-time-${time}-${index}`}
                   style={[
                     styles.timeButton,
                     { 

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -16,6 +16,7 @@ import Svg, { Circle, Path, Text as SvgText, Defs, RadialGradient, Stop } from '
 import { analyticsService, SpendingCategory, SpendingData, Recommendation, TrendData, TrendPoint } from '../services/analyticsService';
 import { useTheme } from '../contexts/ThemeContext';
 import { useLocalization } from '../contexts/LocalizationContext';
+import { useFocusEffect } from '@react-navigation/native';
 
 const { width } = Dimensions.get('window');
 const chartSize = width * 0.95;
@@ -75,6 +76,13 @@ const InsightsScreen = () => {
   useEffect(() => {
     fetchData();
   }, [selectedPeriod]);
+
+  // Refresh data when screen comes into focus (e.g., after bill payment)
+  useFocusEffect(
+    useCallback(() => {
+      fetchData();
+    }, [selectedPeriod])
+  );
   
   // Function to fetch data from analytics service
   const fetchData = async () => {

@@ -22,9 +22,10 @@ import { useNavigation } from '@react-navigation/native';
 import { SyncSettingsModal } from '../components/SyncSettingsModal';
 import { notificationService } from '../services/notificationService';
 import { GoalsService } from '../services/goalsService';
-import { reminderService } from '../services/reminderService';
-import { Goal } from '../types';
-import { Reminder } from './RemindersScreen';
+import { billsService } from '../services/billsService';
+import { budgetService } from '../services/budgetService';
+import { dataInitializationService } from '../services/dataInitializationService';
+import { Goal, Bill } from '../types';
 
 const MoreScreen = () => {
   const { theme } = useTheme();
@@ -35,15 +36,18 @@ const MoreScreen = () => {
   const [showSyncModal, setShowSyncModal] = useState(false);
   const [goals, setGoals] = useState<Goal[]>([]);
   const [goalsLoading, setGoalsLoading] = useState(true);
-  const [enhancedReminders, setEnhancedReminders] = useState<Reminder[]>([]);
-  const [remindersLoading, setRemindersLoading] = useState(true);
-  const [reminderDropdownVisible, setReminderDropdownVisible] = useState(false);
+  const [bills, setBills] = useState<Bill[]>([]);
+  const [billsLoading, setBillsLoading] = useState(true);
+  const [billsDropdownVisible, setBillsDropdownVisible] = useState(false);
+  const [dataStats, setDataStats] = useState<any>(null);
 
   const styles = createStyles(theme);
 
   useEffect(() => {
     loadGoals();
-    loadReminders();
+    loadBills();
+    loadDataStats();
+    initializeSampleData();
   }, []);
 
   const loadGoals = async () => {
@@ -58,110 +62,33 @@ const MoreScreen = () => {
     }
   };
 
-  const loadReminders = async () => {
+  const loadDataStats = async () => {
     try {
-      setRemindersLoading(true);
-      // Mock enhanced reminders data for demo
-      const mockEnhancedReminders: Reminder[] = [
-        {
-          id: '1',
-          title: 'Monthly Rent',
-          description: 'Pay monthly rent',
-          amount: 1200,
-          dueDate: new Date(2025, 9, 15),
-          frequency: 'MONTHLY',
-          status: 'PENDING',
-          isActive: true,
-          isRecurring: true,
-          autoCreateTransaction: true,
-          transactionType: 'EXPENSE',
-          walletId: 'wallet1',
-          categoryId: 'category1',
-          notifyBefore: 60,
-          enablePushNotification: true,
-          enableEmailNotification: false,
-          completedCount: 8,
-          nextDue: new Date(2025, 10, 15),
-          category: {
-            id: 'category1',
-            name: 'Housing',
-            icon: 'home',
-            color: '#3B82F6',
-          },
-        },
-        {
-          id: '2',
-          title: 'Gym Membership',
-          description: 'Monthly gym payment',
-          amount: 45,
-          dueDate: new Date(2025, 9, 20),
-          frequency: 'MONTHLY',
-          status: 'OVERDUE',
-          isActive: true,
-          isRecurring: true,
-          autoCreateTransaction: false,
-          notifyBefore: 120,
-          enablePushNotification: true,
-          enableEmailNotification: false,
-          completedCount: 3,
-          category: {
-            id: 'category2',
-            name: 'Health & Fitness',
-            icon: 'fitness',
-            color: '#10B981',
-          },
-        },
-        {
-          id: '3',
-          title: 'Weekly Groceries',
-          description: 'Grocery shopping reminder',
-          dueDate: new Date(2025, 9, 12),
-          frequency: 'WEEKLY',
-          status: 'PENDING',
-          isActive: true,
-          isRecurring: true,
-          autoCreateTransaction: false,
-          notifyBefore: 30,
-          enablePushNotification: true,
-          enableEmailNotification: false,
-          completedCount: 15,
-          nextDue: new Date(2025, 9, 19),
-          category: {
-            id: 'category3',
-            name: 'Groceries',
-            icon: 'basket',
-            color: '#F59E0B',
-          },
-        },
-        {
-          id: '4',
-          title: 'Quarterly Insurance',
-          description: 'Car insurance payment',
-          amount: 350,
-          dueDate: new Date(2025, 11, 1),
-          frequency: 'QUARTERLY',
-          status: 'PENDING',
-          isActive: true,
-          isRecurring: true,
-          autoCreateTransaction: true,
-          transactionType: 'EXPENSE',
-          notifyBefore: 7 * 24 * 60, // 7 days before
-          enablePushNotification: true,
-          enableEmailNotification: true,
-          completedCount: 2,
-          category: {
-            id: 'category4',
-            name: 'Insurance',
-            icon: 'shield-checkmark',
-            color: '#8B5CF6',
-          },
-        },
-      ];
-      setEnhancedReminders(mockEnhancedReminders);
+      const stats = await dataInitializationService.getDataStats();
+      setDataStats(stats);
     } catch (error) {
-      console.error('Error loading reminders:', error);
+      console.error('Error loading data stats:', error);
+    }
+  };
+
+  const initializeSampleData = async () => {
+    try {
+      await dataInitializationService.initializeSampleData();
+      await loadDataStats(); // Refresh stats after initialization
+    } catch (error) {
+      console.error('Error initializing sample data:', error);
+    }
+  };
+
+  const loadBills = async () => {
+    try {
+      setBillsLoading(true);
+      const billsData = await billsService.getAllBills();
+      setBills(billsData);
+    } catch (error) {
+      console.error('Error loading bills:', error);
     } finally {
-      setRemindersLoading(false);
+      setBillsLoading(false);
     }
   };
 
@@ -184,19 +111,19 @@ const MoreScreen = () => {
     navigation.navigate('QuickSettings' as never);
   };
 
-  const toggleReminderDropdown = () => {
-    setReminderDropdownVisible(!reminderDropdownVisible);
+  const toggleBillsDropdown = () => {
+    setBillsDropdownVisible(!billsDropdownVisible);
   };
 
   const handleDropdownAction = (action: string) => {
-    setReminderDropdownVisible(false);
+    setBillsDropdownVisible(false);
     
     switch (action) {
       case 'viewAll':
-        navigation.navigate('Reminders' as never);
+        navigation.navigate('BillsReminder' as never);
         break;
       case 'addNew':
-        navigation.navigate('Reminders' as never); // Will trigger add modal
+        navigation.navigate('BillsReminder' as never); // Will trigger add modal
         break;
       case 'notifications':
         navigation.navigate('NotificationPreferences' as never);
@@ -220,24 +147,17 @@ const MoreScreen = () => {
           badge: goals.length.toString(),
         },
         {
-          id: 'reminders',
-          title: 'Payment Reminders',
-          subtitle: `${enhancedReminders.filter(r => r.status === 'PENDING' || r.status === 'OVERDUE').length} upcoming`,
-          icon: 'alarm',
-          color: '#FF9500',
-          badge: enhancedReminders.filter(r => r.status === 'PENDING' || r.status === 'OVERDUE').length.toString(),
-        },
-        {
           id: 'bills',
-          title: 'Bills Tracker',
-          subtitle: 'Manage recurring payments',
+          title: 'Bills Reminder',
+          subtitle: `${dataStats?.billsCount || 0} bills, ${dataStats?.overdueBills || 0} overdue`,
           icon: 'calendar',
           color: '#7ED321',
+          badge: dataStats?.overdueBills > 0 ? dataStats.overdueBills.toString() : undefined,
         },
         {
           id: 'budget',
           title: 'Budget Planner',
-          subtitle: 'Set monthly budgets',
+          subtitle: `${dataStats?.budgetsCount || 0} categories budgeted`,
           icon: 'pie-chart',
           color: '#9013FE',
         },
@@ -278,10 +198,12 @@ const MoreScreen = () => {
       onPress={() => {
         if (item.id === 'backup') {
           setShowSyncModal(true);
-        } else if (item.id === 'reminders') {
-          navigation.navigate('Reminders' as never);
         } else if (item.id === 'goals') {
           navigation.navigate('SavingsGoals' as never);
+        } else if (item.id === 'bills') {
+          navigation.navigate('BillsReminder' as never);
+        } else if (item.id === 'budget') {
+          navigation.navigate('BudgetPlanner' as never);
         }
         // Add other navigation handlers here as needed
       }}
@@ -358,13 +280,13 @@ const MoreScreen = () => {
     );
   };
 
-  const renderEnhancedReminderCard = (reminder: Reminder, index: number) => {
-    const isOverdue = reminder.status === 'OVERDUE' || 
-      (reminder.status === 'PENDING' && new Date(reminder.dueDate) < new Date());
-    const isPending = reminder.status === 'PENDING';
-    const isCompleted = reminder.status === 'COMPLETED';
+  const renderBillCard = (bill: Bill, index: number) => {
+    const isOverdue = bill.status === 'overdue';
+    const isPending = bill.status === 'pending';
+    const isUpcoming = bill.status === 'upcoming';
     
-    const formatDateDistance = (date: Date): string => {
+    const formatDateDistance = (dateString: string): string => {
+      const date = new Date(dateString);
       const now = new Date();
       const diffTime = date.getTime() - now.getTime();
       const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
@@ -380,20 +302,17 @@ const MoreScreen = () => {
       if (isOverdue) return {
         color: '#FF6B6B',
         bgColor: '#FFE4E1',
-        icon: 'warning',
-        gradient: ['#FF6B6B', '#FF5252']
+        icon: 'warning'
       };
       if (isPending) return {
         color: '#FF9800',
         bgColor: '#FFF3E0',
-        icon: 'time',
-        gradient: ['#FF9800', '#F57C00']
+        icon: 'time'
       };
       return {
         color: '#4CAF50',
         bgColor: '#E8F5E8',
-        icon: 'checkmark-circle',
-        gradient: ['#4CAF50', '#388E3C']
+        icon: 'calendar'
       };
     };
     
@@ -401,18 +320,16 @@ const MoreScreen = () => {
     
     return (
       <TouchableOpacity 
-        key={reminder.id} 
+        key={bill.id} 
         style={[styles.modernReminderCard, { backgroundColor: theme.colors.card, borderColor: theme.colors.border }]}
-        onPress={() => navigation.navigate('Reminders' as never)}
+        onPress={() => navigation.navigate('BillsReminder' as never)}
       >
         <LinearGradient
           colors={theme.isDark ? [theme.colors.card, theme.colors.surface] : ['#FFFFFF', '#FAFAFA']}
           style={styles.reminderCardGradient}
         >
-          {/* Status indicator bar */}
           <View style={[styles.statusIndicatorBar, { backgroundColor: statusConfig.color }]} />
           
-          {/* Header */}
           <View style={styles.reminderCardHeader}>
             <View style={styles.reminderMainInfo}>
               <View style={[styles.statusIconContainer, { backgroundColor: statusConfig.bgColor }]}>
@@ -420,58 +337,46 @@ const MoreScreen = () => {
               </View>
               <View style={styles.reminderTextContent}>
                 <Text style={[styles.reminderTitleModern, { color: theme.colors.text }]} numberOfLines={1}>
-                  {reminder.title}
+                  {bill.title}
                 </Text>
                 <View style={styles.reminderMetaInfo}>
                   <Text style={[styles.reminderFrequency, { color: theme.colors.textSecondary }]}>
-                    {reminder.frequency.toLowerCase()}
+                    {bill.frequency}
                   </Text>
                   <View style={styles.metaDivider} />
                   <Text style={[styles.reminderDueDate, { 
                     color: isOverdue ? '#FF6B6B' : theme.colors.textSecondary 
                   }]}>
-                    {formatDateDistance(new Date(reminder.dueDate))}
+                    {formatDateDistance(bill.dueDate)}
                   </Text>
                 </View>
               </View>
             </View>
-            {reminder.amount && (
-              <View style={styles.amountContainer}>
-                <Text style={[styles.reminderAmountModern, { color: theme.colors.text }]}>
-                  {formatCurrency(reminder.amount)}
-                </Text>
-              </View>
-            )}
+            <View style={styles.amountContainer}>
+              <Text style={[styles.reminderAmountModern, { color: theme.colors.text }]}>
+                {formatCurrency(bill.amount)}
+              </Text>
+            </View>
           </View>
           
-          {/* Footer with category and badges */}
           <View style={styles.reminderCardFooter}>
-            {reminder.category && (
-              <View style={styles.categoryInfo}>
-                <View style={[styles.categoryIconContainer, { backgroundColor: reminder.category.color + '20' }]}>
-                  <Ionicons 
-                    name={reminder.category.icon as any} 
-                    size={12} 
-                    color={reminder.category.color} 
-                  />
-                </View>
-                <Text style={[styles.categoryName, { color: theme.colors.textSecondary }]}>
-                  {reminder.category.name}
-                </Text>
-              </View>
-            )}
+            <View style={styles.categoryInfo}>
+              <Text style={[styles.categoryName, { color: theme.colors.textSecondary }]}>
+                {bill.category}
+              </Text>
+            </View>
             
             <View style={styles.badgeContainer}>
-              {reminder.isRecurring && (
-                <View style={styles.recurringBadgeModern}>
-                  <Ionicons name="repeat" size={10} color="#6C63FF" />
-                  <Text style={styles.recurringTextModern}>Recurring</Text>
+              {bill.isRecurring && (
+                <View style={[styles.badge, { backgroundColor: '#E3F2FD' }]}>
+                  <Ionicons name="repeat" size={10} color="#1976D2" />
+                  <Text style={[styles.badgeText, { color: '#1976D2' }]}>Recurring</Text>
                 </View>
               )}
-              {isOverdue && (
-                <View style={styles.overdueBadge}>
-                  <Ionicons name="alert-circle" size={10} color="#FF6B6B" />
-                  <Text style={styles.overdueTextModern}>Overdue</Text>
+              {bill.remindersPerDay > 1 && (
+                <View style={[styles.badge, { backgroundColor: '#FFF3E0' }]}>
+                  <Ionicons name="notifications" size={10} color="#F57C00" />
+                  <Text style={[styles.badgeText, { color: '#F57C00' }]}>{bill.remindersPerDay}x daily</Text>
                 </View>
               )}
             </View>
@@ -531,7 +436,11 @@ const MoreScreen = () => {
             </View>
             <View style={styles.overviewCard}>
               <Text style={styles.overviewTitle}>Pending Bills</Text>
-              <Text style={styles.overviewValue}>{enhancedReminders.filter(r => r.status === 'PENDING' || r.status === 'OVERDUE').length}</Text>
+              <Text style={styles.overviewValue}>{dataStats?.pendingBills || 0}</Text>
+            </View>
+            <View style={styles.overviewCard}>
+              <Text style={styles.overviewTitle}>Monthly Budget</Text>
+              <Text style={styles.overviewValue}>${dataStats?.totalBudgetAmount?.toFixed(0) || '0'}</Text>
             </View>
           </View>
 
@@ -564,24 +473,24 @@ const MoreScreen = () => {
             </ScrollView>
           </View>
 
-          {/* Upcoming Reminders */}
+          {/* Bills Reminder */}
           <View style={styles.section}>
             <View style={styles.sectionHeader}>
-              <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>Upcoming Reminders</Text>
+              <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>Bills Reminder</Text>
               <View style={styles.manageReminderContainer}>
                 <TouchableOpacity 
                   style={[styles.manageButton, { backgroundColor: theme.colors.primary }]}
-                  onPress={toggleReminderDropdown}
+                  onPress={toggleBillsDropdown}
                 >
                   <Ionicons name="settings-outline" size={16} color="white" />
                   <Text style={[styles.manageButtonText, { color: 'white' }]}>Manage</Text>
                   <Ionicons 
-                    name={reminderDropdownVisible ? "chevron-up" : "chevron-down"} 
+                    name={billsDropdownVisible ? "chevron-up" : "chevron-down"} 
                     size={16} 
                     color="white" 
                   />
                 </TouchableOpacity>
-                {reminderDropdownVisible && (
+                {billsDropdownVisible && (
                   <View style={[styles.reminderDropdown, { backgroundColor: theme.colors.card, borderColor: theme.colors.border }]}>
                     <TouchableOpacity
                       style={[styles.dropdownItem, { borderBottomColor: theme.colors.border }]}
@@ -589,7 +498,7 @@ const MoreScreen = () => {
                       activeOpacity={0.7}
                     >
                       <Ionicons name="list-outline" size={18} color={theme.colors.text} />
-                      <Text style={[styles.dropdownItemText, { color: theme.colors.text }]}>View All Reminders</Text>
+                      <Text style={[styles.dropdownItemText, { color: theme.colors.text }]}>View All Bills</Text>
                     </TouchableOpacity>
                     <TouchableOpacity
                       style={[styles.dropdownItem, { borderBottomColor: theme.colors.border }]}
@@ -597,7 +506,7 @@ const MoreScreen = () => {
                       activeOpacity={0.7}
                     >
                       <Ionicons name="add-outline" size={18} color={theme.colors.text} />
-                      <Text style={[styles.dropdownItemText, { color: theme.colors.text }]}>Add New Reminder</Text>
+                      <Text style={[styles.dropdownItemText, { color: theme.colors.text }]}>Add New Bill</Text>
                     </TouchableOpacity>
                     <TouchableOpacity
                       style={[styles.dropdownItem, { borderBottomColor: theme.colors.border }]}
@@ -607,49 +516,41 @@ const MoreScreen = () => {
                       <Ionicons name="notifications-outline" size={18} color={theme.colors.text} />
                       <Text style={[styles.dropdownItemText, { color: theme.colors.text }]}>Notification Settings</Text>
                     </TouchableOpacity>
-                    <TouchableOpacity
-                      style={styles.dropdownItem}
-                      onPress={() => handleDropdownAction('settings')}
-                      activeOpacity={0.7}
-                    >
-                      <Ionicons name="settings-outline" size={18} color={theme.colors.text} />
-                      <Text style={[styles.dropdownItemText, { color: theme.colors.text }]}>Settings</Text>
-                    </TouchableOpacity>
                   </View>
                 )}
               </View>
             </View>
             
-            {remindersLoading ? (
+            {billsLoading ? (
               <View style={styles.reminderLoadingCard}>
                 <View style={styles.loadingIndicator}>
                   <View style={styles.loadingDot} />
                   <View style={styles.loadingDot} />
                   <View style={styles.loadingDot} />
                 </View>
-                <Text style={[styles.loadingText, { color: theme.colors.textSecondary }]}>Loading your reminders...</Text>
+                <Text style={[styles.loadingText, { color: theme.colors.textSecondary }]}>Loading your bills...</Text>
               </View>
-            ) : enhancedReminders.length === 0 ? (
+            ) : bills.length === 0 ? (
               <View style={styles.emptyRemindersCard}>
                 <LinearGradient
                   colors={['#F8F9FA', '#E9ECEF']}
                   style={styles.emptyStateGradient}
                 >
                   <View style={styles.emptyIconContainer}>
-                    <Ionicons name="notifications-outline" size={40} color="#6C63FF" />
+                    <Ionicons name="calendar-outline" size={40} color="#6C63FF" />
                   </View>
-                  <Text style={styles.emptyRemindersTitle}>No upcoming reminders</Text>
+                  <Text style={styles.emptyRemindersTitle}>No bills added</Text>
                   <Text style={styles.emptyRemindersSubtitle}>Stay on top of your bills and payments</Text>
                   <TouchableOpacity 
                     style={styles.addReminderButton}
-                    onPress={() => navigation.navigate('Reminders' as never)}
+                    onPress={() => navigation.navigate('BillsReminder' as never)}
                   >
                     <LinearGradient
                       colors={['#6C63FF', '#5A52FF']}
                       style={styles.addButtonGradient}
                     >
                       <Ionicons name="add" size={18} color="white" />
-                      <Text style={styles.addReminderButtonText}>Add Your First Reminder</Text>
+                      <Text style={styles.addReminderButtonText}>Add Your First Bill</Text>
                     </LinearGradient>
                   </TouchableOpacity>
                 </LinearGradient>
@@ -668,7 +569,7 @@ const MoreScreen = () => {
                           <Ionicons name="time" size={16} color="#FF6B6B" />
                         </View>
                         <Text style={[styles.statValue, { color: theme.colors.text }]}>
-                          {enhancedReminders.filter(r => r.status === 'PENDING').length}
+                          {bills.filter(b => b.status === 'pending').length}
                         </Text>
                         <Text style={[styles.statLabel, { color: theme.colors.textSecondary }]}>Pending</Text>
                       </View>
@@ -680,7 +581,7 @@ const MoreScreen = () => {
                           <Ionicons name="warning" size={16} color="#FF9800" />
                         </View>
                         <Text style={[styles.statValue, { color: theme.colors.text }]}>
-                          {enhancedReminders.filter(r => r.status === 'OVERDUE').length}
+                          {bills.filter(b => b.status === 'overdue').length}
                         </Text>
                         <Text style={[styles.statLabel, { color: theme.colors.textSecondary }]}>Overdue</Text>
                       </View>
@@ -692,7 +593,7 @@ const MoreScreen = () => {
                           <Ionicons name="repeat" size={16} color="#4CAF50" />
                         </View>
                         <Text style={[styles.statValue, { color: theme.colors.text }]}>
-                          {enhancedReminders.filter(r => r.isRecurring).length}
+                          {bills.filter(b => b.isRecurring).length}
                         </Text>
                         <Text style={[styles.statLabel, { color: theme.colors.textSecondary }]}>Recurring</Text>
                       </View>
@@ -700,31 +601,31 @@ const MoreScreen = () => {
                   </LinearGradient>
                 </View>
 
-                {/* Reminder Cards */}
+                {/* Bill Cards */}
                 <View style={styles.reminderCardsContainer}>
-                  {enhancedReminders
-                    .filter(r => r.status === 'PENDING' || r.status === 'OVERDUE')
+                  {bills
+                    .filter(b => b.status === 'pending' || b.status === 'overdue')
                     .sort((a, b) => {
                       // Sort by status (overdue first) then by due date
-                      if (a.status === 'OVERDUE' && b.status !== 'OVERDUE') return -1;
-                      if (b.status === 'OVERDUE' && a.status !== 'OVERDUE') return 1;
+                      if (a.status === 'overdue' && b.status !== 'overdue') return -1;
+                      if (b.status === 'overdue' && a.status !== 'overdue') return 1;
                       return new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime();
                     })
                     .slice(0, 3)
-                    .map(renderEnhancedReminderCard)}
+                    .map(renderBillCard)}
                 </View>
                 
-                {enhancedReminders.filter(r => r.status === 'PENDING' || r.status === 'OVERDUE').length > 3 && (
+                {bills.filter(b => b.status === 'pending' || b.status === 'overdue').length > 3 && (
                   <TouchableOpacity 
                     style={styles.viewAllRemindersButton}
-                    onPress={() => navigation.navigate('Reminders' as never)}
+                    onPress={() => navigation.navigate('BillsReminder' as never)}
                   >
                     <LinearGradient
                       colors={theme.isDark ? [theme.colors.surface, theme.colors.card] : ['#F8F9FA', '#E9ECEF']}
                       style={styles.viewAllGradient}
                     >
                       <Text style={[styles.viewAllText, { color: theme.colors.text }]}>
-                        View all {enhancedReminders.filter(r => r.status === 'PENDING' || r.status === 'OVERDUE').length} reminders
+                        View all {bills.filter(b => b.status === 'pending' || b.status === 'overdue').length} bills
                       </Text>
                       <Ionicons name="arrow-forward" size={16} color={theme.colors.primary} />
                     </LinearGradient>
@@ -787,28 +688,33 @@ const createStyles = (theme: any) => StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     marginBottom: 24,
+    flexWrap: 'wrap',
   },
   overviewCard: {
     backgroundColor: theme.colors.card,
     borderRadius: 12,
-    padding: 20,
-    flex: 0.48,
+    padding: 16,
+    flex: 0.31,
+    minWidth: 100,
     alignItems: 'center',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
     shadowRadius: 4,
     elevation: 2,
-  },
-  overviewTitle: {
-    fontSize: 14,
-    color: theme.colors.textSecondary,
     marginBottom: 8,
   },
+  overviewTitle: {
+    fontSize: 12,
+    color: theme.colors.textSecondary,
+    marginBottom: 6,
+    textAlign: 'center',
+  },
   overviewValue: {
-    fontSize: 24,
+    fontSize: 20,
     fontWeight: 'bold',
     color: theme.colors.text,
+    textAlign: 'center',
   },
   section: {
     marginBottom: 24,
