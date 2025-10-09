@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -7,17 +7,21 @@ import {
   TouchableOpacity,
   Switch,
   Alert,
-  Animated,
-  Dimensions,
+  TextInput,
+  Platform,
+  Linking,
+  Modal,
+  KeyboardAvoidingView,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
-import { MaterialIcons } from '@expo/vector-icons';
+import { Ionicons } from '@expo/vector-icons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as Notifications from 'expo-notifications';
 import { useTheme } from '../contexts/ThemeContext';
 import { useNavigation } from '@react-navigation/native';
+import { useNotification } from '../contexts/NotificationContext';
 import { notificationService } from '../services/notificationService';
-
-const { width } = Dimensions.get('window');
 
 interface NotificationPreferences {
   enablePushNotifications: boolean;
@@ -39,27 +43,25 @@ interface NotificationPreferences {
     weeklyReport: boolean;
     monthlyReport: boolean;
   };
+  testNotifications: boolean;
 }
 
 const NotificationPreferencesScreen = () => {
   const { theme, isDark } = useTheme();
   const navigation = useNavigation();
-  const fadeAnim = useRef(new Animated.Value(0)).current;
-  const slideAnim = useRef(new Animated.Value(50)).current;
-  const [activeSection, setActiveSection] = useState<string | null>(null);
-  
+  const { addNotification } = useNotification();
   const [preferences, setPreferences] = useState<NotificationPreferences>({
     enablePushNotifications: true,
     enableEmailNotifications: false,
     quietHours: {
-      enabled: true,
+      enabled: false,
       startTime: '22:00',
       endTime: '08:00',
     },
     categories: {
       transactions: true,
       budgets: true,
-      goals: false,
+      goals: true,
       reminders: true,
       alerts: true,
     },
@@ -68,363 +70,941 @@ const NotificationPreferencesScreen = () => {
       weeklyReport: true,
       monthlyReport: true,
     },
+    testNotifications: true,
   });
+  
+  const [isLoading, setIsLoading] = useState(false);
+  const [testNotificationText, setTestNotificationText] = useState('This is a test notification');
+  const [showStartTimePicker, setShowStartTimePicker] = useState(false);
+  const [showEndTimePicker, setShowEndTimePicker] = useState(false);
+  const [tempStartTime, setTempStartTime] = useState('22:00');
+  const [tempEndTime, setTempEndTime] = useState('08:00');
 
   const styles = createStyles(theme);
 
-  React.useEffect(() => {
-    Animated.parallel([
-      Animated.timing(fadeAnim, {
-        toValue: 1,
-        duration: 800,
-        useNativeDriver: true,
-      }),
-      Animated.timing(slideAnim, {
-        toValue: 0,
-        duration: 600,
-        useNativeDriver: true,
-      }),
-    ]).start();
+  useEffect(() => {
+    loadPreferences();
   }, []);
+
+  const loadPreferences = async () => {
+    try {
+      const savedPreferences = await AsyncStorage.getItem('notificationPreferences');
+      if (savedPreferences) {
+        const parsed = JSON.parse(savedPreferences);
+        setPreferences(parsed);
+      }
+      
+      // Also check system notification permissions
+      const permissionStatus = await Notifications.getPermissionsAsync();
+      if (!permissionStatus.granted) {
+        setPreferences(prev => ({
+          ...prev,
+          enablePushNotifications: false
+        }));
+      }
+    } catch (error) {
+      console.error('Error loading preferences:', error);
+    }
+  };
+
+  const showComingSoon = (feature: string) => {
+    Alert.alert(
+      '🚧 Coming Soon!',
+      `${feature} functionality is coming in a future update. We're working hard to bring you this feature!`,
+      [
+        { text: 'Got it!', style: 'default' },
+        { 
+          text: 'Notify Me', 
+          onPress: () => {
+            Alert.alert(
+              '🔔 Notification Set',
+              `We'll notify you when ${feature} is available!`,
+              [{ text: 'Thanks!' }]
+            );
+          }
+        }
+      ]
+    );
+  };
+
+  const handleEmailNotificationToggle = (value: boolean) => {
+    if (value) {
+      showComingSoon('Email Notifications');
+      return;
+    }
+    updatePreference('enableEmailNotifications', value);
+  };
+
+  const formatTime = (time: string): string => {
+    const [hours, minutes] = time.split(':');
+    const hour = parseInt(hours);
+    const ampm = hour >= 12 ? 'PM' : 'AM';
+    const displayHour = hour === 0 ? 12 : hour > 12 ? hour - 12 : hour;
+    return `${displayHour}:${minutes} ${ampm}`;
+  };
+
+  const showStartTimePickerModal = () => {
+    setTempStartTime(preferences.quietHours.startTime);
+    setShowStartTimePicker(true);
+  };
+
+  const showEndTimePickerModal = () => {
+    setTempEndTime(preferences.quietHours.endTime);
+    setShowEndTimePicker(true);
+  };
+
+  const updateStartTime = (timeString: string) => {
+    updatePreference('quietHours', {
+      ...preferences.quietHours,
+      startTime: timeString
+    });
+    setShowStartTimePicker(false);
+  };
+
+  const updateEndTime = (timeString: string) => {
+    updatePreference('quietHours', {
+      ...preferences.quietHours,
+      endTime: timeString
+    });
+    setShowEndTimePicker(false);
+  };
 
   const handleGoBack = () => {
     navigation.goBack();
   };
 
-  const handleTestNotification = async () => {
+  const sendTestNotification = async () => {
     try {
-      await notificationService.scheduleLocalNotification(
-        '🧪 Test Notification',
-        'Your notifications are working perfectly!',
-        3
-      );
-      
-      Alert.alert(
-        '✅ Test Sent!', 
-        'Your test notification will appear in 3 seconds.',
-        [{ text: 'Got it!', style: 'default' }]
-      );
+      if (!preferences.enablePushNotifications) {
+        Alert.alert(
+          'Push Notifications Disabled',
+          'Please enable push notifications first to test them.',
+          [
+            { text: 'Cancel', style: 'cancel' },
+            { 
+              text: 'Enable', 
+              onPress: () => updatePreference('enablePushNotifications', true)
+            }
+          ]
+        );
+        return;
+      }
+
+      // Check if we're in quiet hours
+      if (preferences.quietHours.enabled && isInQuietHours()) {
+        Alert.alert(
+          'Quiet Hours Active',
+          'Test notification will be sent anyway, but normally notifications are silenced during quiet hours.',
+          [
+            { text: 'Cancel', style: 'cancel' },
+            { text: 'Send Anyway', onPress: () => doSendTestNotification() }
+          ]
+        );
+        return;
+      }
+
+      await doSendTestNotification();
     } catch (error) {
-      Alert.alert('❌ Error', 'Failed to schedule test notification.');
+      console.error('Test notification error:', error);
+      Alert.alert('Error', 'Failed to schedule test notification.');
     }
   };
 
-  const updateNotificationPreference = (key: string, value: any) => {
-    setPreferences(prev => ({
-      ...prev,
-      [key]: value
-    }));
+  const doSendTestNotification = async () => {
+    await notificationService.scheduleLocalNotification(
+      '🧪 Test Notification',
+      testNotificationText || 'This is a test notification from FinTracker!',
+      2
+    );
+    Alert.alert(
+      '✅ Test Sent!',
+      'Your test notification will appear in 2 seconds.',
+      [{ text: 'Got it!' }]
+    );
   };
 
-  const updateCategoryPreference = (category: string, value: boolean) => {
-    setPreferences(prev => ({
-      ...prev,
-      categories: {
-        ...prev.categories,
-        [category]: value
-      }
-    }));
-  };
-
-  const updateQuietHours = (key: string, value: any) => {
-    setPreferences(prev => ({
-      ...prev,
-      quietHours: {
-        ...prev.quietHours,
-        [key]: value
-      }
-    }));
-  };
-
-  const toggleSection = (section: string) => {
-    setActiveSection(activeSection === section ? null : section);
-  };
-
-  const AnimatedCard = ({ children, delay = 0 }: { children: React.ReactNode; delay?: number }) => {
-    const cardAnim = useRef(new Animated.Value(0)).current;
+  const isInQuietHours = (): boolean => {
+    const now = new Date();
+    const currentHour = now.getHours();
+    const startHour = parseInt(preferences.quietHours.startTime.split(':')[0]);
+    const endHour = parseInt(preferences.quietHours.endTime.split(':')[0]);
     
-    React.useEffect(() => {
-      Animated.timing(cardAnim, {
-        toValue: 1,
-        duration: 500,
-        delay,
-        useNativeDriver: true,
-      }).start();
-    }, []);
+    if (startHour > endHour) {
+      // Quiet hours span midnight (e.g., 22:00 to 08:00)
+      return currentHour >= startHour || currentHour < endHour;
+    } else {
+      // Quiet hours within same day
+      return currentHour >= startHour && currentHour < endHour;
+    }
+  };
 
-    return (
-      <Animated.View
-        style={{
-          opacity: cardAnim,
-          transform: [{
-            translateY: cardAnim.interpolate({
-              inputRange: [0, 1],
-              outputRange: [20, 0],
-            }),
-          }],
-        }}
-      >
-        {children}
-      </Animated.View>
+  const updatePreference = async <K extends keyof NotificationPreferences>(
+    key: K,
+    value: NotificationPreferences[K]
+  ) => {
+    // Special handling for push notifications
+    if (key === 'enablePushNotifications' && value === true) {
+      const permissionStatus = await Notifications.requestPermissionsAsync();
+      if (!permissionStatus.granted) {
+        Alert.alert(
+          'Permission Required',
+          'Please enable notifications in your device settings to receive push notifications.',
+          [
+            { text: 'Cancel', style: 'cancel' },
+            { 
+              text: 'Open Settings', 
+              onPress: () => {
+                if (Platform.OS === 'ios') {
+                  Linking.openURL('app-settings:');
+                } else {
+                  // For Android, we can't directly open notification settings
+                  Alert.alert('Settings', 'Please go to Settings > Apps > FinTracker > Notifications to enable notifications.');
+                }
+              }
+            }
+          ]
+        );
+        return;
+      }
+    }
+
+    setPreferences(prev => {
+      const newPrefs = {
+        ...prev,
+        [key]: value,
+      };
+      
+      // Auto-save preferences
+      AsyncStorage.setItem('notificationPreferences', JSON.stringify(newPrefs))
+        .catch(error => console.error('Error saving preferences:', error));
+      
+      return newPrefs;
+    });
+
+    // Show feedback for certain changes
+    if (key === 'enablePushNotifications') {
+      if (value) {
+        Alert.alert('✅ Push Notifications Enabled', 'You will now receive push notifications.');
+      } else {
+        Alert.alert('🔕 Push Notifications Disabled', 'You will no longer receive push notifications.');
+      }
+    }
+  };
+
+  const updateCategoryPreference = (
+    category: keyof NotificationPreferences['categories'],
+    enabled: boolean
+  ) => {
+    // Check if this is a coming soon feature
+    const comingSoonFeatures = ['budgets', 'goals'];
+    
+    if (enabled && comingSoonFeatures.includes(category)) {
+      const categoryNames = {
+        budgets: 'Budget Notifications',
+        goals: 'Goal Notifications'
+      };
+      showComingSoon(categoryNames[category as keyof typeof categoryNames]);
+      return;
+    }
+
+    setPreferences(prev => {
+      const newPrefs = {
+        ...prev,
+        categories: {
+          ...prev.categories,
+          [category]: enabled,
+        },
+      };
+      
+      // Auto-save preferences
+      AsyncStorage.setItem('notificationPreferences', JSON.stringify(newPrefs))
+        .catch(error => console.error('Error saving preferences:', error));
+      
+      return newPrefs;
+    });
+
+    // Show brief feedback
+    const categoryNames = {
+      transactions: 'Transaction',
+      budgets: 'Budget',
+      goals: 'Goal',
+      reminders: 'Reminder',
+      alerts: 'Alert'
+    };
+    
+    const categoryName = categoryNames[category];
+    if (enabled) {
+      console.log(`${categoryName} notifications enabled`);
+    } else {
+      console.log(`${categoryName} notifications disabled`);
+    }
+  };
+
+  const updateFrequencyPreference = (
+    frequency: keyof NotificationPreferences['frequency'],
+    enabled: boolean
+  ) => {
+    // Check if this is a coming soon feature
+    if (enabled && frequency === 'dailyDigest') {
+      showComingSoon('Daily Digest Reports');
+      return;
+    }
+
+    setPreferences(prev => {
+      const newPrefs = {
+        ...prev,
+        frequency: {
+          ...prev.frequency,
+          [frequency]: enabled,
+        },
+      };
+      
+      // Auto-save preferences
+      AsyncStorage.setItem('notificationPreferences', JSON.stringify(newPrefs))
+        .catch(error => console.error('Error saving preferences:', error));
+      
+      return newPrefs;
+    });
+
+    // Schedule or cancel report notifications based on preference
+    if (enabled) {
+      scheduleReportNotification(frequency);
+    } else {
+      cancelReportNotification(frequency);
+    }
+  };
+
+  const scheduleReportNotification = async (frequency: keyof NotificationPreferences['frequency']) => {
+    try {
+      const notificationContent = {
+        dailyDigest: {
+          title: '📊 Daily Financial Digest',
+          body: 'Your daily spending summary is ready to view!',
+          hour: 20, // 8 PM
+          minute: 0
+        },
+        weeklyReport: {
+          title: '📈 Weekly Financial Report',
+          body: 'Your weekly financial analysis is available!',
+          hour: 9, // 9 AM on Sunday
+          minute: 0
+        },
+        monthlyReport: {
+          title: '📋 Monthly Financial Summary',
+          body: 'Your monthly financial report is ready for review!',
+          hour: 10, // 10 AM on 1st of month
+          minute: 0
+        }
+      };
+
+      const content = notificationContent[frequency];
+      
+      // Schedule recurring notification (implementation would depend on specific requirements)
+      console.log(`Scheduling ${frequency} notification: ${content.title}`);
+      
+    } catch (error) {
+      console.error(`Error scheduling ${frequency} notification:`, error);
+    }
+  };
+
+  const cancelReportNotification = (frequency: keyof NotificationPreferences['frequency']) => {
+    // Cancel specific recurring notification
+    console.log(`Cancelling ${frequency} notification`);
+  };
+
+  const savePreferences = async () => {
+    setIsLoading(true);
+    try {
+      // Save to local storage
+      await AsyncStorage.setItem('notificationPreferences', JSON.stringify(preferences));
+      
+      // Apply notification settings immediately
+      if (preferences.enablePushNotifications) {
+        // Ensure notification permissions are still valid
+        const permissionStatus = await Notifications.getPermissionsAsync();
+        if (!permissionStatus.granted) {
+          Alert.alert('Warning', 'Push notifications are enabled but system permissions are not granted.');
+        }
+      }
+      
+      // Show success with details
+      const enabledCategories = Object.entries(preferences.categories)
+        .filter(([_, enabled]) => enabled)
+        .map(([category, _]) => category)
+        .join(', ');
+      
+      const enabledReports = Object.entries(preferences.frequency)
+        .filter(([_, enabled]) => enabled)
+        .map(([frequency, _]) => frequency)
+        .join(', ');
+
+      Alert.alert(
+        '✅ Preferences Saved!',
+        `Your notification settings have been updated:\n\n` +
+        `📱 Push Notifications: ${preferences.enablePushNotifications ? 'Enabled' : 'Disabled'}\n` +
+        `📧 Email Notifications: ${preferences.enableEmailNotifications ? 'Enabled' : 'Disabled'}\n` +
+        `🌙 Quiet Hours: ${preferences.quietHours.enabled ? 'Enabled' : 'Disabled'}\n` +
+        `📂 Active Categories: ${enabledCategories || 'None'}\n` +
+        `📊 Report Frequency: ${enabledReports || 'None'}`,
+        [{ text: 'Perfect!' }]
+      );
+      
+      // Add notification to context to show it was saved
+      addNotification({
+        title: 'Settings Saved',
+        message: 'Your notification preferences have been updated successfully.',
+        type: 'success',
+        read: false,
+      });
+      
+    } catch (error) {
+      console.error('Error saving preferences:', error);
+      Alert.alert(
+        '❌ Save Failed',
+        'Failed to save your preferences. Please check your connection and try again.',
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'Retry', onPress: () => savePreferences() }
+        ]
+      );
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Add function to reset preferences
+  const resetPreferences = () => {
+    Alert.alert(
+      '🔄 Reset Preferences',
+      'Are you sure you want to reset all notification preferences to default values?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Reset',
+          style: 'destructive',
+          onPress: async () => {
+            const defaultPrefs: NotificationPreferences = {
+              enablePushNotifications: true,
+              enableEmailNotifications: false,
+              quietHours: {
+                enabled: false,
+                startTime: '22:00',
+                endTime: '08:00',
+              },
+              categories: {
+                transactions: true,
+                budgets: true,
+                goals: true,
+                reminders: true,
+                alerts: true,
+              },
+              frequency: {
+                dailyDigest: false,
+                weeklyReport: true,
+                monthlyReport: true,
+              },
+              testNotifications: true,
+            };
+            
+            setPreferences(defaultPrefs);
+            await AsyncStorage.setItem('notificationPreferences', JSON.stringify(defaultPrefs));
+            Alert.alert('✅ Reset Complete', 'All notification preferences have been reset to default values.');
+          }
+        }
+      ]
     );
   };
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: theme.colors.background }]} edges={['top', 'bottom']}>
-      {/* Modern Gradient Header */}
-      <LinearGradient
-        colors={isDark 
-          ? ['#1a1a2e', '#16213e', '#0f3460'] 
-          : ['#667eea', '#764ba2', '#f093fb']
-        }
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
-        style={styles.headerGradient}
+      <KeyboardAvoidingView 
+        style={styles.keyboardContainer}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
       >
-        <Animated.View 
-          style={[
-            styles.header,
-            {
-              opacity: fadeAnim,
-              transform: [{ translateY: slideAnim }],
-            }
-          ]}
+        <LinearGradient
+          colors={[theme.colors.gradientStart, theme.colors.gradientEnd]}
+          style={styles.gradient}
         >
-          <TouchableOpacity onPress={handleGoBack} style={styles.backButton}>
-            <MaterialIcons name="arrow-back-ios" size={24} color="white" />
-          </TouchableOpacity>
-          
-          <View style={styles.headerContent}>
-            <Text style={styles.headerTitle}>Notifications</Text>
-            <Text style={styles.headerSubtitle}>Customize your experience</Text>
+          {/* Header */}
+          <View style={styles.header}>
+            <TouchableOpacity onPress={handleGoBack} style={styles.backButton}>
+              <Ionicons name="arrow-back" size={24} color={theme.colors.text} />
+            </TouchableOpacity>
+            <Text style={[styles.title, { color: theme.colors.text }]}>Notification Preferences</Text>
+            <View style={styles.placeholder} />
           </View>
 
-          <View style={styles.headerStats}>
-            <View style={styles.statBubble}>
-              <Text style={styles.statNumber}>
-                {Object.values(preferences.categories).filter(Boolean).length}
-              </Text>
-              <Text style={styles.statLabel}>Active</Text>
-            </View>
-          </View>
-        </Animated.View>
-
-        {/* Floating Status Card */}
-        <AnimatedCard>
-          <View style={styles.floatingCard}>
-            <LinearGradient
-              colors={isDark 
-                ? ['rgba(255,255,255,0.1)', 'rgba(255,255,255,0.05)']
-                : ['rgba(255,255,255,0.9)', 'rgba(255,255,255,0.7)']
-              }
-              style={styles.floatingCardGradient}
-            >
-              <View style={styles.statusRow}>
+          <ScrollView 
+            style={styles.scrollView}
+            showsVerticalScrollIndicator={false}
+            contentContainerStyle={styles.scrollContentContainer}
+            keyboardShouldPersistTaps="handled"
+          >
+          {/* Status Overview */}
+          <View style={styles.section}>
+            <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>Current Status</Text>
+            
+            <View style={[styles.card, { backgroundColor: theme.colors.surface }]}>
+              <View style={styles.statusOverview}>
                 <View style={styles.statusItem}>
-                  <View style={[styles.statusDot, { 
-                    backgroundColor: preferences.enablePushNotifications ? '#4CAF50' : '#FF5722' 
-                  }]} />
-                  <Text style={[styles.statusText, { color: isDark ? 'white' : '#1a1a2e' }]}>
-                    Push {preferences.enablePushNotifications ? 'On' : 'Off'}
+                  <Ionicons 
+                    name={preferences.enablePushNotifications ? "notifications" : "notifications-off"} 
+                    size={20} 
+                    color={preferences.enablePushNotifications ? "#4CAF50" : "#F44336"} 
+                  />
+                  <Text style={[styles.statusText, { color: theme.colors.text }]}>
+                    Push: {preferences.enablePushNotifications ? "On" : "Off"}
                   </Text>
                 </View>
                 
-                <View style={styles.statusDivider} />
+                <View style={styles.statusItem}>
+                  <Ionicons 
+                    name={preferences.quietHours.enabled ? "moon" : "sunny"} 
+                    size={20} 
+                    color={preferences.quietHours.enabled ? "#9C27B0" : "#FF9800"} 
+                  />
+                  <Text style={[styles.statusText, { color: theme.colors.text }]}>
+                    {preferences.quietHours.enabled ? "Quiet Mode" : "Always Active"}
+                  </Text>
+                </View>
                 
                 <View style={styles.statusItem}>
-                  <MaterialIcons 
-                    name={preferences.quietHours.enabled ? 'nights-stay' : 'wb-sunny'} 
-                    size={16} 
-                    color={isDark ? '#ffffff80' : '#1a1a2e80'} 
+                  <Ionicons 
+                    name="list" 
+                    size={20} 
+                    color="#2196F3" 
                   />
-                  <Text style={[styles.statusText, { color: isDark ? 'white' : '#1a1a2e' }]}>
-                    {preferences.quietHours.enabled ? 'Quiet Mode' : 'Always On'}
+                  <Text style={[styles.statusText, { color: theme.colors.text }]}>
+                    {Object.values(preferences.categories).filter(Boolean).length}/5 Categories
                   </Text>
                 </View>
               </View>
-            </LinearGradient>
+              
+              {preferences.quietHours.enabled && (
+                <View style={[styles.quietHoursInfo, { backgroundColor: theme.colors.background }]}>
+                  <Ionicons name="time" size={16} color={theme.colors.textSecondary} />
+                  <Text style={[styles.quietHoursText, { color: theme.colors.textSecondary }]}>
+                    Quiet hours: {preferences.quietHours.startTime} - {preferences.quietHours.endTime}
+                  </Text>
+                </View>
+              )}
+            </View>
           </View>
-        </AnimatedCard>
-      </LinearGradient>
 
-      {/* Scrollable Content */}
-      <ScrollView 
-        style={styles.scrollView} 
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={styles.scrollContent}
-      >
-        {/* Quick Controls */}
-        <AnimatedCard delay={100}>
-          <View style={styles.quickControlsCard}>
-            <Text style={[styles.cardTitle, { color: theme.colors.text }]}>Quick Controls</Text>
+          {/* General Settings */}
+          <View style={styles.section}>
+            <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>General Settings</Text>
             
-            <View style={styles.quickControlsGrid}>
-              <TouchableOpacity 
-                style={[styles.quickControl, { backgroundColor: theme.colors.surface }]}
-                onPress={() => updateNotificationPreference('enablePushNotifications', !preferences.enablePushNotifications)}
-              >
-                <LinearGradient
-                  colors={preferences.enablePushNotifications 
-                    ? ['#4CAF50', '#45a049'] 
-                    : [theme.colors.border, theme.colors.textSecondary]
-                  }
-                  style={styles.quickControlIcon}
-                >
-                  <MaterialIcons 
-                    name="notifications" 
-                    size={24} 
-                    color="white" 
-                  />
-                </LinearGradient>
-                <Text style={[styles.quickControlLabel, { color: theme.colors.text }]}>
-                  Push Notifications
-                </Text>
+            <View style={[styles.card, { backgroundColor: theme.colors.surface }]}>
+              <View style={styles.preferenceItem}>
+                <View style={styles.preferenceInfo}>
+                  <Text style={[styles.preferenceLabel, { color: theme.colors.text }]}>Push Notifications</Text>
+                  <Text style={[styles.preferenceDescription, { color: theme.colors.textSecondary }]}>
+                    Receive notifications on your device
+                  </Text>
+                </View>
                 <Switch
                   value={preferences.enablePushNotifications}
-                  onValueChange={(value) => updateNotificationPreference('enablePushNotifications', value)}
-                  trackColor={{ false: theme.colors.border, true: '#4CAF50' }}
-                  thumbColor={preferences.enablePushNotifications ? '#ffffff' : '#f4f3f4'}
-                  style={styles.quickControlSwitch}
+                  onValueChange={(value) => updatePreference('enablePushNotifications', value)}
+                  trackColor={{ false: theme.colors.border, true: theme.colors.primary }}
+                  thumbColor={preferences.enablePushNotifications ? '#fff' : '#f4f3f4'}
                 />
-              </TouchableOpacity>
+              </View>
 
-              <TouchableOpacity 
-                style={[styles.quickControl, { backgroundColor: theme.colors.surface }]}
-                onPress={() => updateQuietHours('enabled', !preferences.quietHours.enabled)}
-              >
-                <LinearGradient
-                  colors={preferences.quietHours.enabled 
-                    ? ['#9C27B0', '#8E24AA'] 
-                    : [theme.colors.border, theme.colors.textSecondary]
-                  }
-                  style={styles.quickControlIcon}
-                >
-                  <MaterialIcons 
-                    name={preferences.quietHours.enabled ? 'nights-stay' : 'wb-sunny'} 
-                    size={24} 
-                    color="white" 
-                  />
-                </LinearGradient>
-                <Text style={[styles.quickControlLabel, { color: theme.colors.text }]}>
-                  Quiet Hours
-                </Text>
+              <View style={[styles.preferenceItem, styles.preferenceItemBorder]}>
+                <View style={styles.preferenceInfo}>
+                  <Text style={[styles.preferenceLabel, { color: theme.colors.text }]}>Email Notifications</Text>
+                  <Text style={[styles.preferenceDescription, { color: theme.colors.textSecondary }]}>
+                    Receive financial summaries and alerts via email (Coming Soon)
+                  </Text>
+                </View>
+                <Switch
+                  value={preferences.enableEmailNotifications}
+                  onValueChange={handleEmailNotificationToggle}
+                  trackColor={{ false: theme.colors.border, true: theme.colors.primary }}
+                  thumbColor={preferences.enableEmailNotifications ? '#fff' : '#f4f3f4'}
+                />
+              </View>
+
+              <View style={styles.preferenceItem}>
+                <View style={styles.preferenceInfo}>
+                  <Text style={[styles.preferenceLabel, { color: theme.colors.text }]}>Quiet Hours</Text>
+                  <Text style={[styles.preferenceDescription, { color: theme.colors.textSecondary }]}>
+                    Silence notifications during specified hours to avoid interruptions
+                  </Text>
+                </View>
                 <Switch
                   value={preferences.quietHours.enabled}
-                  onValueChange={(value) => updateQuietHours('enabled', value)}
-                  trackColor={{ false: theme.colors.border, true: '#9C27B0' }}
-                  thumbColor={preferences.quietHours.enabled ? '#ffffff' : '#f4f3f4'}
-                  style={styles.quickControlSwitch}
+                  onValueChange={(value) => updatePreference('quietHours', { ...preferences.quietHours, enabled: value })}
+                  trackColor={{ false: theme.colors.border, true: theme.colors.primary }}
+                  thumbColor={preferences.quietHours.enabled ? '#fff' : '#f4f3f4'}
                 />
+              </View>
+              
+              {preferences.quietHours.enabled && (
+                <View style={[styles.quietHoursSettings, { borderTopColor: theme.colors.border }]}>
+                  <Text style={[styles.quietHoursTitle, { color: theme.colors.text }]}>Customize Quiet Hours</Text>
+                  
+                  <View style={styles.timePickerContainer}>
+                    <TouchableOpacity 
+                      style={[styles.timePicker, { backgroundColor: theme.colors.background, borderColor: theme.colors.border }]}
+                      onPress={showStartTimePickerModal}
+                    >
+                      <Ionicons name="moon" size={20} color={theme.colors.primary} />
+                      <View style={styles.timePickerText}>
+                        <Text style={[styles.timePickerLabel, { color: theme.colors.textSecondary }]}>Start Time</Text>
+                        <Text style={[styles.timePickerValue, { color: theme.colors.text }]}>
+                          {formatTime(preferences.quietHours.startTime)}
+                        </Text>
+                      </View>
+                      <Ionicons name="chevron-forward" size={16} color={theme.colors.textSecondary} />
+                    </TouchableOpacity>
+                    
+                    <TouchableOpacity 
+                      style={[styles.timePicker, { backgroundColor: theme.colors.background, borderColor: theme.colors.border }]}
+                      onPress={showEndTimePickerModal}
+                    >
+                      <Ionicons name="sunny" size={20} color={theme.colors.primary} />
+                      <View style={styles.timePickerText}>
+                        <Text style={[styles.timePickerLabel, { color: theme.colors.textSecondary }]}>End Time</Text>
+                        <Text style={[styles.timePickerValue, { color: theme.colors.text }]}>
+                          {formatTime(preferences.quietHours.endTime)}
+                        </Text>
+                      </View>
+                      <Ionicons name="chevron-forward" size={16} color={theme.colors.textSecondary} />
+                    </TouchableOpacity>
+                  </View>
+                  
+                  <Text style={[styles.quietHoursNote, { color: theme.colors.textSecondary }]}>
+                    💡 Tip: Emergency notifications and calls will still come through
+                  </Text>
+                </View>
+              )}
+            </View>
+          </View>
+
+          {/* Categories */}
+          <View style={styles.section}>
+            <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>Notification Categories</Text>
+            <Text style={[styles.sectionDescription, { color: theme.colors.textSecondary }]}>
+              Choose which types of activities you want to be notified about
+            </Text>
+            
+            <View style={[styles.card, { backgroundColor: theme.colors.surface }]}>
+              {Object.entries(preferences.categories).map(([category, enabled], index) => {
+                const categoryInfo = {
+                  transactions: {
+                    name: 'Transactions',
+                    description: 'Get notified when money comes in or goes out',
+                    icon: 'swap-horizontal',
+                    implemented: true
+                  },
+                  budgets: {
+                    name: 'Budget Alerts',
+                    description: 'Warnings when approaching spending limits (Coming Soon)',
+                    icon: 'pie-chart',
+                    implemented: false
+                  },
+                  goals: {
+                    name: 'Savings Goals',
+                    description: 'Progress updates and milestone celebrations (Coming Soon)',
+                    icon: 'flag',
+                    implemented: false
+                  },
+                  reminders: {
+                    name: 'Payment Reminders',
+                    description: 'Never miss bills, subscriptions, or important payments',
+                    icon: 'alarm',
+                    implemented: true
+                  },
+                  alerts: {
+                    name: 'Security Alerts',
+                    description: 'Important account security and system notifications',
+                    icon: 'shield-checkmark',
+                    implemented: true
+                  }
+                };
+                
+                const info = categoryInfo[category as keyof typeof categoryInfo];
+                
+                return (
+                  <View 
+                    key={category} 
+                    style={[
+                      styles.categoryItem,
+                      index < Object.entries(preferences.categories).length - 1 && styles.preferenceItemBorder
+                    ]}
+                  >
+                    <View style={styles.categoryLeft}>
+                      <View style={[styles.categoryIcon, { backgroundColor: info.implemented ? theme.colors.primary + '20' : theme.colors.border + '40' }]}>
+                        <Ionicons 
+                          name={info.icon as any} 
+                          size={20} 
+                          color={info.implemented ? theme.colors.primary : theme.colors.textSecondary} 
+                        />
+                      </View>
+                      <View style={styles.categoryInfo}>
+                        <Text style={[styles.categoryName, { color: theme.colors.text }]}>
+                          {info.name}
+                        </Text>
+                        <Text style={[styles.categoryDescription, { color: theme.colors.textSecondary }]}>
+                          {info.description}
+                        </Text>
+                      </View>
+                    </View>
+                    <Switch
+                      value={enabled}
+                      onValueChange={(value) => updateCategoryPreference(category as any, value)}
+                      trackColor={{ false: theme.colors.border, true: theme.colors.primary }}
+                      thumbColor={enabled ? '#fff' : '#f4f3f4'}
+                    />
+                  </View>
+                );
+              })}
+            </View>
+          </View>
+
+          {/* Frequency */}
+          <View style={styles.section}>
+            <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>Report Frequency</Text>
+            <Text style={[styles.sectionDescription, { color: theme.colors.textSecondary }]}>
+              Get regular summaries of your financial activity
+            </Text>
+            
+            <View style={[styles.card, { backgroundColor: theme.colors.surface }]}>
+              {Object.entries(preferences.frequency).map(([frequency, enabled], index) => {
+                const frequencyInfo = {
+                  dailyDigest: {
+                    name: 'Daily Digest',
+                    description: 'Summary of today\'s transactions at 8 PM (Coming Soon)',
+                    icon: 'today',
+                    implemented: false
+                  },
+                  weeklyReport: {
+                    name: 'Weekly Report',
+                    description: 'Weekly spending analysis every Sunday at 9 AM',
+                    icon: 'calendar',
+                    implemented: true
+                  },
+                  monthlyReport: {
+                    name: 'Monthly Report',
+                    description: 'Comprehensive monthly review on the 1st at 10 AM',
+                    icon: 'stats-chart',
+                    implemented: true
+                  }
+                };
+                
+                const info = frequencyInfo[frequency as keyof typeof frequencyInfo];
+                
+                return (
+                  <View 
+                    key={frequency} 
+                    style={[
+                      styles.categoryItem,
+                      index < Object.entries(preferences.frequency).length - 1 && styles.preferenceItemBorder
+                    ]}
+                  >
+                    <View style={styles.categoryLeft}>
+                      <View style={[styles.categoryIcon, { backgroundColor: info.implemented ? theme.colors.primary + '20' : theme.colors.border + '40' }]}>
+                        <Ionicons 
+                          name={info.icon as any} 
+                          size={20} 
+                          color={info.implemented ? theme.colors.primary : theme.colors.textSecondary} 
+                        />
+                      </View>
+                      <View style={styles.categoryInfo}>
+                        <Text style={[styles.categoryName, { color: theme.colors.text }]}>
+                          {info.name}
+                        </Text>
+                        <Text style={[styles.categoryDescription, { color: theme.colors.textSecondary }]}>
+                          {info.description}
+                        </Text>
+                      </View>
+                    </View>
+                    <Switch
+                      value={enabled}
+                      onValueChange={(value) => updateFrequencyPreference(frequency as any, value)}
+                      trackColor={{ false: theme.colors.border, true: theme.colors.primary }}
+                      thumbColor={enabled ? '#fff' : '#f4f3f4'}
+                    />
+                  </View>
+                );
+              })}
+            </View>
+          </View>
+
+          {/* Test Notifications */}
+          <View style={styles.section}>
+            <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>Test Notifications</Text>
+            
+            <View style={[styles.card, { backgroundColor: theme.colors.surface }]}>
+              <View style={styles.testContainer}>
+                <TextInput
+                  style={[styles.testInput, { 
+                    backgroundColor: theme.colors.background, 
+                    borderColor: theme.colors.border,
+                    color: theme.colors.text 
+                  }]}
+                  value={testNotificationText}
+                  onChangeText={setTestNotificationText}
+                  placeholder="Enter test notification message"
+                  placeholderTextColor={theme.colors.textSecondary}
+                  multiline
+                />
+                <TouchableOpacity
+                  style={[styles.testButton, { backgroundColor: theme.colors.primary }]}
+                  onPress={sendTestNotification}
+                >
+                  <Ionicons name="send" size={16} color="#FFFFFF" />
+                  <Text style={styles.testButtonText}>Send Test Notification</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+
+          {/* Action Buttons */}
+          </ScrollView>
+          
+          {/* Fixed Bottom Button Container */}
+          <View style={[styles.fixedButtonContainer, { backgroundColor: theme.colors.background, borderTopColor: theme.colors.border }]}>
+            <View style={styles.buttonRow}>
+              <TouchableOpacity
+                style={[styles.resetButton, { 
+                  borderColor: theme.colors.border,
+                  backgroundColor: theme.colors.surface 
+                }]}
+                onPress={resetPreferences}
+                disabled={isLoading}
+                activeOpacity={0.7}
+              >
+                <Ionicons name="refresh" size={18} color={theme.colors.textSecondary} />
+                <Text style={[styles.resetButtonText, { color: theme.colors.textSecondary }]}>Reset</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.saveButton, { 
+                  backgroundColor: isLoading ? theme.colors.textSecondary : theme.colors.primary,
+                  opacity: isLoading ? 0.7 : 1
+                }]}
+                onPress={savePreferences}
+                disabled={isLoading}
+                activeOpacity={0.8}
+              >
+                {isLoading ? (
+                  <>
+                    <Ionicons name="hourglass" size={20} color="#FFFFFF" />
+                    <Text style={styles.saveButtonText}>Saving...</Text>
+                  </>
+                ) : (
+                  <>
+                    <Ionicons name="checkmark-circle" size={20} color="#FFFFFF" />
+                    <Text style={styles.saveButtonText}>Save Preferences</Text>
+                  </>
+                )}
               </TouchableOpacity>
             </View>
           </View>
-        </AnimatedCard>
-
-        {/* Categories Section */}
-        <AnimatedCard delay={200}>
-          <View style={[styles.modernCard, { backgroundColor: theme.colors.surface }]}>
-            <TouchableOpacity 
-              style={styles.sectionHeader}
-              onPress={() => toggleSection('categories')}
-            >
-              <View style={styles.sectionHeaderLeft}>
-                <LinearGradient
-                  colors={['#FF6B6B', '#FF8E8E']}
-                  style={styles.sectionIcon}
+        </LinearGradient>
+      </KeyboardAvoidingView>
+      
+      {/* Start Time Picker Modal */}
+      <Modal
+        visible={showStartTimePicker}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setShowStartTimePicker(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={[styles.timePickerModal, { backgroundColor: theme.colors.surface }]}>
+            <View style={styles.modalHeader}>
+              <Text style={[styles.modalTitle, { color: theme.colors.text }]}>Set Start Time</Text>
+              <TouchableOpacity onPress={() => setShowStartTimePicker(false)}>
+                <Ionicons name="close" size={24} color={theme.colors.text} />
+              </TouchableOpacity>
+            </View>
+            
+            <Text style={[styles.modalDescription, { color: theme.colors.textSecondary }]}>
+              When should quiet hours begin?
+            </Text>
+            
+            <View style={styles.timeButtonsContainer}>
+              {['20:00', '21:00', '22:00', '23:00', '00:00'].map((time) => (
+                <TouchableOpacity
+                  key={time}
+                  style={[
+                    styles.timeButton,
+                    { 
+                      backgroundColor: tempStartTime === time ? theme.colors.primary : theme.colors.background,
+                      borderColor: theme.colors.border
+                    }
+                  ]}
+                  onPress={() => {
+                    setTempStartTime(time);
+                    updateStartTime(time);
+                  }}
                 >
-                  <MaterialIcons name="category" size={24} color="white" />
-                </LinearGradient>
-                <View>
-                  <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>
-                    Categories
+                  <Text style={[
+                    styles.timeButtonText,
+                    { color: tempStartTime === time ? '#fff' : theme.colors.text }
+                  ]}>
+                    {formatTime(time)}
                   </Text>
-                  <Text style={[styles.sectionSubtitle, { color: theme.colors.textSecondary }]}>
-                    {Object.values(preferences.categories).filter(Boolean).length} of {Object.keys(preferences.categories).length} enabled
-                  </Text>
-                </View>
-              </View>
-              <MaterialIcons 
-                name={activeSection === 'categories' ? 'expand-less' : 'expand-more'} 
-                size={24} 
-                color={theme.colors.textSecondary} 
-              />
-            </TouchableOpacity>
-
-            {activeSection === 'categories' && (
-              <View style={styles.expandedContent}>
-                {Object.entries(preferences.categories).map(([key, value], index) => {
-                  const categoryConfig = {
-                    transactions: { icon: 'swap-horiz', color: '#2196F3', label: 'Transactions', desc: 'Income and expense notifications' },
-                    budgets: { icon: 'pie-chart', color: '#FF9800', label: 'Budgets', desc: 'Budget limits and progress alerts' },
-                    goals: { icon: 'flag', color: '#4CAF50', label: 'Goals', desc: 'Savings goals and milestones' },
-                    reminders: { icon: 'alarm', color: '#9C27B0', label: 'Reminders', desc: 'Payment and bill reminders' },
-                    alerts: { icon: 'warning', color: '#F44336', label: 'Alerts', desc: 'System alerts and warnings' }
-                  };
-                  
-                  const config = categoryConfig[key as keyof typeof categoryConfig];
-                  
-                  return (
-                    <View key={key} style={[styles.categoryItem, index > 0 && styles.categoryItemBorder]}>
-                      <View style={styles.categoryLeft}>
-                        <LinearGradient
-                          colors={[config.color, config.color + 'DD']}
-                          style={styles.categoryIcon}
-                        >
-                          <MaterialIcons name={config.icon as any} size={20} color="white" />
-                        </LinearGradient>
-                        <View style={styles.categoryText}>
-                          <Text style={[styles.categoryLabel, { color: theme.colors.text }]}>
-                            {config.label}
-                          </Text>
-                          <Text style={[styles.categoryDesc, { color: theme.colors.textSecondary }]}>
-                            {config.desc}
-                          </Text>
-                        </View>
-                      </View>
-                      <Switch
-                        value={value}
-                        onValueChange={(val) => updateCategoryPreference(key, val)}
-                        trackColor={{ false: theme.colors.border, true: config.color + '80' }}
-                        thumbColor={value ? config.color : '#f4f3f4'}
-                      />
-                    </View>
-                  );
-                })}
-              </View>
-            )}
+                </TouchableOpacity>
+              ))}
+            </View>
           </View>
-        </AnimatedCard>
-
-        {/* Test Notification */}
-        <AnimatedCard delay={300}>
-          <TouchableOpacity 
-            style={styles.testCard}
-            onPress={handleTestNotification}
-            activeOpacity={0.8}
-          >
-            <LinearGradient
-              colors={isDark 
-                ? ['#667eea', '#764ba2'] 
-                : ['#f093fb', '#f5576c']
-              }
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-              style={styles.testCardGradient}
-            >
-              <View style={styles.testContent}>
-                <View style={styles.testIcon}>
-                  <MaterialIcons name="send" size={28} color="white" />
-                </View>
-                <View style={styles.testText}>
-                  <Text style={styles.testTitle}>Test Notification</Text>
-                  <Text style={styles.testSubtitle}>Send a test to verify your settings</Text>
-                </View>
-              </View>
-              <MaterialIcons name="arrow-forward-ios" size={20} color="rgba(255,255,255,0.8)" />
-            </LinearGradient>
-          </TouchableOpacity>
-        </AnimatedCard>
-      </ScrollView>
+        </View>
+      </Modal>
+      
+      {/* End Time Picker Modal */}
+      <Modal
+        visible={showEndTimePicker}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setShowEndTimePicker(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={[styles.timePickerModal, { backgroundColor: theme.colors.surface }]}>
+            <View style={styles.modalHeader}>
+              <Text style={[styles.modalTitle, { color: theme.colors.text }]}>Set End Time</Text>
+              <TouchableOpacity onPress={() => setShowEndTimePicker(false)}>
+                <Ionicons name="close" size={24} color={theme.colors.text} />
+              </TouchableOpacity>
+            </View>
+            
+            <Text style={[styles.modalDescription, { color: theme.colors.textSecondary }]}>
+              When should quiet hours end?
+            </Text>
+            
+            <View style={styles.timeButtonsContainer}>
+              {['06:00', '07:00', '08:00', '09:00', '10:00'].map((time) => (
+                <TouchableOpacity
+                  key={time}
+                  style={[
+                    styles.timeButton,
+                    { 
+                      backgroundColor: tempEndTime === time ? theme.colors.primary : theme.colors.background,
+                      borderColor: theme.colors.border
+                    }
+                  ]}
+                  onPress={() => {
+                    setTempEndTime(time);
+                    updateEndTime(time);
+                  }}
+                >
+                  <Text style={[
+                    styles.timeButtonText,
+                    { color: tempEndTime === time ? '#fff' : theme.colors.text }
+                  ]}>
+                    {formatTime(time)}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 };
@@ -433,218 +1013,230 @@ const createStyles = (theme: any) => StyleSheet.create({
   container: {
     flex: 1,
   },
-  // Header Styles
-  headerGradient: {
-    paddingBottom: 40,
+  keyboardContainer: {
+    flex: 1,
+  },
+  gradient: {
+    flex: 1,
   },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: 20,
-    paddingTop: 20,
-    paddingBottom: 30,
+    paddingVertical: 16,
   },
   backButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: 'rgba(255,255,255,0.2)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginLeft: -4,
-  },
-  headerContent: {
-    flex: 1,
-    alignItems: 'center',
-  },
-  headerTitle: {
-    fontSize: 28,
-    fontWeight: 'bold',
-    color: 'white',
-    textAlign: 'center',
-  },
-  headerSubtitle: {
-    fontSize: 16,
-    color: 'rgba(255,255,255,0.8)',
-    marginTop: 4,
-    textAlign: 'center',
-  },
-  headerStats: {
-    alignItems: 'center',
-  },
-  statBubble: {
-    backgroundColor: 'rgba(255,255,255,0.2)',
+    padding: 8,
     borderRadius: 20,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    alignItems: 'center',
-    minWidth: 50,
+    backgroundColor: theme.colors.surface + '80',
   },
-  statNumber: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: 'white',
-  },
-  statLabel: {
-    fontSize: 12,
-    color: 'rgba(255,255,255,0.8)',
-    marginTop: 2,
-  },
-  // Floating Card
-  floatingCard: {
-    marginHorizontal: 20,
-    marginTop: -20,
-    borderRadius: 20,
-    overflow: 'hidden',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.25,
-    shadowRadius: 20,
-    elevation: 10,
-  },
-  floatingCardGradient: {
-    padding: 20,
-  },
-  statusRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-    alignItems: 'center',
-  },
-  statusItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flex: 1,
-    justifyContent: 'center',
-  },
-  statusDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    marginRight: 8,
-  },
-  statusText: {
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  statusDivider: {
-    width: 1,
-    height: 20,
-    backgroundColor: 'rgba(255,255,255,0.3)',
-    marginHorizontal: 15,
-  },
-  // Scroll Content
-  scrollView: {
-    flex: 1,
-    backgroundColor: theme.colors.background,
-  },
-  scrollContent: {
-    paddingHorizontal: 20,
-    paddingTop: 20,
-    paddingBottom: 40,
-  },
-  // Quick Controls
-  quickControlsCard: {
-    backgroundColor: theme.colors.surface,
-    borderRadius: 20,
-    padding: 20,
-    marginBottom: 20,
-    shadowColor: theme.colors.shadow,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 12,
-    elevation: 5,
-  },
-  cardTitle: {
+  title: {
     fontSize: 20,
     fontWeight: 'bold',
-    marginBottom: 16,
-  },
-  quickControlsGrid: {
-    flexDirection: 'row',
-    gap: 15,
-  },
-  quickControl: {
     flex: 1,
-    borderRadius: 16,
-    padding: 16,
-    alignItems: 'center',
-    shadowColor: theme.colors.shadow,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 3,
-  },
-  quickControlIcon: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 12,
-  },
-  quickControlLabel: {
-    fontSize: 14,
-    fontWeight: '600',
     textAlign: 'center',
-    marginBottom: 12,
   },
-  quickControlSwitch: {
-    transform: [{ scaleX: 0.9 }, { scaleY: 0.9 }],
+  placeholder: {
+    width: 40,
   },
-  // Modern Cards
-  modernCard: {
-    borderRadius: 20,
-    marginBottom: 20,
-    overflow: 'hidden',
-    shadowColor: theme.colors.shadow,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 12,
-    elevation: 5,
-  },
-  sectionHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    padding: 20,
-  },
-  sectionHeaderLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
+  scrollView: {
     flex: 1,
+    paddingHorizontal: 20,
   },
-  sectionIcon: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 15,
+  scrollContentContainer: {
+    paddingBottom: Platform.OS === 'ios' ? 140 : 120, // Extra space for fixed buttons + keyboard
+  },
+  section: {
+    marginBottom: 24,
   },
   sectionTitle: {
     fontSize: 18,
-    fontWeight: 'bold',
-    marginBottom: 4,
+    fontWeight: '600',
+    marginBottom: 12,
   },
-  sectionSubtitle: {
+  card: {
+    borderRadius: 16,
+    shadowColor: theme.colors.shadow,
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 4,
+    overflow: 'hidden',
+  },
+  preferenceItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: 16,
+  },
+  preferenceItemBorder: {
+    borderBottomWidth: 1,
+    borderBottomColor: theme.colors.border,
+  },
+  preferenceInfo: {
+    flex: 1,
+    marginRight: 16,
+  },
+  preferenceLabel: {
+    fontSize: 16,
+    fontWeight: '500',
+    marginBottom: 2,
+  },
+  preferenceDescription: {
     fontSize: 14,
   },
-  expandedContent: {
+  testContainer: {
+    padding: 16,
+    gap: 12,
+  },
+  testInput: {
+    borderWidth: 1,
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    fontSize: 15,
+    minHeight: 100,
+    maxHeight: 120,
+    textAlignVertical: 'top',
+    lineHeight: 22,
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 1,
+    },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 1,
+  },
+  testButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+    gap: 8,
+  },
+  testButtonText: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '500',
+  },
+  // Fixed Bottom Button Container
+  fixedButtonContainer: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
     paddingHorizontal: 20,
-    paddingBottom: 20,
+    paddingVertical: 16,
+    paddingBottom: Platform.OS === 'ios' ? 34 : 16, // Account for safe area
+    borderTopWidth: 1,
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: -2,
+    },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 8,
+  },
+  buttonRow: {
+    flexDirection: 'row',
+    gap: 12,
+    alignItems: 'center',
+  },
+  resetButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    borderRadius: 12,
+    borderWidth: 1.5,
+    gap: 6,
+    minHeight: 48,
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 1,
+    },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 1,
+  },
+  resetButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  saveButton: {
+    flex: 2.5,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 16,
+    paddingHorizontal: 20,
+    borderRadius: 12,
+    gap: 8,
+    minHeight: 48,
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.15,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  saveButtonText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '700',
+  },
+  statusOverview: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    padding: 16,
+  },
+  statusItem: {
+    alignItems: 'center',
+    gap: 8,
+  },
+  statusText: {
+    fontSize: 12,
+    fontWeight: '500',
+    textAlign: 'center',
+  },
+  quietHoursInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    marginHorizontal: 16,
+    marginBottom: 8,
+    borderRadius: 8,
+    gap: 6,
+  },
+  quietHoursText: {
+    fontSize: 12,
+    fontWeight: '500',
+  },
+  sectionDescription: {
+    fontSize: 14,
+    marginBottom: 12,
+    lineHeight: 20,
   },
   categoryItem: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    paddingVertical: 16,
-  },
-  categoryItemBorder: {
-    borderTopWidth: 1,
-    borderTopColor: theme.colors.border,
-    marginTop: 16,
-    paddingTop: 16,
+    justifyContent: 'space-between',
+    padding: 16,
   },
   categoryLeft: {
     flexDirection: 'row',
@@ -657,62 +1249,101 @@ const createStyles = (theme: any) => StyleSheet.create({
     borderRadius: 20,
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: 15,
+    marginRight: 12,
   },
-  categoryText: {
+  categoryInfo: {
     flex: 1,
   },
-  categoryLabel: {
+  categoryName: {
     fontSize: 16,
-    fontWeight: '600',
-    marginBottom: 4,
+    fontWeight: '500',
+    marginBottom: 2,
   },
-  categoryDesc: {
+  categoryDescription: {
     fontSize: 13,
     lineHeight: 18,
   },
-  // Test Card
-  testCard: {
-    borderRadius: 20,
-    overflow: 'hidden',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.2,
-    shadowRadius: 16,
-    elevation: 8,
+  quietHoursSettings: {
+    borderTopWidth: 1,
+    paddingTop: 16,
+    paddingHorizontal: 16,
+    paddingBottom: 16,
   },
-  testCardGradient: {
+  quietHoursTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    marginBottom: 12,
+  },
+  timePickerContainer: {
+    gap: 8,
+    marginBottom: 12,
+  },
+  timePicker: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 12,
+    borderRadius: 8,
+    borderWidth: 1,
+  },
+  timePickerText: {
+    flex: 1,
+    marginLeft: 12,
+  },
+  timePickerLabel: {
+    fontSize: 12,
+    fontWeight: '500',
+  },
+  timePickerValue: {
+    fontSize: 16,
+    fontWeight: '600',
+    marginTop: 2,
+  },
+  quietHoursNote: {
+    fontSize: 12,
+    fontStyle: 'italic',
+    lineHeight: 16,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  timePickerModal: {
+    width: '100%',
+    maxWidth: 400,
+    borderRadius: 16,
+    padding: 20,
+  },
+  modalHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    padding: 24,
+    marginBottom: 16,
   },
-  testContent: {
-    flexDirection: 'row',
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+  },
+  modalDescription: {
+    fontSize: 14,
+    marginBottom: 20,
+    textAlign: 'center',
+  },
+  timeButtonsContainer: {
+    gap: 12,
+  },
+  timeButton: {
+    paddingVertical: 16,
+    paddingHorizontal: 20,
+    borderRadius: 12,
+    borderWidth: 1,
     alignItems: 'center',
-    flex: 1,
   },
-  testIcon: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
-    backgroundColor: 'rgba(255,255,255,0.2)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 16,
-  },
-  testText: {
-    flex: 1,
-  },
-  testTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: 'white',
-    marginBottom: 4,
-  },
-  testSubtitle: {
-    fontSize: 15,
-    color: 'rgba(255,255,255,0.8)',
+  timeButtonText: {
+    fontSize: 16,
+    fontWeight: '500',
   },
 });
 

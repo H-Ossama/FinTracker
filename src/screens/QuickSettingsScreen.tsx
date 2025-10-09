@@ -562,19 +562,6 @@ const QuickSettingsScreen = () => {
                 <Ionicons name="chevron-forward" size={16} color={theme.colors.textSecondary} />
               </TouchableOpacity>
 
-              <TouchableOpacity
-                style={[styles.settingItem, styles.settingItemBorder]}
-                onPress={handleNotificationSettings}
-              >
-                <View style={styles.settingContent}>
-                  <Ionicons name="notifications-outline" size={20} color={theme.colors.text} />
-                  <Text style={[styles.settingTitle, { color: theme.colors.text }]}>
-                    Notification Settings
-                  </Text>
-                </View>
-                <Ionicons name="chevron-forward" size={16} color={theme.colors.textSecondary} />
-              </TouchableOpacity>
-
               <View style={[styles.settingItem, styles.settingItemBorder]}>
                 <View style={styles.settingContent}>
                   <Ionicons name="moon-outline" size={20} color={theme.colors.text} />

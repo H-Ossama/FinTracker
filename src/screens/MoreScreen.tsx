@@ -198,6 +198,9 @@ const MoreScreen = () => {
       case 'addNew':
         navigation.navigate('Reminders' as never); // Will trigger add modal
         break;
+      case 'notifications':
+        navigation.navigate('NotificationPreferences' as never);
+        break;
       case 'settings':
         navigation.navigate('QuickSettings' as never);
         break;
@@ -595,6 +598,14 @@ const MoreScreen = () => {
                     >
                       <Ionicons name="add-outline" size={18} color={theme.colors.text} />
                       <Text style={[styles.dropdownItemText, { color: theme.colors.text }]}>Add New Reminder</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={[styles.dropdownItem, { borderBottomColor: theme.colors.border }]}
+                      onPress={() => handleDropdownAction('notifications')}
+                      activeOpacity={0.7}
+                    >
+                      <Ionicons name="notifications-outline" size={18} color={theme.colors.text} />
+                      <Text style={[styles.dropdownItemText, { color: theme.colors.text }]}>Notification Settings</Text>
                     </TouchableOpacity>
                     <TouchableOpacity
                       style={styles.dropdownItem}
