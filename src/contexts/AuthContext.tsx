@@ -19,6 +19,11 @@ export interface AuthState {
   isLoading: boolean;
   biometricEnabled: boolean;
   rememberMe: boolean;
+  accessDenied: {
+    isDenied: boolean;
+    reason: string;
+    details?: string;
+  };
 }
 
 export interface AuthContextType extends AuthState {
@@ -33,6 +38,9 @@ export interface AuthContextType extends AuthState {
   authenticateWithBiometric: () => Promise<{ success: boolean; error?: string }>;
   checkBiometricAvailability: () => Promise<boolean>;
   refreshUser: () => Promise<void>;
+  validateSession: () => Promise<{ valid: boolean; reason?: string }>;
+  denyAccess: (reason: string, details?: string) => void;
+  clearAccessDenial: () => void;
 }
 
 // Storage keys
@@ -146,6 +154,23 @@ const API = {
     }
     
     try {
+      // Check for demo account credentials
+      if (email.toLowerCase() === 'demo@fintracker.app' && password === 'Demo123!') {
+        // Handle demo account login
+        const demoUser = {
+          id: 'demo_user',
+          email: 'demo@fintracker.app',
+          name: 'Demo User',
+          createdAt: new Date().toISOString(),
+          lastLogin: new Date().toISOString(),
+        };
+        
+        return {
+          user: demoUser,
+          token: 'demo_token_' + demoUser.id,
+        };
+      }
+      
       // Get registered users
       const existingUsers = await AsyncStorage.getItem('registered_users');
       const users = existingUsers ? JSON.parse(existingUsers) : [];
@@ -154,12 +179,12 @@ const API = {
       const user = users.find((u: any) => u.email.toLowerCase() === email.toLowerCase());
       
       if (!user) {
-        throw new Error('No account found with this email address');
+        throw new Error('No account found with this email address. Please check your email or sign up for a new account.');
       }
       
       // Check password
       if (user.password !== password) {
-        throw new Error('Incorrect password');
+        throw new Error('Incorrect password. Please check your password and try again.');
       }
       
       // Update last login
@@ -227,6 +252,11 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     isLoading: true,
     biometricEnabled: false,
     rememberMe: false,
+    accessDenied: {
+      isDenied: false,
+      reason: '',
+      details: '',
+    },
   });
 
   // Initialize auth state on app start
@@ -247,15 +277,36 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         
         if (token && userData) {
           const user = JSON.parse(userData);
-          setState(prev => ({
-            ...prev,
-            user,
-            isAuthenticated: true,
-            isLoading: false,
-            biometricEnabled: biometricEnabled === 'true',
-            rememberMe: true,
-          }));
-          return;
+          
+          // Validate session
+          const sessionValidation = await validateUserSession(user, token);
+          
+          if (sessionValidation.valid) {
+            setState(prev => ({
+              ...prev,
+              user,
+              isAuthenticated: true,
+              isLoading: false,
+              biometricEnabled: biometricEnabled === 'true',
+              rememberMe: true,
+            }));
+            return;
+          } else {
+            // Session invalid, show access denied
+            setState(prev => ({
+              ...prev,
+              isLoading: false,
+              accessDenied: {
+                isDenied: true,
+                reason: sessionValidation.reason || 'Session expired',
+                details: 'Please sign in again to continue using FinTracker.',
+              },
+            }));
+            
+            // Clear invalid session data
+            await clearStoredSession();
+            return;
+          }
         }
       }
       
@@ -266,7 +317,15 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       }));
     } catch (error) {
       console.error('Error initializing auth:', error);
-      setState(prev => ({ ...prev, isLoading: false }));
+      setState(prev => ({ 
+        ...prev, 
+        isLoading: false,
+        accessDenied: {
+          isDenied: true,
+          reason: 'Authentication Error',
+          details: 'Unable to verify your account. Please sign in again.',
+        },
+      }));
     }
   };
 
@@ -275,6 +334,10 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       setState(prev => ({ ...prev, isLoading: true }));
       
       const { user, token } = await API.signUp(email, password, name);
+      
+      // Clear demo data for new accounts
+      await AsyncStorage.removeItem('is_demo_account');
+      await AsyncStorage.removeItem('seed_demo_data');
       
       // Store token and user data
       await SecureStore.setItemAsync(STORAGE_KEYS.USER_TOKEN, token);
@@ -306,6 +369,27 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       setState(prev => ({ ...prev, isLoading: true }));
       
       const { user, token } = await API.signIn(email, password);
+      
+      // Check if this is a demo account
+      const isDemoAccount = user.email === 'demo@fintracker.app';
+      
+      if (isDemoAccount) {
+        // Set demo account flags
+        await AsyncStorage.setItem('is_demo_account', 'true');
+        await AsyncStorage.setItem('seed_demo_data', 'true');
+      } else {
+        // Clear demo data for regular accounts
+        await AsyncStorage.removeItem('is_demo_account');
+        await AsyncStorage.removeItem('seed_demo_data');
+        
+        // Clear any existing demo data from the database
+        try {
+          const { hybridDataService } = await import('../services/hybridDataService');
+          await hybridDataService.clearAllData();
+        } catch (error) {
+          console.log('No demo data to clear');
+        }
+      }
       
       // Store token and user data
       await SecureStore.setItemAsync(STORAGE_KEYS.USER_TOKEN, token);
@@ -345,6 +429,11 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         isLoading: false,
         biometricEnabled: state.biometricEnabled, // Keep biometric setting
         rememberMe: false,
+        accessDenied: {
+          isDenied: false,
+          reason: '',
+          details: '',
+        },
       });
     } catch (error) {
       console.error('Error signing out:', error);
@@ -549,6 +638,97 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     }
   };
 
+  const validateUserSession = async (user: User, token: string): Promise<{ valid: boolean; reason?: string }> => {
+    try {
+      // Check if token is demo token (always valid)
+      if (token.startsWith('demo_token_')) {
+        return { valid: true };
+      }
+      
+      // Check token format
+      if (!token.startsWith('jwt_token_')) {
+        return { valid: false, reason: 'Invalid session format' };
+      }
+      
+      // Check if user data exists in registered users (for non-demo accounts)
+      if (user.email !== 'demo@fintracker.app') {
+        const existingUsers = await AsyncStorage.getItem('registered_users');
+        const users = existingUsers ? JSON.parse(existingUsers) : [];
+        const userExists = users.find((u: any) => u.email.toLowerCase() === user.email.toLowerCase());
+        
+        if (!userExists) {
+          return { valid: false, reason: 'Account no longer exists' };
+        }
+        
+        // Check if account is still active (you can add more validation here)
+        if (userExists.disabled) {
+          return { valid: false, reason: 'Account has been disabled' };
+        }
+      }
+      
+      // Check session age (optional: expire sessions after a certain time)
+      const lastLogin = new Date(user.lastLogin);
+      const now = new Date();
+      const daysSinceLogin = Math.floor((now.getTime() - lastLogin.getTime()) / (1000 * 60 * 60 * 24));
+      
+      if (daysSinceLogin > 30) { // Expire after 30 days
+        return { valid: false, reason: 'Session expired due to inactivity' };
+      }
+      
+      return { valid: true };
+    } catch (error) {
+      console.error('Error validating session:', error);
+      return { valid: false, reason: 'Session validation failed' };
+    }
+  };
+
+  const clearStoredSession = async () => {
+    try {
+      await SecureStore.deleteItemAsync(STORAGE_KEYS.USER_TOKEN);
+      await AsyncStorage.removeItem(STORAGE_KEYS.USER_DATA);
+      await AsyncStorage.removeItem(STORAGE_KEYS.REMEMBER_ME);
+    } catch (error) {
+      console.error('Error clearing stored session:', error);
+    }
+  };
+
+  const validateSession = async (): Promise<{ valid: boolean; reason?: string }> => {
+    if (!state.user || !state.isAuthenticated) {
+      return { valid: false, reason: 'Not authenticated' };
+    }
+    
+    const token = await SecureStore.getItemAsync(STORAGE_KEYS.USER_TOKEN);
+    if (!token) {
+      return { valid: false, reason: 'No valid session token' };
+    }
+    
+    return validateUserSession(state.user, token);
+  };
+
+  const denyAccess = (reason: string, details?: string) => {
+    setState(prev => ({
+      ...prev,
+      user: null,
+      isAuthenticated: false,
+      accessDenied: {
+        isDenied: true,
+        reason,
+        details: details || 'Please contact support if you believe this is an error.',
+      },
+    }));
+  };
+
+  const clearAccessDenial = () => {
+    setState(prev => ({
+      ...prev,
+      accessDenied: {
+        isDenied: false,
+        reason: '',
+        details: '',
+      },
+    }));
+  };
+
   const value: AuthContextType = {
     ...state,
     signUp,
@@ -562,6 +742,9 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     authenticateWithBiometric,
     checkBiometricAvailability,
     refreshUser,
+    validateSession,
+    denyAccess,
+    clearAccessDenial,
   };
 
   return (

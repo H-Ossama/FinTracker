@@ -60,7 +60,7 @@ class BudgetService {
   }
 
   // Budget CRUD operations
-  async createBudget(budgetData: Omit<Budget, 'id' | 'spentAmount' | 'remainingAmount' | 'status' | 'createdAt' | 'transactions'>): Promise<Budget> {
+  async createBudget(budgetData: Omit<Budget, 'id' | 'spentAmount' | 'remainingAmount' | 'status' | 'createdAt' | 'transactions'>, options?: { allowDuplicate?: boolean }): Promise<Budget> {
     try {
       const budgets = await this.getAllBudgets();
       
@@ -70,7 +70,14 @@ class BudgetService {
       );
       
       if (existingBudget) {
-        throw new Error('Budget already exists for this category and month');
+        if (options?.allowDuplicate) {
+          // For system operations, return the existing budget
+          console.log(`Budget already exists for category ${budgetData.categoryName} in ${budgetData.monthYear}, returning existing budget`);
+          return existingBudget;
+        } else {
+          // For user operations, throw an error
+          throw new Error('Budget already exists for this category and month');
+        }
       }
 
       const newBudget: Budget = {
@@ -94,6 +101,11 @@ class BudgetService {
       console.error('Error creating budget:', error);
       throw error;
     }
+  }
+
+  // System method for creating budgets that allows duplicates
+  async createBudgetForSystem(budgetData: Omit<Budget, 'id' | 'spentAmount' | 'remainingAmount' | 'status' | 'createdAt' | 'transactions'>): Promise<Budget> {
+    return this.createBudget(budgetData, { allowDuplicate: true });
   }
 
   async getAllBudgets(): Promise<Budget[]> {
@@ -189,35 +201,60 @@ class BudgetService {
   // Transaction integration
   async addTransactionToBudget(transaction: Transaction): Promise<void> {
     try {
-      if (transaction.type !== 'expense') return; // Only track expenses in budgets
+      // Handle both lowercase and uppercase transaction types
+      const transactionType = transaction.type?.toLowerCase();
+      if (transactionType !== 'expense') return; // Only track expenses in budgets
       
       const monthYear = transaction.date.slice(0, 7); // Extract YYYY-MM
       const budgets = await this.getAllBudgets();
       
-      // Find budget by category name or create a default "Miscellaneous" budget
+      // Find budget by category name
       let budget = budgets.find(b => 
         b.monthYear === monthYear && 
         (b.categoryName.toLowerCase() === transaction.category.toLowerCase())
       );
 
+      // If no budget found, try to find a "Miscellaneous" budget or create one
       if (!budget) {
-        // Create a miscellaneous budget if no matching category found
-        const miscCategory = await this.getBudgetCategoryByName('Miscellaneous');
-        if (miscCategory) {
-          budget = await this.createBudget({
-            categoryId: miscCategory.id,
-            categoryName: miscCategory.name,
-            monthYear,
-            budgetAmount: 500, // Default budget amount
-            warningThreshold: 80,
-            notes: 'Auto-created for uncategorized expenses'
-          });
+        // First check if there's already a Miscellaneous budget for this month
+        budget = budgets.find(b => 
+          b.monthYear === monthYear && 
+          b.categoryName.toLowerCase() === 'miscellaneous'
+        );
+        
+        if (!budget) {
+          // Create a miscellaneous budget if no matching category found
+          const miscCategory = await this.getBudgetCategoryByName('Miscellaneous');
+          if (miscCategory) {
+            try {
+              budget = await this.createBudgetForSystem({
+                categoryId: miscCategory.id,
+                categoryName: miscCategory.name,
+                monthYear,
+                budgetAmount: 500, // Default budget amount
+                warningThreshold: 80,
+                notes: 'Auto-created for uncategorized expenses'
+              });
+            } catch (createError) {
+              // If budget creation fails (e.g., already exists), try to find it again
+              budget = budgets.find(b => 
+                b.monthYear === monthYear && 
+                b.categoryName.toLowerCase() === 'miscellaneous'
+              );
+            }
+          }
         }
       }
 
       if (budget) {
+        // Check if transaction is already in the budget to avoid duplicates
+        const existingTransaction = budget.transactions.find(t => t.id === transaction.id);
+        if (existingTransaction) {
+          return; // Transaction already exists in budget
+        }
+        
         const updatedTransactions = [...budget.transactions, transaction];
-        const spentAmount = Math.abs(updatedTransactions.reduce((sum, t) => sum + t.amount, 0));
+        const spentAmount = Math.abs(updatedTransactions.reduce((sum, t) => sum + Math.abs(t.amount), 0));
         
         await this.updateBudget(budget.id, {
           spentAmount,
@@ -226,6 +263,7 @@ class BudgetService {
       }
     } catch (error) {
       console.error('Error adding transaction to budget:', error);
+      // Don't throw the error to prevent blocking other operations
     }
   }
 
@@ -507,7 +545,7 @@ class BudgetService {
         const category = categories.find(c => c.id === item.categoryId);
         if (category) {
           try {
-            const budget = await this.createBudget({
+            const budget = await this.createBudgetForSystem({
               categoryId: item.categoryId,
               categoryName: category.name,
               monthYear: currentMonth,
@@ -538,7 +576,7 @@ class BudgetService {
 
       for (const sourceBudget of sourceBudgets) {
         try {
-          const newBudget = await this.createBudget({
+          const newBudget = await this.createBudgetForSystem({
             categoryId: sourceBudget.categoryId,
             categoryName: sourceBudget.categoryName,
             monthYear: toMonth,

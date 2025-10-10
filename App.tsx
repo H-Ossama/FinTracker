@@ -17,6 +17,7 @@ import NotificationCenterScreen from './src/screens/NotificationCenterScreen';
 import NotificationPreferencesScreen from './src/screens/NotificationPreferencesScreen';
 import SignUpScreen from './src/screens/SignUpScreen';
 import SignInScreen from './src/screens/SignInScreen';
+import AccessDeniedScreen from './src/screens/AccessDeniedScreen';
 import UserProfileScreen from './src/screens/UserProfileScreen';
 import SavingsGoalsScreen from './src/screens/SavingsGoalsScreen';
 import QuickSettingsScreen from './src/screens/QuickSettingsScreen';
@@ -37,7 +38,7 @@ const Stack = createStackNavigator();
 
 const AppNavigator = () => {
   const { isDark } = useTheme();
-  const { isAuthenticated, isLoading: authLoading } = useAuth();
+  const { isAuthenticated, isLoading: authLoading, accessDenied } = useAuth();
   const [isAppLocked, setIsAppLocked] = useState(false);
   const [appLockInitialized, setAppLockInitialized] = useState(false);
   const appLockService = AppLockService.getInstance();
@@ -83,6 +84,17 @@ const AppNavigator = () => {
 
   if (authLoading || (isAuthenticated && !appLockInitialized)) {
     return <LoadingScreen />;
+  }
+
+  // Show access denied screen if access is denied
+  if (accessDenied.isDenied) {
+    return (
+      <AccessDeniedScreen 
+        onReturnToLogin={() => {
+          // Navigation will automatically show sign in screen when access is cleared
+        }} 
+      />
+    );
   }
 
   // Show lock screen if app is locked and user is authenticated

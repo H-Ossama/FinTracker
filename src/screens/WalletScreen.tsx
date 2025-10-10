@@ -33,6 +33,7 @@ const WalletScreen = () => {
   const [showAddMoneyModal, setShowAddMoneyModal] = useState(false);
   const [selectedWalletForMoney, setSelectedWalletForMoney] = useState<any>(null);
   const [isBalanceVisible, setIsBalanceVisible] = useState(true);
+  const [monthlySpending, setMonthlySpending] = useState(0);
 
   useEffect(() => {
     loadWallets();
@@ -43,11 +44,37 @@ const WalletScreen = () => {
       setLoading(true);
       const fetchedWallets = await hybridDataService.getWallets();
       setWallets(fetchedWallets);
+      await calculateMonthlySpending();
     } catch (error) {
       console.error('Error loading wallets:', error);
       Alert.alert(t('error'), t('wallet_screen_error_loading'));
     } finally {
       setLoading(false);
+    }
+  };
+
+  const calculateMonthlySpending = async () => {
+    try {
+      const currentDate = new Date();
+      const currentMonth = currentDate.getMonth() + 1;
+      const currentYear = currentDate.getFullYear();
+      
+      // Get all transactions for the current month
+      const allTransactions = await hybridDataService.getTransactions();
+      
+      const monthlyTotal = allTransactions
+        .filter(transaction => {
+          const transactionDate = new Date(transaction.date);
+          return transactionDate.getMonth() + 1 === currentMonth && 
+                 transactionDate.getFullYear() === currentYear &&
+                 transaction.type === 'EXPENSE';
+        })
+        .reduce((total, transaction) => total + Math.abs(transaction.amount), 0);
+      
+      setMonthlySpending(monthlyTotal);
+    } catch (error) {
+      console.error('Error calculating monthly spending:', error);
+      setMonthlySpending(0);
     }
   };
 
@@ -294,7 +321,7 @@ const WalletScreen = () => {
             </Text>
             <View style={styles.overviewStats}>
               <View style={styles.statItem}>
-                <Text style={[styles.statValue, { color: theme.colors.text }]}>{formatCurrency(1200)}</Text>
+                <Text style={[styles.statValue, { color: theme.colors.text }]}>{formatCurrency(monthlySpending)}</Text>
                 <Text style={[styles.statLabel, { color: theme.colors.textSecondary }]}>{t('wallet_screen_this_month')}</Text>
               </View>
               <View style={[styles.statDivider, { backgroundColor: theme.colors.border }]} />

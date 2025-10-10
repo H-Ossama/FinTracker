@@ -9,10 +9,12 @@ import {
   Animated,
   ActivityIndicator,
   processColor,
+  RefreshControl,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import Svg, { Circle, Path, Text as SvgText, Defs, RadialGradient, Stop } from 'react-native-svg';
+import { Ionicons } from '@expo/vector-icons';
 import { analyticsService, SpendingCategory, SpendingData, Recommendation, TrendData, TrendPoint } from '../services/analyticsService';
 import { useTheme } from '../contexts/ThemeContext';
 import { useLocalization } from '../contexts/LocalizationContext';
@@ -122,8 +124,8 @@ const InsightsScreen = () => {
       'uncategorized': '🏷️',
     };
     
-    // If icon is already an emoji (contains unicode), return it
-    if (/[\u{1F600}-\u{1F6FF}]|[\u{2600}-\u{27BF}]|[\u{1F300}-\u{1F5FF}]|[\u{1F680}-\u{1F6FF}]|[\u{1F1E0}-\u{1F1FF}]/u.test(icon)) {
+    // If icon is already an emoji (simple check), return it
+    if (icon.length <= 2 && /[^a-zA-Z0-9\-]/.test(icon)) {
       return icon;
     }
     
@@ -149,6 +151,7 @@ const InsightsScreen = () => {
   const [selectedPeriod, setSelectedPeriod] = useState<'Week' | 'Month' | 'Year'>('Month');
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
+  const [refreshing, setRefreshing] = useState<boolean>(false);
   const [spendingData, setSpendingData] = useState<SpendingData | null>(null);
   const [trendData, setTrendData] = useState<TrendData | null>(null);
   const [recommendations, setRecommendations] = useState<Recommendation[]>([]);
@@ -183,9 +186,13 @@ const InsightsScreen = () => {
   );
   
   // Function to fetch data from analytics service
-  const fetchData = async () => {
+  const fetchData = async (isRefresh = false) => {
     try {
-      setLoading(true);
+      if (isRefresh) {
+        setRefreshing(true);
+      } else {
+        setLoading(true);
+      }
       setError(null);
       
       // Convert UI period to API period
@@ -220,8 +227,14 @@ const InsightsScreen = () => {
       setError('An error occurred while loading insights');
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
   };
+
+  // Handle pull to refresh
+  const onRefresh = useCallback(() => {
+    fetchData(true);
+  }, [selectedPeriod]);
 
   // Enhanced categories with fallback colors if needed
   const enhancedCategories = categories.map((category, index) => ({
@@ -431,7 +444,7 @@ const InsightsScreen = () => {
           <Text style={[styles.errorText, { color: theme.colors.error }]}>{error}</Text>
           <TouchableOpacity 
             style={[styles.retryButton, { backgroundColor: theme.colors.primary }]}
-            onPress={fetchData}
+            onPress={() => fetchData(false)}
           >
             <Text style={styles.retryText}>{t('retry')}</Text>
           </TouchableOpacity>
@@ -440,10 +453,38 @@ const InsightsScreen = () => {
     }
     
     return (
-      <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
+      <ScrollView 
+        style={styles.scrollView} 
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            colors={[theme.colors.primary]}
+            tintColor={theme.colors.primary}
+            title={t('pull_to_refresh')}
+            titleColor={theme.colors.textSecondary}
+          />
+        }
+      >
         {/* Header */}
         <View style={styles.header}>
           <Text style={[styles.title, { color: theme.colors.text }]}>{t('insights_title')}</Text>
+          <TouchableOpacity 
+            style={[styles.refreshButton, { backgroundColor: theme.colors.surface }]}
+            onPress={() => fetchData(true)}
+            disabled={refreshing || loading}
+          >
+            {refreshing ? (
+              <ActivityIndicator size="small" color={theme.colors.primary} />
+            ) : (
+              <Ionicons 
+                name="refresh" 
+                size={20} 
+                color={theme.colors.primary} 
+              />
+            )}
+          </TouchableOpacity>
         </View>
 
         {/* Period Selector */}
@@ -470,7 +511,16 @@ const InsightsScreen = () => {
           ))}
         </View>
 
-        {loading && (
+        {refreshing && !loading && (
+          <View style={styles.overlayLoader}>
+            <ActivityIndicator size="small" color={theme.colors.primary} />
+            <Text style={[styles.refreshingText, { color: theme.colors.textSecondary }]}>
+              {t('refreshing_data')}
+            </Text>
+          </View>
+        )}
+
+        {loading && !refreshing && (
           <View style={styles.overlayLoader}>
             <ActivityIndicator size="small" color={theme.colors.primary} />
           </View>
@@ -704,9 +754,16 @@ const styles = StyleSheet.create({
     top: 80,
     alignSelf: 'center',
     zIndex: 10,
-    backgroundColor: 'rgba(255,255,255,0.7)',
+    backgroundColor: 'rgba(255,255,255,0.9)',
     borderRadius: 20,
     padding: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  refreshingText: {
+    marginLeft: 8,
+    fontSize: 12,
+    fontWeight: '500',
   },
   errorContainer: {
     flex: 1,
@@ -740,14 +797,29 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
   },
   header: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
     paddingTop: 20,
     paddingBottom: 20,
-    alignItems: 'center',
   },
   title: {
     fontSize: 24,
     fontWeight: 'bold',
     color: '#333',
+    flex: 1,
+  },
+  refreshButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
   },
   periodSelector: {
     flexDirection: 'row',

@@ -23,24 +23,45 @@ class DataInitializationService {
       if (__DEV__) {
         console.log('💰 Adding sample budgets for demo...');
       }
+      
+      // Get existing budgets to avoid duplicates
+      const existingBudgets = await budgetService.getAllBudgets();
+      
       for (const budgetData of mockBudgets) {
         try {
-          await budgetService.createBudget({
-            categoryId: budgetData.categoryId,
-            categoryName: budgetData.categoryName,
-            monthYear: budgetData.monthYear,
-            budgetAmount: budgetData.budgetAmount,
-            warningThreshold: budgetData.warningThreshold,
-            notes: budgetData.notes,
-          });
+          // Check if this budget already exists
+          const existingBudget = existingBudgets.find(b => 
+            b.categoryId === budgetData.categoryId && b.monthYear === budgetData.monthYear
+          );
           
-          // Add sample transactions to the budget
+          let budget;
+          if (existingBudget) {
+            budget = existingBudget;
+            if (__DEV__) {
+              console.log(`Budget for ${budgetData.categoryName} (${budgetData.monthYear}) already exists, using existing`);
+            }
+          } else {
+            budget = await budgetService.createBudgetForSystem({
+              categoryId: budgetData.categoryId,
+              categoryName: budgetData.categoryName,
+              monthYear: budgetData.monthYear,
+              budgetAmount: budgetData.budgetAmount,
+              warningThreshold: budgetData.warningThreshold,
+              notes: budgetData.notes,
+            });
+          }
+          
+          // Add sample transactions to the budget (only if they don't already exist)
           for (const transaction of budgetData.transactions) {
-            await budgetService.addTransactionToBudget(transaction);
+            // Check if transaction already exists in the budget
+            const existingTransaction = budget.transactions.find(t => t.id === transaction.id);
+            if (!existingTransaction) {
+              await budgetService.addTransactionToBudget(transaction);
+            }
           }
         } catch (error) {
           if (__DEV__) {
-            console.warn('Failed to create sample budget:', budgetData.categoryName, error);
+            console.warn('Failed to create/update sample budget:', budgetData.categoryName, error.message);
           }
         }
       }
