@@ -2,7 +2,7 @@
   "expo": {
     "name": "FinTracker",
     "slug": "fintracker",
-    "version": "1.0.0",
+    "version": "2.0.1",
     "orientation": "portrait",
     "sdkVersion": "54.0.0",
     "icon": "./assets/icon.png",
@@ -35,7 +35,7 @@
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#20C6F7"
       },
-      "versionCode": 2,
+      "versionCode": 3,
       "compileSdkVersion": 34,
       "targetSdkVersion": 34,
       "minSdkVersion": 21,

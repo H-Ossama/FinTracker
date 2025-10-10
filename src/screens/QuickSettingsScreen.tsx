@@ -490,6 +490,24 @@ const QuickSettingsScreen = () => {
     );
   };
 
+  // Handle LinkedIn profile opening
+  const openLinkedIn = () => {
+    const linkedInUrl = 'https://www.linkedin.com/in/h-oussama';
+    Linking.openURL(linkedInUrl).catch((err) => {
+      console.error('Failed to open LinkedIn profile:', err);
+      Alert.alert('Error', 'Could not open LinkedIn profile');
+    });
+  };
+
+  // Handle GitHub profile opening
+  const openGitHub = () => {
+    const githubUrl = 'https://github.com/H-Ossama/FinTracker';
+    Linking.openURL(githubUrl).catch((err) => {
+      console.error('Failed to open GitHub profile:', err);
+      Alert.alert('Error', 'Could not open GitHub profile');
+    });
+  };
+
   const quickActions = [
     {
       id: 'notification-preferences',
@@ -881,6 +899,39 @@ const QuickSettingsScreen = () => {
             <Text style={[styles.versionText, { color: theme.colors.textSecondary }]}>
               {t('settings_screen_built_with_love')}
             </Text>
+            
+            {/* Social Media Links */}
+            <View style={styles.socialContainer}>
+              <TouchableOpacity 
+                style={styles.socialButton} 
+                onPress={openLinkedIn}
+                activeOpacity={0.7}
+              >
+                <Ionicons 
+                  name="logo-linkedin" 
+                  size={20} 
+                  color="#0077B5" 
+                />
+                <Text style={[styles.socialText, { color: theme.colors.textSecondary }]}>
+                  LinkedIn
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity 
+                style={styles.socialButton} 
+                onPress={openGitHub}
+                activeOpacity={0.7}
+              >
+                <Ionicons 
+                  name="logo-github" 
+                  size={20} 
+                  color={isDark ? "#ffffff" : "#333333"} 
+                />
+                <Text style={[styles.socialText, { color: theme.colors.textSecondary }]}>
+                  GitHub
+                </Text>
+              </TouchableOpacity>
+            </View>
           </View>
         </ScrollView>
       </LinearGradient>
@@ -1198,6 +1249,28 @@ const createStyles = (theme: any) =>
       fontSize: 14,
       marginLeft: 12,
       flex: 1,
+    },
+    socialContainer: {
+      flexDirection: 'row',
+      justifyContent: 'center',
+      alignItems: 'center',
+      marginTop: 15,
+      gap: 20,
+    },
+    socialButton: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      paddingVertical: 8,
+      paddingHorizontal: 12,
+      borderRadius: 8,
+      backgroundColor: 'rgba(128, 128, 128, 0.1)',
+      minWidth: 90,
+    },
+    socialText: {
+      fontSize: 11,
+      fontWeight: '500',
+      marginLeft: 6,
     },
   });
 
