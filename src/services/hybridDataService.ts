@@ -21,9 +21,55 @@ interface AppInitResult {
 
 class HybridDataService {
   private isInitialized = false;
+  private initializationPromise: Promise<AppInitResult> | null = null;
+
+  // Check if service is initialized
+  public isServiceInitialized(): boolean {
+    return this.isInitialized;
+  }
+
+  // Wait for initialization to complete
+  public async waitForInitialization(): Promise<void> {
+    if (this.isInitialized) {
+      return;
+    }
+    
+    if (this.initializationPromise) {
+      await this.initializationPromise;
+      return;
+    }
+    
+    // If no initialization is in progress, start it
+    await this.initializeApp();
+  }
 
   // App Initialization
   async initializeApp(): Promise<AppInitResult> {
+    // If already initialized, return success
+    if (this.isInitialized) {
+      return {
+        success: true,
+        syncStatus: {
+          enabled: false,
+          authenticated: false,
+          pendingItems: 0,
+        },
+      };
+    }
+    
+    // If initialization is already in progress, return that promise
+    if (this.initializationPromise) {
+      return this.initializationPromise;
+    }
+    
+    // Start new initialization
+    this.initializationPromise = this._initializeApp();
+    const result = await this.initializationPromise;
+    this.initializationPromise = null;
+    return result;
+  }
+
+  private async _initializeApp(): Promise<AppInitResult> {
     try {
       // Initialize local database
       await localStorageService.initializeDatabase();
@@ -120,9 +166,7 @@ class HybridDataService {
     color?: string;
     icon?: string;
   }): Promise<HybridWallet> {
-    if (!this.isInitialized) {
-      throw new Error('Service not initialized. Call initializeApp() first.');
-    }
+    await this.waitForInitialization();
 
     // Create locally first
     const wallet = await localStorageService.createWallet({
@@ -138,26 +182,20 @@ class HybridDataService {
   }
 
   async getWallets(): Promise<HybridWallet[]> {
-    if (!this.isInitialized) {
-      throw new Error('Service not initialized. Call initializeApp() first.');
-    }
+    await this.waitForInitialization();
 
     const wallets = await localStorageService.getWallets();
     return wallets.map(wallet => this.convertWalletToHybrid(wallet));
   }
 
   async updateWallet(id: string, updates: Partial<LocalWallet>): Promise<void> {
-    if (!this.isInitialized) {
-      throw new Error('Service not initialized. Call initializeApp() first.');
-    }
+    await this.waitForInitialization();
 
     await localStorageService.updateWallet(id, updates);
   }
 
   async deleteWallet(id: string): Promise<void> {
-    if (!this.isInitialized) {
-      throw new Error('Service not initialized. Call initializeApp() first.');
-    }
+    await this.waitForInitialization();
 
     await localStorageService.deleteWallet(id);
   }
@@ -172,9 +210,7 @@ class HybridDataService {
     walletId: string;
     categoryId?: string;
   }): Promise<HybridTransaction> {
-    if (!this.isInitialized) {
-      throw new Error('Service not initialized. Call initializeApp() first.');
-    }
+    await this.waitForInitialization();
 
     // Create locally first
     const transaction = await localStorageService.createTransaction({
@@ -200,9 +236,7 @@ class HybridDataService {
   }
 
   async getTransactions(walletId?: string, limit?: number): Promise<HybridTransaction[]> {
-    if (!this.isInitialized) {
-      throw new Error('Service not initialized. Call initializeApp() first.');
-    }
+    await this.waitForInitialization();
 
     const transactions = await localStorageService.getTransactions(walletId, limit);
     return transactions.map(transaction => this.convertTransactionToHybrid(transaction));
@@ -225,9 +259,7 @@ class HybridDataService {
     fromWalletBalance: number;
     toWalletBalance: number;
   }> {
-    if (!this.isInitialized) {
-      throw new Error('Service not initialized. Call initializeApp() first.');
-    }
+    await this.waitForInitialization();
 
     const result = await localStorageService.transferMoney(transfer);
 
@@ -244,9 +276,7 @@ class HybridDataService {
     transactions: HybridTransaction[];
     total: number;
   }> {
-    if (!this.isInitialized) {
-      throw new Error('Service not initialized. Call initializeApp() first.');
-    }
+    await this.waitForInitialization();
 
     const result = await localStorageService.getWalletTransactions(walletId, limit, offset);
     
@@ -261,9 +291,7 @@ class HybridDataService {
     wallet: HybridWallet | null;
     balanceHistory: Array<{ date: string; balance: number }>;
   }> {
-    if (!this.isInitialized) {
-      throw new Error('Service not initialized. Call initializeApp() first.');
-    }
+    await this.waitForInitialization();
 
     const result = await localStorageService.getWalletBalanceHistory(walletId, days);
     
@@ -275,9 +303,7 @@ class HybridDataService {
 
   // Category Operations
   async getCategories(): Promise<LocalCategory[]> {
-    if (!this.isInitialized) {
-      throw new Error('Service not initialized. Call initializeApp() first.');
-    }
+    await this.waitForInitialization();
 
     return localStorageService.getCategories();
   }
