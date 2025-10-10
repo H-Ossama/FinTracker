@@ -31,7 +31,7 @@
         "resourceClass": "m1-medium"
       },
       "android": {
-        "buildType": "aab",
+        "buildType": "app-bundle",
         "gradleCommand": ":app:bundleRelease"
       },
       "env": {
