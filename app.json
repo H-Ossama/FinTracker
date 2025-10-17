@@ -1,7 +1,7 @@
 {
   "expo": {
-  "name": "FINEX",
-  "slug": "finex",
+    "name": "FINEX",
+    "slug": "finex",
     "version": "2.0.1",
     "orientation": "portrait",
     "sdkVersion": "54.0.0",
@@ -68,7 +68,7 @@
     ],
     "extra": {
       "eas": {
-        "projectId": "cfd99b92-e76c-4291-8605-37103045734e"
+        "projectId": "c3f94c58-e5f4-4e50-b25d-f2b00bd99d2f"
       }
     },
     "owner": "oussamaaaaa"
