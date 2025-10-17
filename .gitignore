@@ -66,8 +66,8 @@ android/.gradle/
 android/app/release/
 android/app/debug/
 android/gradle/
-android/gradlew
-android/gradlew.bat
+# android/gradlew
+# android/gradlew.bat
 android/.idea/
 android/*.iml
 android/local.properties
