@@ -65,9 +65,9 @@ android/build/
 android/.gradle/
 android/app/release/
 android/app/debug/
-android/gradle/
-android/gradlew
-android/gradlew.bat
+# android/gradle/ - Keep this for EAS Build
+# android/gradlew - Keep this for EAS Build
+# android/gradlew.bat - Keep this for EAS Build
 android/.idea/
 android/*.iml
 android/local.properties
