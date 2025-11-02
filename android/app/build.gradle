@@ -89,13 +89,34 @@ android {
 
     namespace 'com.oussamaaaaa.fintracker'
     defaultConfig {
+        // Set default applicationId first (required by EAS)
         applicationId 'com.oussamaaaaa.fintracker'
+        
+        // Dynamic override based on APP_VARIANT environment variable
+        def appVariant = System.getenv("APP_VARIANT") ?: "production"
+        def baseAppId = 'com.oussamaaaaa.fintracker'
+        
+        if (appVariant == "development") {
+            applicationId = "${baseAppId}.dev"
+        } else if (appVariant == "preview") {
+            applicationId = "${baseAppId}.preview"
+        }
+        
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
         versionCode 2
         versionName "1.0.0"
 
         buildConfigField "String", "REACT_NATIVE_RELEASE_LEVEL", "\"${findProperty('reactNativeReleaseLevel') ?: 'stable'}\""
+        
+        // Add variant to app name for easy identification
+        if (appVariant == "development") {
+            resValue "string", "app_name", "FINEX (Dev)"
+        } else if (appVariant == "preview") {
+            resValue "string", "app_name", "FINEX (Preview)"
+        } else {
+            resValue "string", "app_name", "FINEX"
+        }
     }
     signingConfigs {
         debug {

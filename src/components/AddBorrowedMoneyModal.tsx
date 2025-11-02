@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -13,10 +13,11 @@ import {
 } from 'react-native';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { Ionicons } from '@expo/vector-icons';
-import { BorrowedMoney } from '../types';
+import { BorrowedMoney, Wallet } from '../types';
 import { useTheme } from '../contexts/ThemeContext';
 import { useLocalization } from '../contexts/LocalizationContext';
 import useSafeAreaHelper from '../hooks/useSafeAreaHelper';
+import { localStorageService } from '../services/localStorageService';
 
 interface AddBorrowedMoneyModalProps {
   visible: boolean;
@@ -42,9 +43,27 @@ const AddBorrowedMoneyModal: React.FC<AddBorrowedMoneyModalProps> = ({
     notes: '',
     phoneNumber: '',
     email: '',
+    walletId: '',
   });
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [addToReminders, setAddToReminders] = useState(true);
+  const [wallets, setWallets] = useState<Wallet[]>([]);
+  
+  useEffect(() => {
+    loadWallets();
+  }, [visible]);
+
+  const loadWallets = async () => {
+    try {
+      const loadedWallets = await localStorageService.getWallets();
+      setWallets(loadedWallets);
+      if (loadedWallets.length > 0 && !formData.walletId) {
+        setFormData(prev => ({ ...prev, walletId: loadedWallets[0].id }));
+      }
+    } catch (error) {
+      console.error('Error loading wallets:', error);
+    }
+  };
 
   const resetForm = () => {
     setFormData({
@@ -55,6 +74,7 @@ const AddBorrowedMoneyModal: React.FC<AddBorrowedMoneyModalProps> = ({
       notes: '',
       phoneNumber: '',
       email: '',
+      walletId: wallets.length > 0 ? wallets[0].id : '',
     });
     setAddToReminders(true);
   };
@@ -80,6 +100,11 @@ const AddBorrowedMoneyModal: React.FC<AddBorrowedMoneyModalProps> = ({
       return;
     }
 
+    if (!formData.walletId) {
+      Alert.alert('Error', 'Please select a wallet to receive the borrowed money');
+      return;
+    }
+
     const borrowedMoney: Omit<BorrowedMoney, 'id'> = {
       personName: formData.personName.trim(),
       amount: Number(formData.amount),
@@ -90,6 +115,7 @@ const AddBorrowedMoneyModal: React.FC<AddBorrowedMoneyModalProps> = ({
       notes: formData.notes.trim() || undefined,
       phoneNumber: formData.phoneNumber.trim() || undefined,
       email: formData.email.trim() || undefined,
+      walletId: formData.walletId,
     };
 
     if (addToReminders && onAddWithReminder) {
@@ -236,6 +262,85 @@ const AddBorrowedMoneyModal: React.FC<AddBorrowedMoneyModalProps> = ({
                 placeholderTextColor={theme.colors.textSecondary}
                 keyboardType="numeric"
               />
+            </View>
+
+            <View style={styles.inputGroup}>
+              <View style={styles.labelRow}>
+                <Text style={[styles.label, { color: theme.colors.textSecondary }]}>
+                  Receive Money In *
+                </Text>
+                <Ionicons name="wallet" size={16} color={theme.colors.textSecondary} />
+              </View>
+              
+              {wallets.length === 0 ? (
+                <View style={[styles.emptyWalletState, { 
+                  backgroundColor: theme.colors.background,
+                  borderColor: theme.colors.border 
+                }]}>
+                  <Ionicons name="wallet-outline" size={32} color={theme.colors.textSecondary} />
+                  <Text style={[styles.emptyWalletText, { color: theme.colors.textSecondary }]}>
+                    No wallets available
+                  </Text>
+                  <Text style={[styles.emptyWalletSubtext, { color: theme.colors.textSecondary }]}>
+                    Please create a wallet in the Wallet tab first
+                  </Text>
+                </View>
+              ) : (
+                <ScrollView 
+                  horizontal 
+                  showsHorizontalScrollIndicator={false}
+                  style={styles.walletSelector}
+                  contentContainerStyle={styles.walletSelectorContent}
+                >
+                  {wallets.map((wallet) => (
+                    <TouchableOpacity
+                      key={wallet.id}
+                      style={[
+                        styles.walletOption,
+                        {
+                          backgroundColor: formData.walletId === wallet.id 
+                            ? theme.colors.primary 
+                            : theme.colors.background,
+                          borderColor: formData.walletId === wallet.id
+                            ? theme.colors.primary
+                            : theme.colors.border,
+                        }
+                      ]}
+                      onPress={() => setFormData({...formData, walletId: wallet.id})}
+                      activeOpacity={0.7}
+                    >
+                      <View style={[
+                        styles.walletIconCircle,
+                        {
+                          backgroundColor: formData.walletId === wallet.id 
+                            ? 'rgba(255,255,255,0.2)' 
+                            : theme.colors.surface
+                        }
+                      ]}>
+                        <Ionicons 
+                          name={wallet.icon as any || 'wallet-outline'} 
+                          size={22} 
+                          color={formData.walletId === wallet.id ? 'white' : theme.colors.text}
+                        />
+                      </View>
+                      <View style={styles.walletInfo}>
+                        <Text style={[
+                          styles.walletOptionText,
+                          {
+                            color: formData.walletId === wallet.id ? 'white' : theme.colors.text,
+                            fontWeight: formData.walletId === wallet.id ? '600' : '500'
+                          }
+                        ]}>
+                          {wallet.name}
+                        </Text>
+                        {formData.walletId === wallet.id && (
+                          <Ionicons name="checkmark-circle" size={16} color="white" />
+                        )}
+                      </View>
+                    </TouchableOpacity>
+                  ))}
+                </ScrollView>
+              )}
             </View>
 
             <View style={styles.inputGroup}>
@@ -457,6 +562,74 @@ const styles = StyleSheet.create({
     height: 26,
     borderRadius: 13,
     marginHorizontal: 2,
+  },
+  labelRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  walletSelector: {
+    flexDirection: 'row',
+    marginVertical: 4,
+  },
+  walletSelectorContent: {
+    paddingVertical: 4,
+  },
+  walletOption: {
+    flexDirection: 'column',
+    alignItems: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 16,
+    borderWidth: 2,
+    marginRight: 12,
+    minWidth: 100,
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  walletIconCircle: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 8,
+  },
+  walletInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  walletOptionText: {
+    fontSize: 13,
+    fontWeight: '500',
+  },
+  emptyWalletState: {
+    paddingVertical: 40,
+    paddingHorizontal: 20,
+    borderRadius: 16,
+    borderWidth: 2,
+    borderStyle: 'dashed',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginVertical: 8,
+  },
+  emptyWalletText: {
+    fontSize: 16,
+    fontWeight: '600',
+    marginTop: 12,
+    marginBottom: 4,
+  },
+  emptyWalletSubtext: {
+    fontSize: 13,
+    textAlign: 'center',
+    lineHeight: 18,
   },
 });
 
