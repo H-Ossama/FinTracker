@@ -11,7 +11,10 @@
         "resourceClass": "m1-medium"
       },
       "android": {
-        "buildType": "apk"
+        "buildType": "apk",
+        "env": {
+          "reactNativeArchitectures": "arm64-v8a"
+        }
       }
     },
     "preview": {
