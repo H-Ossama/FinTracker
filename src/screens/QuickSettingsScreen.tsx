@@ -119,8 +119,8 @@ const QuickSettingsScreen = () => {
   const handleShareApp = async () => {
     try {
       await Share.share({
-        message: 'Check out FinTracker - the best personal finance app to track your expenses and manage your money! 💰📱',
-        title: 'FinTracker - Personal Finance App',
+        message: 'Check out FINEX - the best personal finance app to track your expenses and manage your money! 💰📱',
+        title: 'FINEX - Personal Finance App',
       });
     } catch (error) {
       console.error('Error sharing app:', error);
@@ -135,11 +135,11 @@ const QuickSettingsScreen = () => {
         { text: 'Cancel', style: 'cancel' },
         {
           text: 'Email Support',
-          onPress: () => Linking.openURL('mailto:support@fintracker.app?subject=FinTracker Support Request'),
+          onPress: () => Linking.openURL('mailto:support@finex.app?subject=FINEX Support Request'),
         },
         {
           text: 'Report Bug',
-          onPress: () => Linking.openURL('mailto:bugs@fintracker.app?subject=Bug Report - FinTracker'),
+          onPress: () => Linking.openURL('mailto:bugs@finex.app?subject=Bug Report - FINEX'),
         },
       ]
     );

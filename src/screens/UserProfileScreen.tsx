@@ -192,7 +192,7 @@ const UserProfileScreen: React.FC<UserProfileScreenProps> = ({ navigation }) => 
       if (result.success) {
         Alert.alert(
           '✅ Account Deleted',
-          'Your account and all data have been permanently deleted. Thank you for using FinTracker.',
+          'Your account and all data have been permanently deleted. Thank you for using FINEX.',
           [
             {
               text: t('ok'),

@@ -221,7 +221,7 @@ const AppNavigator = () => {
 const LoadingScreen = () => (
   <View style={styles.loadingContainer}>
     <ActivityIndicator size="large" color="#007AFF" />
-    <Text style={styles.loadingText}>Initializing FinTracker...</Text>
+    <Text style={styles.loadingText}>Initializing FINEX...</Text>
   </View>
 );
 
@@ -243,7 +243,7 @@ export default function App() {
   const initializeApp = async () => {
     setIsLoading(true);
     try {
-      console.log('🚀 Initializing FinTracker...');
+      console.log('🚀 Initializing FINEX...');
       const result = await hybridDataService.initializeApp();
       setInitResult(result);
       

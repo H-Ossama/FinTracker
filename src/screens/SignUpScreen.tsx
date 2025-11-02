@@ -123,7 +123,7 @@ const SignUpScreen: React.FC<SignUpScreenProps> = ({ navigation }) => {
         // Show welcome message with delay to ensure proper rendering
         setTimeout(() => {
           showSuccess(
-            '🎉 Welcome to FinTracker!',
+            '🎉 Welcome to FINEX!',
             'Your account has been created successfully and you are now signed in.',
           );
         }, 100);
@@ -138,11 +138,11 @@ const SignUpScreen: React.FC<SignUpScreenProps> = ({ navigation }) => {
   };
 
   const openTermsOfService = () => {
-    Linking.openURL('https://fintracker.app/terms-of-service');
+    Linking.openURL('https://finex.app/terms-of-service');
   };
 
   const openPrivacyPolicy = () => {
-    Linking.openURL('https://fintracker.app/privacy-policy');
+    Linking.openURL('https://finex.app/privacy-policy');
   };
 
   return (
@@ -152,7 +152,7 @@ const SignUpScreen: React.FC<SignUpScreenProps> = ({ navigation }) => {
         <View style={styles.compactHeader}>
           <View style={styles.logoContainer}>
             <Ionicons name="wallet" size={28} color="#3B82F6" />
-            <Text style={[styles.appName, { color: theme.colors.text }]}>FinTracker</Text>
+            <Text style={[styles.appName, { color: theme.colors.text }]}>FINEX</Text>
           </View>
           <Text style={[styles.welcomeText, { color: theme.colors.text }]}>Create Account</Text>
         </View>

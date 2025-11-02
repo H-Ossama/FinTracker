@@ -181,7 +181,7 @@ const SignInScreen: React.FC<SignInScreenProps> = ({ navigation }) => {
   };
 
   const fillDemoCredentials = () => {
-    setValue('email', 'demo@fintracker.app', { shouldValidate: true });
+    setValue('email', 'demo@finex.app', { shouldValidate: true });
     setValue('password', 'Demo123!', { shouldValidate: true });
     // Use a slight delay to ensure the form updates before showing alert
     setTimeout(() => {
@@ -196,7 +196,7 @@ const SignInScreen: React.FC<SignInScreenProps> = ({ navigation }) => {
         <View style={styles.compactHeader}>
           <View style={styles.logoContainer}>
             <Ionicons name="wallet" size={28} color="#3B82F6" />
-            <Text style={[styles.appName, { color: theme.colors.text }]}>FinTracker</Text>
+            <Text style={[styles.appName, { color: theme.colors.text }]}>FINEX</Text>
           </View>
           <Text style={[styles.welcomeText, { color: theme.colors.text }]}>Welcome Back</Text>
         </View>
@@ -361,7 +361,7 @@ const SignInScreen: React.FC<SignInScreenProps> = ({ navigation }) => {
         {/* Sign Up Link */}
         <View style={styles.signUpSection}>
           <Text style={[styles.signUpPrompt, { color: theme.colors.textSecondary }]}>
-            New to FinTracker?
+            New to FINEX?
           </Text>
           <TouchableOpacity onPress={() => navigation.navigate('SignUp')}>
             <Text style={styles.signUpLink}>Create Account</Text>

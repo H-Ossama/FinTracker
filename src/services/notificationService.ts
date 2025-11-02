@@ -432,7 +432,7 @@ export class NotificationService {
     try {
       await this.scheduleLocalNotification(
         'Test Notification',
-        'This is a test notification from FinTracker',
+        'This is a test notification from FINEX',
         { test: true }
       );
     } catch (error) {

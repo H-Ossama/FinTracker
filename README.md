@@ -1,4 +1,4 @@
-# FinTracker 💰# FinTracker 💰# FinTracker 💰# FinTracker - Production-Ready Finance App 🏆
+# FINEX 💰# FINEX 💰# FINEX 💰# FINEX - Production-Ready Finance App 🏆
 
 
 
@@ -22,7 +22,7 @@ A modern mobile finance tracking application focused on privacy and user control
 
 
 
-[![Download APK](https://img.shields.io/badge/Download%20APK-Development%20Build-orange?style=for-the-badge&logo=android)](https://github.com/H-Ossama/FinTracker/releases/latest)---
+[![Download APK](https://img.shields.io/badge/Download%20APK-Development%20Build-orange?style=for-the-badge&logo=android)](https://github.com/H-Ossama/FINEX/releases/latest)---
 
 
 
@@ -222,7 +222,7 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 
 ## 📞 **Support**
 
-- 📧 **Email**: support@fintracker.app
+- 📧 **Email**: support@finex.app
 - 🐛 **Issues**: GitHub Issues tab
 - 💬 **Discussions**: GitHub Discussions
 - 📖 **Docs**: See `/docs` folder for detailed guides
@@ -235,7 +235,7 @@ Traditional finance apps force users to choose between:
 - **Cloud-only**: Requires internet, privacy concerns, vendor lock-in
 - **Local-only**: No backup, no multi-device access, data loss risk
 
-**FinTracker's hybrid approach gives users the best of both worlds:**
+**FINEX's hybrid approach gives users the best of both worlds:**
 - ✅ **Privacy by default** (local storage)
 - ✅ **Backup when wanted** (optional cloud sync)  
 - ✅ **User control** (manual sync decisions)
@@ -251,7 +251,7 @@ Traditional finance apps force users to choose between:
 
 ### For Testing/Development:- **Recent Transactions** - Quick access to your latest activity
 
-1. [Download the development APK](https://github.com/H-Ossama/FinTracker/releases/latest)
+1. [Download the development APK](https://github.com/H-Ossama/FINEX/releases/latest)
 
 2. Install on your Android device (enable "Install from unknown sources")## 🎯 How It Works
 
@@ -373,7 +373,7 @@ npm start
 
 
 
-### Development Setup:1. [Download the APK](https://github.com/H-Ossama/FinTracker/releases/latest)
+### Development Setup:1. [Download the APK](https://github.com/H-Ossama/FINEX/releases/latest)
 
 
 
@@ -453,7 +453,7 @@ npm start- **Savings Goals** - Track progress toward your objectives
 
 If you're interested in this project, please consider:
 
-- [⭐ Starring this repository](https://github.com/H-Ossama/FinTracker)**Requirements:**
+- [⭐ Starring this repository](https://github.com/H-Ossama/FINEX)**Requirements:**
 
 - Testing the development build
 
@@ -467,4 +467,4 @@ If you're interested in this project, please consider:
 
 - Mobile device with Expo Go app- **Local Backup** - Export data for manual backup
 
-*Thank you for your interest in FinTracker! Together we can build a better finance tracking app.* 🚀
+*Thank you for your interest in FINEX! Together we can build a better finance tracking app.* 🚀
