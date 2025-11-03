@@ -38,8 +38,6 @@ try {
 
 // Advanced haptic feedback function with different patterns
 const triggerHaptic = (type: 'open' | 'close' | 'select' | 'hover') => {
-  console.log(`🔥 Triggering ${type} haptic feedback`);
-  
   if (Platform.OS === 'android') {
     // Custom vibration patterns for different actions
     const patterns = {
@@ -52,12 +50,9 @@ const triggerHaptic = (type: 'open' | 'close' | 'select' | 'hover') => {
     try {
       if (Vibration && typeof Vibration.vibrate === 'function') {
         Vibration.vibrate(patterns[type]);
-        console.log(`✅ Android ${type} vibration pattern triggered:`, patterns[type]);
-      } else {
-        console.log('❌ Vibration API not available');
       }
     } catch (error) {
-      console.log('❌ Android vibration failed:', error);
+      // Silent fail
     }
   } else {
     // Use expo-haptics for iOS with appropriate feedback types
@@ -76,9 +71,8 @@ const triggerHaptic = (type: 'open' | 'close' | 'select' | 'hover') => {
       };
       
       feedbackMap[type]();
-      console.log(`✅ iOS ${type} haptic triggered`);
     } catch (error) {
-      console.log('❌ iOS haptic failed:', error);
+      // Silent fail
     }
   }
 };
@@ -181,7 +175,6 @@ const QuickActionMenuButton: React.FC<QuickActionMenuButtonProps> = ({
     setIsExpanded(true);
     
     // Haptic feedback for menu opening
-    console.log('🔥 Opening menu - triggering haptic feedback');
     triggerHaptic('open');
     
     // Enhanced ripple effect
@@ -273,7 +266,6 @@ const QuickActionMenuButton: React.FC<QuickActionMenuButtonProps> = ({
 
   const handleActionPress = (actionId: string) => {
     // Haptic feedback for action selection
-    console.log('⚡ Action selected - triggering haptic feedback:', actionId);
     triggerHaptic('select');
     
     closeMenu();
