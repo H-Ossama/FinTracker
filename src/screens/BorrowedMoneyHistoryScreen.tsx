@@ -78,7 +78,7 @@ const BorrowedMoneyHistoryScreen = ({ navigation }: any) => {
       await loadBorrowedMoneyData();
       setShowDetailsModal(false);
       setSelectedBorrowedMoneyForPayment(null);
-      Alert.alert('Success', `Payment of $${selectedBorrowedMoneyForPayment.amount} received from ${selectedBorrowedMoneyForPayment.personName}`);
+      Alert.alert('Success', `Debt of $${selectedBorrowedMoneyForPayment.amount} repaid to ${selectedBorrowedMoneyForPayment.personName}`);
     } catch (error) {
       console.error('Error processing payment:', error);
       Alert.alert('Error', 'Failed to process payment');
@@ -96,7 +96,7 @@ const BorrowedMoneyHistoryScreen = ({ navigation }: any) => {
       // Load wallets to select from
       const wallets = await localStorageService.getWallets();
       if (wallets.length === 0) {
-        Alert.alert('No Wallets', 'You need to have at least one wallet to receive the payment.');
+        Alert.alert('No Wallets', 'You need to have at least one wallet to make the payment from.');
         return;
       }
 
@@ -105,7 +105,7 @@ const BorrowedMoneyHistoryScreen = ({ navigation }: any) => {
         await borrowedMoneyService.markAsPaid(id, wallets[0].id);
         await loadBorrowedMoneyData();
         setShowDetailsModal(false);
-        Alert.alert('Success', `Payment of $${borrowedMoney.amount} received from ${borrowedMoney.personName}`);
+        Alert.alert('Success', `Debt of $${borrowedMoney.amount} repaid to ${borrowedMoney.personName}`);
         return;
       }
 
@@ -260,7 +260,7 @@ const BorrowedMoneyHistoryScreen = ({ navigation }: any) => {
           <View style={[styles.paymentModalContent, { backgroundColor: theme.colors.card }]}>
             <View style={styles.paymentModalHeader}>
               <Text style={[styles.paymentModalTitle, { color: theme.colors.text }]}>
-                Receive Payment
+                Repay Debt
               </Text>
               <TouchableOpacity
                 onPress={() => setShowPaymentModal(false)}
@@ -272,7 +272,7 @@ const BorrowedMoneyHistoryScreen = ({ navigation }: any) => {
 
             <View style={styles.paymentDetails}>
               <Text style={[styles.paymentBillTitle, { color: theme.colors.text }]}>
-                Payment from {selectedBorrowedMoneyForPayment.personName}
+                Repay to {selectedBorrowedMoneyForPayment.personName}
               </Text>
               <Text style={[styles.paymentAmount, { color: theme.colors.primary }]}>
                 ${selectedBorrowedMoneyForPayment.amount}
@@ -281,7 +281,7 @@ const BorrowedMoneyHistoryScreen = ({ navigation }: any) => {
 
             <View style={styles.walletSelection}>
               <Text style={[styles.walletSelectionLabel, { color: theme.colors.text }]}>
-                Select wallet to receive payment
+                Select wallet to pay from
               </Text>
               <ScrollView style={styles.walletsList}>
                 {/* Wallet selection will be implemented here */}
@@ -299,7 +299,7 @@ const BorrowedMoneyHistoryScreen = ({ navigation }: any) => {
                 style={[styles.payButton, { backgroundColor: theme.colors.primary }]}
                 onPress={processPayment}
               >
-                <Text style={styles.payButtonText}>Receive Payment</Text>
+                <Text style={styles.payButtonText}>Repay Debt</Text>
               </TouchableOpacity>
             </View>
           </View>

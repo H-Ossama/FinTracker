@@ -51,6 +51,7 @@ export interface BorrowedMoney {
   borrowedDate: string;
   dueDate: string;
   isPaid: boolean;
+  walletId: string;
   notes?: string;
   phoneNumber?: string;
   email?: string;

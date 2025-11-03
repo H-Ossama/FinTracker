@@ -88,6 +88,16 @@ export class BorrowedMoneyService {
       id: Date.now().toString(),
     };
 
+    // Create an income transaction when borrowing money (money comes into your wallet)
+    await hybridDataService.createTransaction({
+      amount: borrowedMoney.amount,
+      description: `Borrowed money from ${borrowedMoney.personName}`,
+      type: 'INCOME',
+      walletId: borrowedMoney.walletId,
+      date: new Date().toISOString(),
+      notes: `Borrowed for: ${borrowedMoney.reason}`,
+    });
+
     this.borrowedMoneyList.push(newBorrowedMoney);
     await this.saveToStorage();
     return newBorrowedMoney;
@@ -114,14 +124,14 @@ export class BorrowedMoneyService {
       throw new Error('This borrowed money is already marked as paid');
     }
 
-    // Create an income transaction for the repayment
+    // Create an expense transaction for the repayment (paying back the debt)
     await hybridDataService.createTransaction({
       amount: borrowedMoney.amount,
-      description: `Payment received from ${borrowedMoney.personName}`,
-      type: 'INCOME',
+      description: `Repaid debt to ${borrowedMoney.personName}`,
+      type: 'EXPENSE',
       walletId: walletId,
       date: new Date().toISOString(),
-      notes: `Borrowed money repayment - ${borrowedMoney.reason}`,
+      notes: `Debt repayment - ${borrowedMoney.reason}`,
     });
 
     // Mark as paid

@@ -26,6 +26,7 @@ import AddBorrowedMoneyModal from '../components/AddBorrowedMoneyModal';
 import { useTheme } from '../contexts/ThemeContext';
 import { useLocalization } from '../contexts/LocalizationContext';
 import { useNotification } from '../contexts/NotificationContext';
+import { useQuickActions } from '../contexts/QuickActionsContext';
 import borrowedMoneyService from '../services/borrowedMoneyService';
 import useSafeAreaHelper from '../hooks/useSafeAreaHelper';
 import { useWalletVisibility } from '../hooks/useWalletVisibility';
@@ -36,6 +37,7 @@ const HomeScreen = () => {
   const { theme } = useTheme();
   const { t, formatCurrency: formatCurrencyLoc } = useLocalization();
   const { state: notificationState, addNotification } = useNotification();
+  const quickActions = useQuickActions();
   const { headerPadding } = useSafeAreaHelper();
   const { formatWalletBalance, shouldShowBalance } = useWalletVisibility();
   const [isBalanceVisible, setIsBalanceVisible] = useState(true);
@@ -65,6 +67,13 @@ const HomeScreen = () => {
     loadAllData();
     addSampleNotifications();
   }, []);
+
+  // Register quick actions
+  useEffect(() => {
+    quickActions.setTriggerAddExpense(() => setShowAddExpenseModal(true));
+    quickActions.setTriggerTransfer(() => setShowTransferModal(true));
+    // Add wallet functionality is handled by WalletScreen
+  }, [quickActions]);
 
   // Reload data when screen comes into focus (e.g., after bill payment)
   useFocusEffect(

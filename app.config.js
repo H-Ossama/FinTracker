@@ -1,33 +1,76 @@
-const IS_DEV = process.env.APP_VARIANT === 'development';
-const IS_PREVIEW = process.env.APP_VARIANT === 'preview';
-
-module.exports = () => {
-  // Load the base config from app.json
-  const appJson = require('./app.json');
-  const baseConfig = appJson.expo;
-
-  let appName = baseConfig.name;
-  let bundleId = baseConfig.android.package;
-
-  // Modify based on build variant
-  if (IS_DEV) {
-    appName = 'FINEX (Dev)';
-    bundleId = 'com.oussamaaaaa.fintracker.dev';
-  } else if (IS_PREVIEW) {
-    appName = 'FINEX (Preview)';
-    bundleId = 'com.oussamaaaaa.fintracker.preview';
-  }
-
-  return {
-    ...baseConfig,
-    name: appName,
+export default {
+  expo: {
+    name: "FINEX",
+    slug: "finex", 
+    version: "2.0.1",
+    orientation: "portrait",
+    sdkVersion: "54.0.0",
+    icon: "./assets/icon.png",
+    userInterfaceStyle: "light",
+    splash: {
+      image: "./assets/splash.png",
+      resizeMode: "contain",
+      backgroundColor: "#20C6F7"
+    },
+    assetBundlePatterns: [
+      "assets/**/*",
+      "src/**/*.{js,ts,tsx,json}"
+    ],
+    optimization: {
+      minify: true,
+      treeshake: true
+    },
+    updates: {
+      fallbackToCacheTimeout: 0
+    },
     ios: {
-      ...baseConfig.ios,
-      bundleIdentifier: bundleId,
+      bundleIdentifier: "com.oussamaaaaa.fintracker",
+      supportsTablet: true,
+      icon: "./assets/icon.png"
     },
     android: {
-      ...baseConfig.android,
-      package: bundleId,
+      package: "com.oussamaaaaa.finex",
+      icon: "./assets/icon.png",
+      adaptiveIcon: {
+        foregroundImage: "./assets/adaptive-icon.png",
+        backgroundColor: "#20C6F7"
+      },
+      versionCode: 3,
+      compileSdkVersion: 34,
+      targetSdkVersion: 34,
+      minSdkVersion: 21,
+      buildToolsVersion: "34.0.0",
+      enableProguardInReleaseBuilds: true,
+      enableSeparateBuildPerCPUArchitecture: true,
+      bundleInRelease: true,
+      config: {
+        useCleartextTraffic: false
+      }
     },
-  };
+    web: {
+      favicon: "./assets/favicon.png"
+    },
+    platforms: [
+      "ios",
+      "android"
+    ],
+    plugins: [
+      "expo-dev-client",
+      "expo-sqlite",
+      [
+        "expo-notifications",
+        {
+          icon: "./assets/adaptive-icon.png",
+          color: "#20C6F7",
+          defaultChannel: "default"
+        }
+      ]
+    ],
+    extra: {
+      eas: {
+        projectId: "c3f94c58-e5f4-4e50-b25d-f2b00bd99d2f"
+      }
+    },
+    owner: "oussamaaaaa"
+  }
 };

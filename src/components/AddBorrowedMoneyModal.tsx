@@ -13,11 +13,11 @@ import {
 } from 'react-native';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { Ionicons } from '@expo/vector-icons';
-import { BorrowedMoney, Wallet } from '../types';
+import { BorrowedMoney } from '../types';
 import { useTheme } from '../contexts/ThemeContext';
 import { useLocalization } from '../contexts/LocalizationContext';
 import useSafeAreaHelper from '../hooks/useSafeAreaHelper';
-import { localStorageService } from '../services/localStorageService';
+import { localStorageService, LocalWallet } from '../services/localStorageService';
 
 interface AddBorrowedMoneyModalProps {
   visible: boolean;
@@ -47,7 +47,7 @@ const AddBorrowedMoneyModal: React.FC<AddBorrowedMoneyModalProps> = ({
   });
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [addToReminders, setAddToReminders] = useState(true);
-  const [wallets, setWallets] = useState<Wallet[]>([]);
+  const [wallets, setWallets] = useState<LocalWallet[]>([]);
   
   useEffect(() => {
     loadWallets();
@@ -101,7 +101,7 @@ const AddBorrowedMoneyModal: React.FC<AddBorrowedMoneyModalProps> = ({
     }
 
     if (!formData.walletId) {
-      Alert.alert('Error', 'Please select a wallet to receive the borrowed money');
+      Alert.alert('Error', 'Please select a wallet to add the borrowed money to');
       return;
     }
 
@@ -267,7 +267,7 @@ const AddBorrowedMoneyModal: React.FC<AddBorrowedMoneyModalProps> = ({
             <View style={styles.inputGroup}>
               <View style={styles.labelRow}>
                 <Text style={[styles.label, { color: theme.colors.textSecondary }]}>
-                  Receive Money In *
+                  Add Borrowed Money To *
                 </Text>
                 <Ionicons name="wallet" size={16} color={theme.colors.textSecondary} />
               </View>

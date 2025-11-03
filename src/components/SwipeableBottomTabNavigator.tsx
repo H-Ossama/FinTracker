@@ -11,12 +11,14 @@ import WalletScreen from '../screens/WalletScreen';
 import MoreScreen from '../screens/MoreScreen';
 import { useTheme } from '../contexts/ThemeContext';
 import { useLocalization } from '../contexts/LocalizationContext';
+import QuickActionMenuButton from './QuickActionMenuButton';
 
 const initialLayout = { width: Dimensions.get('window').width };
 
 const SwipeableBottomTabNavigator = () => {
   const { isDark } = useTheme();
   const { t } = useLocalization();
+  const navigation = useNavigation();
   const insets = useSafeAreaInsets();
   const [index, setIndex] = useState(0);
   const [routes] = useState([
@@ -61,11 +63,11 @@ const SwipeableBottomTabNavigator = () => {
       styles.tabBarContainer,
       {
         backgroundColor: isDark ? '#1a1a1a' : '#ffffff',
-        paddingBottom: Math.max(insets.bottom, 8), // Minimal bottom padding
+        paddingBottom: Math.max(insets.bottom, 8),
       }
     ]}>
       <View style={styles.tabBar}>
-        {props.navigationState.routes.map((route: any, i: number) => {
+        {props.navigationState.routes.slice(0, 2).map((route: any, i: number) => {
           const focused = index === i;
           const iconName = getIconName(route.key, focused) as keyof typeof Ionicons.glyphMap;
           
@@ -74,6 +76,39 @@ const SwipeableBottomTabNavigator = () => {
               key={route.key}
               style={styles.tabItem}
               onPress={() => setIndex(i)}
+            >
+              <Ionicons
+                name={iconName}
+                size={24}
+                color={focused ? '#007AFF' : (isDark ? '#8E8E93' : 'gray')}
+              />
+              <Text style={[
+                styles.tabLabel,
+                {
+                  color: focused ? '#007AFF' : (isDark ? '#8E8E93' : 'gray'),
+                }
+              ]}>
+                {route.title}
+              </Text>
+            </Pressable>
+          );
+        })}
+        
+        {/* Center Quick Action Button */}
+        <View style={styles.centerButtonContainer}>
+          <QuickActionMenuButton color="#007AFF" />
+        </View>
+        
+        {props.navigationState.routes.slice(2).map((route: any, i: number) => {
+          const actualIndex = i + 2;
+          const focused = index === actualIndex;
+          const iconName = getIconName(route.key, focused) as keyof typeof Ionicons.glyphMap;
+          
+          return (
+            <Pressable
+              key={route.key}
+              style={styles.tabItem}
+              onPress={() => setIndex(actualIndex)}
             >
               <Ionicons
                 name={iconName}
@@ -143,6 +178,12 @@ const styles = StyleSheet.create({
     fontSize: 12,
     marginTop: 4,
     fontWeight: '500',
+  },
+  centerButtonContainer: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    height: '100%',
   },
 });
 

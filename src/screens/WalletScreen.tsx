@@ -18,12 +18,14 @@ import AddMoneyModal from '../components/AddMoneyModal';
 import TransferModal from '../components/TransferModal';
 import { useTheme } from '../contexts/ThemeContext';
 import { useLocalization } from '../contexts/LocalizationContext';
+import { useQuickActions } from '../contexts/QuickActionsContext';
 import { hybridDataService } from '../services/hybridDataService';
 
 const WalletScreen = () => {
   const { theme } = useTheme();
   const { formatCurrency, t } = useLocalization();
   const { formatWalletBalance, shouldShowBalance, getTotalVisibleBalance } = useWalletVisibility();
+  const quickActions = useQuickActions();
   
   const [wallets, setWallets] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -38,6 +40,11 @@ const WalletScreen = () => {
   useEffect(() => {
     loadWallets();
   }, []);
+
+  // Register quick action for adding wallet
+  useEffect(() => {
+    quickActions.setTriggerAddWallet(() => setShowAddWalletModal(true));
+  }, [quickActions]);
 
   const loadWallets = async () => {
     try {

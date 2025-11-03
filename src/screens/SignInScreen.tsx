@@ -181,7 +181,7 @@ const SignInScreen: React.FC<SignInScreenProps> = ({ navigation }) => {
   };
 
   const fillDemoCredentials = () => {
-    setValue('email', 'demo@finex.app', { shouldValidate: true });
+    setValue('email', 'demo@fintracker.app', { shouldValidate: true });
     setValue('password', 'Demo123!', { shouldValidate: true });
     // Use a slight delay to ensure the form updates before showing alert
     setTimeout(() => {

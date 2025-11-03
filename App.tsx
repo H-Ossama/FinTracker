@@ -31,6 +31,7 @@ import { ThemeProvider, useTheme } from './src/contexts/ThemeContext';
 import { LocalizationProvider } from './src/contexts/LocalizationContext';
 import { AuthProvider, useAuth } from './src/contexts/AuthContext';
 import { NotificationProvider } from './src/contexts/NotificationContext';
+import { QuickActionsProvider } from './src/contexts/QuickActionsContext';
 import { hybridDataService, AppInitResult } from './src/services/hybridDataService';
 import AppLockService from './src/services/appLockService';
 import SyncReminderBanner from './src/components/SyncReminderBanner';
@@ -309,12 +310,14 @@ export default function App() {
         <ThemeProvider>
           <AuthProvider>
             <NotificationProvider>
-              {/* Sync reminder banner - shows at top level */}
-              <SyncReminderBanner onSyncComplete={() => {
-                console.log('🔄 Sync completed from reminder');
-              }} />
-              
-              <AppNavigator />
+              <QuickActionsProvider>
+                {/* Sync reminder banner - shows at top level */}
+                <SyncReminderBanner onSyncComplete={() => {
+                  console.log('🔄 Sync completed from reminder');
+                }} />
+                
+                <AppNavigator />
+              </QuickActionsProvider>
             </NotificationProvider>
           </AuthProvider>
         </ThemeProvider>

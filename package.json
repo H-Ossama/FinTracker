@@ -27,7 +27,7 @@
     "@react-navigation/stack": "^6.4.1",
     "expo": "54.0.13",
     "expo-constants": "~18.0.9",
-    "expo-dev-client": "~6.0.14",
+    "expo-dev-client": "~6.0.16",
     "expo-device": "^8.0.9",
     "expo-image-manipulator": "~14.0.7",
     "expo-linear-gradient": "~15.0.7",

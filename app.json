@@ -45,13 +45,7 @@
       "bundleInRelease": true,
       "config": {
         "useCleartextTraffic": false
-      },
-      "permissions": [
-        "NOTIFICATIONS",
-        "VIBRATE",
-        "USE_BIOMETRIC",
-        "USE_FINGERPRINT"
-      ]
+      }
     },
     "web": {
       "favicon": "./assets/favicon.png"

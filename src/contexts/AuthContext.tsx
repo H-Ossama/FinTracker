@@ -373,10 +373,14 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       // Check if this is a demo account
       const isDemoAccount = user.email === 'demo@fintracker.app';
       
+      // Demo accounts are always remembered to maintain session
+      const shouldRemember = isDemoAccount ? true : remember;
+      
       if (isDemoAccount) {
         // Set demo account flags
         await AsyncStorage.setItem('is_demo_account', 'true');
         await AsyncStorage.setItem('seed_demo_data', 'true');
+        console.log('✅ Demo account login - session will persist');
       } else {
         // Clear demo data for regular accounts
         await AsyncStorage.removeItem('is_demo_account');
@@ -394,7 +398,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       // Store token and user data
       await SecureStore.setItemAsync(STORAGE_KEYS.USER_TOKEN, token);
       await AsyncStorage.setItem(STORAGE_KEYS.USER_DATA, JSON.stringify(user));
-      await AsyncStorage.setItem(STORAGE_KEYS.REMEMBER_ME, remember.toString());
+      await AsyncStorage.setItem(STORAGE_KEYS.REMEMBER_ME, shouldRemember.toString());
       // Mark that user has logged in before (for biometric checks)
       await AsyncStorage.setItem(STORAGE_KEYS.HAS_LOGGED_IN_BEFORE, 'true');
       
@@ -403,7 +407,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         user,
         isAuthenticated: true,
         isLoading: false,
-        rememberMe: remember,
+        rememberMe: shouldRemember,
       }));
       
       return { success: true };
@@ -640,44 +644,52 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
   const validateUserSession = async (user: User, token: string): Promise<{ valid: boolean; reason?: string }> => {
     try {
-      // Check if token is demo token (always valid)
-      if (token.startsWith('demo_token_')) {
+      // Check if this is a demo account (always valid for demo)
+      if (user.email === 'demo@fintracker.app' && token.startsWith('demo_token_')) {
+        console.log('✅ Demo account session validated');
         return { valid: true };
       }
       
-      // Check token format
-      if (!token.startsWith('jwt_token_')) {
+      // Check token format for regular accounts
+      if (!token.startsWith('jwt_token_') && !token.startsWith('demo_token_')) {
+        console.log('❌ Invalid token format:', token.substring(0, 20));
         return { valid: false, reason: 'Invalid session format' };
       }
       
-      // Check if user data exists in registered users (for non-demo accounts)
+      // For regular accounts, check if user exists in registered users
       if (user.email !== 'demo@fintracker.app') {
         const existingUsers = await AsyncStorage.getItem('registered_users');
         const users = existingUsers ? JSON.parse(existingUsers) : [];
         const userExists = users.find((u: any) => u.email.toLowerCase() === user.email.toLowerCase());
         
         if (!userExists) {
+          console.log('❌ User account not found:', user.email);
           return { valid: false, reason: 'Account no longer exists' };
         }
         
-        // Check if account is still active (you can add more validation here)
+        // Check if account is still active
         if (userExists.disabled) {
+          console.log('❌ User account disabled:', user.email);
           return { valid: false, reason: 'Account has been disabled' };
         }
       }
       
-      // Check session age (optional: expire sessions after a certain time)
-      const lastLogin = new Date(user.lastLogin);
-      const now = new Date();
-      const daysSinceLogin = Math.floor((now.getTime() - lastLogin.getTime()) / (1000 * 60 * 60 * 24));
-      
-      if (daysSinceLogin > 30) { // Expire after 30 days
-        return { valid: false, reason: 'Session expired due to inactivity' };
+      // Check session age (skip for demo accounts)
+      if (user.email !== 'demo@fintracker.app') {
+        const lastLogin = new Date(user.lastLogin);
+        const now = new Date();
+        const daysSinceLogin = Math.floor((now.getTime() - lastLogin.getTime()) / (1000 * 60 * 60 * 24));
+        
+        if (daysSinceLogin > 30) { // Expire after 30 days
+          console.log('❌ Session expired after', daysSinceLogin, 'days');
+          return { valid: false, reason: 'Session expired due to inactivity' };
+        }
       }
       
+      console.log('✅ Regular account session validated:', user.email);
       return { valid: true };
     } catch (error) {
-      console.error('Error validating session:', error);
+      console.error('❌ Error validating session:', error);
       return { valid: false, reason: 'Session validation failed' };
     }
   };

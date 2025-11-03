@@ -1,4 +1,4 @@
-package com.oussamaaaaa.fintracker
+package com.oussamaaaaa.finex
 
 import android.os.Build
 import android.os.Bundle
