@@ -40,6 +40,9 @@
       "targetSdkVersion": 34,
       "minSdkVersion": 21,
       "buildToolsVersion": "34.0.0",
+      "permissions": [
+        "SCHEDULE_EXACT_ALARM"
+      ],
       "enableProguardInReleaseBuilds": true,
       "enableSeparateBuildPerCPUArchitecture": true,
       "bundleInRelease": true,

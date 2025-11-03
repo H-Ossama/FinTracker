@@ -73,6 +73,14 @@ export default function NotificationCenterScreen({ navigation }: { navigation: a
     markAsRead(notificationId);
   };
 
+  const handleNotificationPress = (notification: typeof notifications[0]) => {
+    handleMarkAsRead(notification.id);
+
+    if (notification.data) {
+      notificationService.navigateFromNotificationData(notification.data);
+    }
+  };
+
   const handleMarkAllAsRead = () => {
     markAllAsRead();
   };
@@ -198,7 +206,7 @@ export default function NotificationCenterScreen({ navigation }: { navigation: a
   const renderNotificationItem = ({ item }: { item: typeof notifications[0] }) => (
     <TouchableOpacity
       style={[styles.notificationItem, !item.read && styles.unreadNotification]}
-      onPress={() => handleMarkAsRead(item.id)}
+      onPress={() => handleNotificationPress(item)}
     >
       <View style={styles.notificationHeader}>
         <View style={styles.notificationIconContainer}>

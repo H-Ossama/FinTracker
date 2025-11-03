@@ -3,6 +3,8 @@ import * as Device from 'expo-device';
 import { Platform } from 'react-native';
 import Constants from 'expo-constants';
 
+import { navigate } from '../navigation/navigationService';
+
 // Check if we're in a development build (not Expo Go)
 const isExpoGo = Constants.appOwnership === 'expo';
 const isDevBuild = !isExpoGo;
@@ -35,6 +37,7 @@ export interface PushToken {
 export class NotificationService {
   private static pushToken: string | null = null;
   private static listeners: Array<() => void> = [];
+  private static processedResponseIds = new Set<string>();
 
   /**
    * Initialize notification service
@@ -60,8 +63,10 @@ export class NotificationService {
         console.log('📱 Push notifications not available on simulator/emulator');
       }
 
-      // Set up notification listeners
-      this.setupNotificationListeners();
+  // Set up notification listeners
+  this.setupNotificationListeners();
+
+  await this.handleInitialNotificationResponse();
       
       console.log('✅ Notification service initialized successfully');
     } catch (error) {
@@ -243,14 +248,18 @@ export class NotificationService {
    */
   static setupNotificationListeners(): void {
     // Listener for notifications received while app is running
+    // NOTE: In development, this may fire when scheduling AND when actually triggered
+    // We filter out the premature triggers in handleNotificationReceived
     const notificationListener = Notifications.addNotificationReceivedListener(notification => {
-      console.log('Notification received:', notification);
       this.handleNotificationReceived(notification);
     });
 
     // Listener for notification responses (when user taps notification)
     const responseListener = Notifications.addNotificationResponseReceivedListener(response => {
-      console.log('Notification response:', response);
+      console.log('👆 User tapped notification:', {
+        id: response.notification.request.identifier,
+        title: response.notification.request.content.title,
+      });
       this.handleNotificationResponse(response);
     });
 
@@ -262,26 +271,147 @@ export class NotificationService {
   }
 
   /**
+   * Notification received callback - to be set by NotificationContext
+   */
+  private static onNotificationReceived: ((notification: Notifications.Notification) => void) | null = null;
+  private static onNotificationDelayed: ((info: {
+    id: string;
+    title: string | null;
+    expectedAt: number;
+    receivedAt: number;
+    delayMs: number;
+    data: any;
+  }) => void) | null = null;
+
+  /**
+   * Set callback for when notifications are received
+   */
+  static setNotificationReceivedCallback(callback: (notification: Notifications.Notification) => void) {
+    this.onNotificationReceived = callback;
+  }
+
+  static setNotificationDelayCallback(
+    callback: ((info: {
+      id: string;
+      title: string | null;
+      expectedAt: number;
+      receivedAt: number;
+      delayMs: number;
+      data: any;
+    }) => void) | null,
+  ) {
+    this.onNotificationDelayed = callback;
+  }
+
+  /**
+   * Store of recently scheduled notification IDs with their expected trigger time
+   */
+  private static scheduledNotifications = new Map<string, number>();
+
+  /**
    * Handle notification received while app is running
    */
   private static handleNotificationReceived(notification: Notifications.Notification): void {
     const { title, body, data } = notification.request.content;
+    const notificationId = notification.request.identifier;
     
-    // You can update app state, show in-app notifications, etc.
-    console.log(`Received: ${title} - ${body}`, data);
+    // Check if this notification was recently scheduled
+    const expectedTriggerTime = this.scheduledNotifications.get(notificationId);
+    const now = Date.now();
+    const notificationDate = notification.date;
     
-    // Emit custom event for app components to listen to
-    // This could be implemented with EventEmitter or Context
+    if (expectedTriggerTime) {
+      // Calculate how early this notification is firing
+      const timeUntilExpected = expectedTriggerTime - now;
+      
+      if (timeUntilExpected > 5000) {
+        // Notification is firing more than 5 seconds early - this is the scheduling artifact
+        console.log('🚫 Ignoring premature notification trigger:', {
+          id: notificationId,
+          title,
+          expectedAt: new Date(expectedTriggerTime).toLocaleString(),
+          receivedAt: new Date(now).toLocaleString(),
+          earlyBySeconds: Math.floor(timeUntilExpected / 1000),
+        });
+        return;
+      } else {
+        const latenessMs = now - expectedTriggerTime;
+        const timingSummary = {
+          id: notificationId,
+          title,
+          expectedAt: expectedTriggerTime,
+          receivedAt: now,
+          delayMs: Math.max(0, latenessMs),
+        };
+
+        // Notification fired close to the expected time
+        console.log('✅ Notification triggered at expected time:', {
+          id: notificationId,
+          title,
+          expectedAt: new Date(expectedTriggerTime).toLocaleString(),
+          receivedAt: new Date(now).toLocaleString(),
+          delayMs: Math.max(0, latenessMs),
+        });
+
+        if (latenessMs > 60000) {
+          console.warn('⚠️  Notification fired later than expected', {
+            ...timingSummary,
+            delaySeconds: Math.round(latenessMs / 1000),
+          });
+
+          if (this.onNotificationDelayed) {
+            this.onNotificationDelayed({
+              ...timingSummary,
+              data,
+            });
+          }
+        }
+
+        // Remove from tracking map
+        this.scheduledNotifications.delete(notificationId);
+      }
+    } else {
+      // This is a notification we don't know about (maybe from a previous session)
+      // Check if notification date is close to current time
+      const timeDifference = Math.abs(now - notificationDate);
+      
+      if (timeDifference > 10000) {
+        console.log('⚠️  Ignoring notification with suspicious timing:', {
+          title,
+          notificationDate: new Date(notificationDate).toLocaleString(),
+          now: new Date(now).toLocaleString(),
+          differenceMs: timeDifference
+        });
+        return;
+      }
+    }
+    
+    // Log the received notification
+  console.log(`✅ Notification triggered: ${title} - ${body}`, data);
+    
+    // Call the callback if set (NotificationContext will handle adding to in-app list)
+    if (this.onNotificationReceived) {
+      this.onNotificationReceived(notification);
+    }
   }
 
   /**
    * Handle notification response (user interaction)
    */
   private static handleNotificationResponse(response: Notifications.NotificationResponse): void {
+    const responseId = `${response.notification.request.identifier}:${response.actionIdentifier ?? 'default'}`;
+
+    if (this.processedResponseIds.has(responseId)) {
+      console.log('🔁 Notification response already processed, skipping duplicate', responseId);
+      return;
+    }
+
+    this.markResponseProcessed(responseId);
+
     const { data } = response.notification.request.content;
-    
+
     console.log('User tapped notification with data:', data);
-    
+
     // Handle navigation based on notification data
     if (data) {
       this.handleNotificationNavigation(data);
@@ -292,23 +422,128 @@ export class NotificationService {
    * Handle navigation based on notification data
    */
   private static handleNotificationNavigation(data: any): void {
-    // This would integrate with your navigation system
-    console.log('Handling navigation for notification data:', data);
-    
-    // Example navigation logic:
-    if (data.reminderId) {
-      // Navigate to reminder details
-      console.log('Navigate to reminder:', data.reminderId);
-    } else if (data.transactionId) {
-      // Navigate to transaction details
-      console.log('Navigate to transaction:', data.transactionId);
-    } else if (data.goalId) {
-      // Navigate to goal details
-      console.log('Navigate to goal:', data.goalId);
-    } else if (data.categoryId) {
-      // Navigate to category insights
-      console.log('Navigate to category:', data.categoryId);
+    const target = this.resolveNotificationTarget(data);
+
+    if (!target) {
+      console.log('ℹ️  No navigation target resolved for notification data:', data);
+      return;
     }
+
+    console.log('🧭 Navigating to notification target:', target);
+    navigate(target.screen, target.params);
+  }
+
+  private static resolveNotificationTarget(data: any): { screen: string; params?: Record<string, unknown> } | null {
+    if (!data) {
+      return null;
+    }
+
+    const normalizedParams = (input: any) => this.normalizeParams(input);
+
+    if (typeof data.targetScreen === 'string') {
+      return {
+        screen: data.targetScreen,
+        params: normalizedParams(data.navigationParams ?? data.targetParams ?? data.params),
+      };
+    }
+
+    if (data.type === 'reminder' || data.reminderId) {
+      return {
+        screen: this.resolveReminderTargetScreen(data),
+        params: normalizedParams(data.navigationParams) ?? {
+          reminderId: data.reminderId ?? data.id,
+          reminderType: data.reminderType ?? data.categoryName ?? data.categoryId,
+        },
+      };
+    }
+
+    if (data.transactionId) {
+      return {
+        screen: 'TransactionsHistory',
+        params: normalizedParams(data.navigationParams) ?? { transactionId: data.transactionId },
+      };
+    }
+
+    if (data.goalId) {
+      return {
+        screen: 'SavingsGoals',
+        params: normalizedParams(data.navigationParams) ?? { goalId: data.goalId },
+      };
+    }
+
+    if (data.budgetId) {
+      return {
+        screen: 'BudgetPlanner',
+        params: normalizedParams(data.navigationParams) ?? { budgetId: data.budgetId },
+      };
+    }
+
+    return null;
+  }
+
+  private static resolveReminderTargetScreen(data: any): string {
+    if (typeof data.reminderScreen === 'string') {
+      return data.reminderScreen;
+    }
+
+    const lowered = (
+      data.reminderType ??
+      data.categoryName ??
+      data.category ??
+      data.categoryId ??
+      ''
+    )
+      .toString()
+      .toLowerCase();
+
+    if (lowered.includes('bill') || lowered.includes('utility')) {
+      return 'BillsReminder';
+    }
+
+    if (lowered.includes('budget')) {
+      return 'BudgetPlanner';
+    }
+
+    if (lowered.includes('goal')) {
+      return 'SavingsGoals';
+    }
+
+    return 'Reminders';
+  }
+
+  private static normalizeParams(raw: any): Record<string, unknown> | undefined {
+    if (!raw || Array.isArray(raw) || typeof raw !== 'object') {
+      return undefined;
+    }
+
+    return raw as Record<string, unknown>;
+  }
+
+  private static markResponseProcessed(responseId: string) {
+    this.processedResponseIds.add(responseId);
+
+    if (this.processedResponseIds.size > 50) {
+      const iterator = this.processedResponseIds.values();
+      const first = iterator.next();
+      if (!first.done) {
+        this.processedResponseIds.delete(first.value);
+      }
+    }
+  }
+
+  private static async handleInitialNotificationResponse(): Promise<void> {
+    try {
+      const lastResponse = await Notifications.getLastNotificationResponseAsync();
+      if (lastResponse) {
+        this.handleNotificationResponse(lastResponse);
+      }
+    } catch (error) {
+      console.error('Error handling initial notification response:', error);
+    }
+  }
+
+  static navigateFromNotificationData(data: any): void {
+    this.handleNotificationNavigation(data);
   }
 
   /**
@@ -318,7 +553,8 @@ export class NotificationService {
     title: string,
     body: string,
     data?: any,
-    trigger?: Notifications.NotificationTriggerInput
+    trigger?: Notifications.NotificationTriggerInput | number | Date,
+    options: { channelId?: string; allowWhileIdle?: boolean } = {}
   ): Promise<string> {
     try {
       const permissions = await this.getPermissions();
@@ -327,6 +563,84 @@ export class NotificationService {
         throw new Error('Notification permissions not granted');
       }
 
+      const channelId = options.channelId ?? 'default';
+      const allowWhileIdle = options.allowWhileIdle ?? true;
+
+      // Handle different trigger formats
+      let finalTrigger: Notifications.NotificationTriggerInput | null = null;
+      let expectedTriggerTime = Date.now();
+
+      if (trigger instanceof Date) {
+        const triggerTime = trigger.getTime();
+        if (Number.isNaN(triggerTime)) {
+          throw new Error('Invalid trigger date');
+        }
+
+        expectedTriggerTime = triggerTime;
+
+        finalTrigger = {
+          type: Notifications.SchedulableTriggerInputTypes.DATE,
+          date: triggerTime,
+          channelId: Platform.OS === 'android' ? channelId : undefined,
+          ...(Platform.OS === 'android' ? { allowWhileIdle } : {}),
+        } as Notifications.DateTriggerInput & { allowWhileIdle?: boolean };
+      } else if (typeof trigger === 'number') {
+        if (!Number.isFinite(trigger) || trigger < 1) {
+          console.error('❌ ERROR: Trigger seconds cannot be less than 1!', trigger);
+          throw new Error(`Invalid trigger seconds: ${trigger}`);
+        }
+
+        expectedTriggerTime = Date.now() + trigger * 1000;
+
+        if (Platform.OS === 'android') {
+          finalTrigger = {
+            type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL,
+            seconds: trigger,
+            repeats: false,
+            channelId,
+            allowWhileIdle,
+          } as Notifications.TimeIntervalTriggerInput & { allowWhileIdle?: boolean };
+        } else {
+          finalTrigger = {
+            seconds: trigger,
+            repeats: false,
+          } as Notifications.TimeIntervalTriggerInput;
+        }
+      } else if (trigger) {
+        finalTrigger = {
+          ...(trigger as Record<string, any>),
+        } as Notifications.NotificationTriggerInput;
+
+        const triggerAsAny = finalTrigger as Record<string, any>;
+
+        if (Platform.OS === 'android' && !triggerAsAny.channelId) {
+          triggerAsAny.channelId = channelId;
+        }
+
+        if (Platform.OS === 'android' && allowWhileIdle !== undefined) {
+          triggerAsAny.allowWhileIdle = allowWhileIdle;
+        }
+
+        if (typeof triggerAsAny.seconds === 'number') {
+          expectedTriggerTime = Date.now() + triggerAsAny.seconds * 1000;
+        } else if (triggerAsAny.date) {
+          expectedTriggerTime = new Date(triggerAsAny.date).getTime();
+        }
+      }
+
+      if (!finalTrigger) {
+        finalTrigger = null;
+      }
+      
+      console.log('📅 Scheduling notification:', {
+        title,
+        body,
+        trigger: finalTrigger,
+        triggerType: finalTrigger ? (finalTrigger as any).type ?? 'custom' : 'immediate',
+        triggerValue: (finalTrigger as any)?.seconds ?? (finalTrigger as any)?.date ?? null,
+        willFireAt: new Date(expectedTriggerTime).toLocaleString()
+      });
+
       const notificationId = await Notifications.scheduleNotificationAsync({
         content: {
           title,
@@ -334,13 +648,30 @@ export class NotificationService {
           data: data || {},
           sound: 'default',
         },
-        trigger: trigger || null, // null = immediate
+        trigger: finalTrigger,
       });
 
-      console.log('Local notification scheduled:', notificationId);
+      // Track this notification's expected trigger time
+      if (expectedTriggerTime > Date.now()) {
+        this.scheduledNotifications.set(notificationId, expectedTriggerTime);
+
+        const cleanupDelay = Math.max(0, expectedTriggerTime - Date.now()) + 30000;
+
+        // Clean up after the notification should have fired (add 30 second buffer)
+        setTimeout(() => {
+          this.scheduledNotifications.delete(notificationId);
+        }, cleanupDelay);
+      }
+
+      console.log('✅ Local notification scheduled successfully:', {
+        id: notificationId,
+        scheduledFor: expectedTriggerTime > Date.now()
+          ? new Date(expectedTriggerTime).toLocaleTimeString()
+          : 'immediate'
+      });
       return notificationId;
     } catch (error) {
-      console.error('Error scheduling local notification:', error);
+      console.error('❌ Error scheduling local notification:', error);
       throw error;
     }
   }

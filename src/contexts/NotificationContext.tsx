@@ -1,5 +1,7 @@
-import React, { createContext, useContext, useReducer, useEffect, useState, ReactNode } from 'react';
+import React, { createContext, useContext, useReducer, useEffect, useState, ReactNode, useRef, useCallback } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Alert, Linking, Platform } from 'react-native';
+import Constants from 'expo-constants';
 import { NotificationService } from '../services/notificationService';
 import { hybridDataService } from '../services/hybridDataService';
 
@@ -202,9 +204,93 @@ const NotificationContext = createContext<NotificationContextType | undefined>(u
 export function NotificationProvider({ children }: { children: ReactNode }) {
   const [state, dispatch] = useReducer(notificationReducer, initialState);
   const [isInitialized, setIsInitialized] = useState(false);
+  const hasShownExactAlarmWarning = useRef(false);
+
+  const openExactAlarmSettings = useCallback(async () => {
+    if (Platform.OS !== 'android' || Platform.Version < 31) {
+      try {
+        await Linking.openSettings();
+      } catch (error) {
+        console.error('Failed to open application settings', error);
+      }
+      return;
+    }
+
+    const packageName = Constants.expoConfig?.android?.package
+      ?? (Constants as any)?.manifest2?.extra?.expoClient?.android?.package
+      ?? (Constants as any)?.manifest?.android?.package
+      ?? null;
+
+    try {
+      if (packageName) {
+        await Linking.sendIntent('android.settings.REQUEST_SCHEDULE_EXACT_ALARM', [
+          { key: 'android.provider.extra.APP_PACKAGE', value: packageName },
+        ]);
+      } else {
+        await Linking.sendIntent('android.settings.REQUEST_SCHEDULE_EXACT_ALARM');
+      }
+    } catch (error) {
+      console.error('Failed to open exact alarm settings', error);
+      try {
+        await Linking.openSettings();
+      } catch (fallbackError) {
+        console.error('Failed to open application settings as fallback', fallbackError);
+      }
+    }
+  }, []);
 
   // Initialize notifications on app start - load saved state first
   useEffect(() => {
+    NotificationService.setNotificationReceivedCallback((notification) => {
+      console.log('📩 Processing received notification for in-app list');
+      
+      // Add to in-app notification list
+      const { title, body, data } = notification.request.content;
+      addNotification({
+        title: title || 'Reminder',
+        message: body || '',
+        type: data?.type === 'reminder' ? 'info' : 'info',
+        read: false,
+        data: data || undefined,
+      });
+    });
+
+    NotificationService.setNotificationDelayCallback((info) => {
+      if (Platform.OS !== 'android') {
+        return;
+      }
+
+      if (info.delayMs < 60000) {
+        return;
+      }
+
+      if (!hasShownExactAlarmWarning.current) {
+        hasShownExactAlarmWarning.current = true;
+
+        console.warn('⚠️  Reminder notification fired late. Suggesting exact alarm permission.', info);
+
+        addNotification({
+          title: 'Allow Exact Alarms',
+          message: 'Android delayed a reminder notification. Enable "Alarms & reminders" access so reminders fire exactly on time.',
+          type: 'warning',
+          read: false,
+          data: info,
+        });
+
+        Alert.alert(
+          'Allow Exact Alarms',
+          'Android delayed a reminder notification. Enable "Alarms & reminders" access in system settings so reminders trigger exactly on time.',
+          [
+            { text: 'Later', style: 'cancel' },
+            {
+              text: 'Open Settings',
+              onPress: openExactAlarmSettings,
+            },
+          ]
+        );
+      }
+    });
+
     const initializeApp = async () => {
       await loadStateFromStorage();
       await initializeNotifications();
@@ -212,7 +298,12 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
       setIsInitialized(true);
     };
     initializeApp();
-  }, []);
+
+    return () => {
+      NotificationService.setNotificationReceivedCallback(() => undefined);
+      NotificationService.setNotificationDelayCallback(null);
+    };
+  }, [openExactAlarmSettings]);
 
   // Save state to AsyncStorage whenever it changes (but only after initialization)
   useEffect(() => {
@@ -246,21 +337,21 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
         console.log('Loading notification state:', { count: inAppNotifications.length, unread: unreadCount, lastSaved });
         
         // Convert timestamp strings back to Date objects and ensure read status is preserved
-        const notifications = inAppNotifications.map((n: any) => ({
+        const notifications: InAppNotification[] = inAppNotifications.map((n: any) => ({
           ...n,
           timestamp: new Date(n.timestamp),
           read: n.read || false, // Ensure read property exists
         }));
         
         // Calculate actual unread count to ensure consistency
-        const actualUnreadCount = notifications.filter(n => !n.read).length;
+        const actualUnreadCount = notifications.filter((n: InAppNotification) => !n.read).length;
         
         dispatch({ type: 'SET_NOTIFICATIONS', payload: notifications });
         
         console.log('Notification state loaded successfully:', { 
           totalNotifications: notifications.length, 
           unreadCount: actualUnreadCount,
-          readNotifications: notifications.filter(n => n.read).length
+          readNotifications: notifications.filter((n: InAppNotification) => n.read).length
         });
       } else {
         console.log('No saved notification state found');
@@ -420,15 +511,53 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
 
   const scheduleReminder = async (title: string, body: string, date: Date, data?: any): Promise<string> => {
     try {
+      const now = new Date();
+      let targetTime = date instanceof Date ? new Date(date.getTime()) : new Date(date);
+
+      if (Number.isNaN(targetTime.getTime())) {
+        console.warn('⚠️  Invalid reminder date received, falling back to 60 seconds from now', {
+          originalValue: date,
+        });
+        targetTime = new Date(now.getTime() + 60000);
+      }
+
+      if (targetTime <= now) {
+        console.warn('⚠️  Reminder date is in the past or now, scheduling for 60 seconds from now');
+        targetTime = new Date(now.getTime() + 60000);
+      }
+
+      const delaySeconds = Math.max(5, Math.ceil((targetTime.getTime() - now.getTime()) / 1000));
+
+      console.log('⏰ Scheduling reminder:', title);
+      console.log('   Target time:', targetTime.toLocaleString());
+      console.log('   Current time:', now.toLocaleString());
+      console.log('   Seconds until due:', delaySeconds);
+
+      const enrichedData = {
+        ...(data ?? {}),
+        reminderMeta: {
+          scheduledFor: targetTime.toISOString(),
+          requestedAt: now.toISOString(),
+        },
+      };
+
       const notificationId = await NotificationService.scheduleLocalNotification(
         title,
         body,
-        data,
-        { date } as any // Using any to bypass type checking for now
+        enrichedData,
+        targetTime,
+        {
+          channelId: 'reminders',
+          allowWhileIdle: true,
+        }
       );
+
+  console.log(`✅ Reminder scheduled with ID: ${notificationId}`);
+  console.log(`   Will fire at: ${targetTime.toLocaleString()}`);
+
       return notificationId;
     } catch (error) {
-      console.error('Error scheduling reminder:', error);
+      console.error('❌ Error scheduling reminder:', error);
       throw error;
     }
   };

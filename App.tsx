@@ -27,6 +27,7 @@ import PinSetupScreen from './src/screens/PinSetupScreen';
 import AppLockScreen from './src/screens/AppLockScreen';
 import BillsTrackerScreen from './src/screens/BillsTrackerScreen';
 import BudgetPlannerScreen from './src/screens/BudgetPlannerScreen';
+import RemindersScreen from './src/screens/RemindersScreen';
 import { ThemeProvider, useTheme } from './src/contexts/ThemeContext';
 import { LocalizationProvider } from './src/contexts/LocalizationContext';
 import { AuthProvider, useAuth } from './src/contexts/AuthContext';
@@ -35,6 +36,7 @@ import { QuickActionsProvider } from './src/contexts/QuickActionsContext';
 import { hybridDataService, AppInitResult } from './src/services/hybridDataService';
 import AppLockService from './src/services/appLockService';
 import SyncReminderBanner from './src/components/SyncReminderBanner';
+import { navigationRef, onNavigationReady } from './src/navigation/navigationService';
 
 const Stack = createStackNavigator();
 
@@ -106,7 +108,7 @@ const AppNavigator = () => {
 
   return (
     <TouchActivityWrapper>
-      <NavigationContainer>
+  <NavigationContainer ref={navigationRef} onReady={onNavigationReady}>
         <StatusBar style={isDark ? "light" : "dark"} />
         <Stack.Navigator screenOptions={{ headerShown: false }}>
           {isAuthenticated ? (
@@ -201,6 +203,13 @@ const AppNavigator = () => {
               <Stack.Screen 
                 name="BudgetPlanner" 
                 component={BudgetPlannerScreen}
+                options={{ 
+                  headerShown: false,
+                }}
+              />
+              <Stack.Screen 
+                name="Reminders" 
+                component={RemindersScreen}
                 options={{ 
                   headerShown: false,
                 }}

@@ -240,6 +240,13 @@ const MoreScreen = () => {
           color: '#9013FE',
         },
         {
+          id: 'reminders',
+          title: 'Reminders',
+          subtitle: 'Set payment and task reminders',
+          icon: 'notifications',
+          color: '#FF6B6B',
+        },
+        {
           id: 'quick_actions',
           title: t('quick_actions_settings'),
           subtitle: t('quick_actions_description'),
@@ -316,6 +323,8 @@ const MoreScreen = () => {
           navigation.navigate('BillsReminder' as never);
         } else if (item.id === 'budget') {
           navigation.navigate('BudgetPlanner' as never);
+        } else if (item.id === 'reminders') {
+          navigation.navigate('Reminders' as never);
         } else if (item.id === 'quick_actions') {
           navigation.navigate('QuickActionsSettings' as never);
         }
