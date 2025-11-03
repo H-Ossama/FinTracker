@@ -274,15 +274,15 @@ const QuickActionMenuButton: React.FC<QuickActionMenuButtonProps> = ({
       if (actionId === 'settings') {
         navigation.navigate('QuickActionsSettings' as never);
       } else {
-        const action = actions.find(a => a.id === actionId);
-        if (action) {
-          executeAction(action.action);
+        const actionItem = actions.find(a => a.id === actionId);
+        if (actionItem) {
+          executeAction(actionItem);
         }
       }
     }, 100);
   };
 
-  const executeAction = (actionName: string) => {
+  const executeAction = (actionItem: QuickAction) => {
     try {
       // Map action names to appropriate navigation or modal triggers
       const actionMap: { [key: string]: () => void } = {
@@ -322,12 +322,43 @@ const QuickActionMenuButton: React.FC<QuickActionMenuButtonProps> = ({
         },
       };
       
-      const actionFunction = actionMap[actionName];
+      const actionFunction = actionMap[actionItem.action];
       if (actionFunction) {
         actionFunction();
-      } else {
-        console.warn(`Unknown action: ${actionName}`);
+        return;
       }
+
+      if (actionItem.navigateTo) {
+        // If navigateParams were stored with the action, pass them through
+        const params = (actionItem as any).navigateParams ?? undefined;
+        try {
+          if (params) {
+            (navigation as any).navigate(actionItem.navigateTo, params);
+          } else {
+            (navigation as any).navigate(actionItem.navigateTo);
+          }
+        } catch (navError) {
+          console.error('Navigation with params failed, falling back to simple navigate', navError);
+          (navigation as any).navigate(actionItem.navigateTo);
+        }
+        return;
+      }
+
+      if (actionItem.action?.startsWith('navigate:')) {
+        const [, routeName] = actionItem.action.split(':');
+        if (routeName) {
+          // try to navigate using any stored params
+          const params = (actionItem as any).navigateParams ?? undefined;
+          if (params) {
+            (navigation as any).navigate(routeName, params);
+          } else {
+            (navigation as any).navigate(routeName);
+          }
+          return;
+        }
+      }
+      
+      console.warn(`Unknown action: ${actionItem.action}`);
     } catch (error) {
       console.error('Action execution error:', error);
     }

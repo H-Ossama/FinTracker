@@ -23,6 +23,7 @@ import AddIncomeModal from '../components/AddIncomeModal';
 import TransferModal from '../components/TransferModal';
 import BorrowedMoneyDetailsModal from '../components/BorrowedMoneyDetailsModal';
 import AddBorrowedMoneyModal from '../components/AddBorrowedMoneyModal';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useTheme } from '../contexts/ThemeContext';
 import { useLocalization } from '../contexts/LocalizationContext';
 import { useNotification } from '../contexts/NotificationContext';
@@ -31,6 +32,9 @@ import borrowedMoneyService from '../services/borrowedMoneyService';
 import useSafeAreaHelper from '../hooks/useSafeAreaHelper';
 import { useWalletVisibility } from '../hooks/useWalletVisibility';
 import { hybridDataService, HybridWallet, HybridTransaction } from '../services/hybridDataService';
+
+const SAMPLE_NOTIFICATIONS_FLAG = 'sample_notifications_seeded';
+const NOTIFICATION_STORAGE_KEY = 'notification_state';
 
 const HomeScreen = () => {
   const navigation = useNavigation();
@@ -61,11 +65,11 @@ const HomeScreen = () => {
   
   // Animation values for swipeable balance
   const scaleAnim = useRef(new Animated.Value(1)).current;
+  const hasAttemptedSampleSeed = useRef(false);
 
   // Load all data
   useEffect(() => {
     loadAllData();
-    addSampleNotifications();
   }, []);
 
   // Register quick actions
@@ -82,39 +86,68 @@ const HomeScreen = () => {
     }, [])
   );
 
-  const addSampleNotifications = () => {
-    // Only add sample notifications if there are no existing notifications
-    if (notificationState.inAppNotifications.length === 0) {
-      // Add a test notification first
-      setTimeout(() => {
+  useEffect(() => {
+    if (hasAttemptedSampleSeed.current) {
+      return;
+    }
+
+    hasAttemptedSampleSeed.current = true;
+
+    const seedSampleNotificationsIfNeeded = async () => {
+      try {
+        const seededFlag = await AsyncStorage.getItem(SAMPLE_NOTIFICATIONS_FLAG);
+        if (seededFlag === 'true') {
+          return;
+        }
+
+        try {
+          const storedStateRaw = await AsyncStorage.getItem(NOTIFICATION_STORAGE_KEY);
+          if (storedStateRaw) {
+            const storedState = JSON.parse(storedStateRaw);
+            if (Array.isArray(storedState?.inAppNotifications) && storedState.inAppNotifications.length > 0) {
+              await AsyncStorage.setItem(SAMPLE_NOTIFICATIONS_FLAG, 'true');
+              return;
+            }
+          }
+        } catch (storageError) {
+          console.warn('Unable to inspect notification storage for samples', storageError);
+        }
+
+        if (notificationState.inAppNotifications.length > 0) {
+          await AsyncStorage.setItem(SAMPLE_NOTIFICATIONS_FLAG, 'true');
+          return;
+        }
+
         addNotification({
           title: 'Testing',
           message: 'This is a test notification to verify functionality works correctly.',
           type: 'info',
           read: false,
         });
-      }, 500);
 
-      // Add other sample notifications
-      setTimeout(() => {
         addNotification({
           title: 'Welcome to FinTracker!',
           message: 'Start tracking your finances and achieve your goals.',
           type: 'success',
           read: false,
         });
-      }, 1000);
 
-      setTimeout(() => {
         addNotification({
           title: 'Budget Alert',
           message: 'You have spent 80% of your dining budget this month.',
           type: 'warning',
           read: false,
         });
-      }, 1500);
-    }
-  };
+
+        await AsyncStorage.setItem(SAMPLE_NOTIFICATIONS_FLAG, 'true');
+      } catch (error) {
+        console.warn('Error seeding sample notifications', error);
+        hasAttemptedSampleSeed.current = false;
+      }
+    };
+
+    void seedSampleNotificationsIfNeeded();
+  }, [addNotification, notificationState.inAppNotifications.length]);
 
   const loadAllData = async () => {
     try {
