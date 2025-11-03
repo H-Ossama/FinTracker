@@ -8,6 +8,7 @@ import {
   Pressable,
   TouchableOpacity,
   Platform,
+  StatusBar,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../contexts/ThemeContext';
@@ -16,6 +17,8 @@ import { useQuickActions } from '../contexts/QuickActionsContext';
 import { quickActionsService, QuickAction } from '../services/quickActionsService';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
+const STATUS_BAR_HEIGHT = Platform.OS === 'android' ? StatusBar.currentHeight || 0 : 0;
+const TOTAL_HEIGHT = SCREEN_HEIGHT + STATUS_BAR_HEIGHT;
 const ACTION_RADIUS = 120;
 const ACTION_BUTTON_SIZE = 56;
 const MAIN_BUTTON_SIZE = 56;
@@ -98,6 +101,12 @@ const QuickActionMenuButton: React.FC<QuickActionMenuButtonProps> = ({
       closeMenu();
     } else {
       openMenu();
+    }
+  };
+
+  const handleOverlayPress = () => {
+    if (isExpanded) {
+      closeMenu();
     }
   };
 
@@ -272,46 +281,35 @@ const QuickActionMenuButton: React.FC<QuickActionMenuButtonProps> = ({
   const allActionsCount = actions.length + 1; // +1 for settings
 
   return (
-    <View style={styles.container}>
-      {/* Enhanced Overlay with Dark Tint Effect */}
+    <>
+      {/* Full-screen overlay - positioned outside container */}
       {isExpanded && (
         <Animated.View
           style={[
-            styles.overlay,
+            styles.fullScreenOverlay,
             {
               opacity: overlayOpacity,
             },
           ]}
           pointerEvents="auto"
         >
-          {/* Dark overlay base */}
+          {/* Dark tint to dim background */}
           <Animated.View 
             style={[
-              styles.darkOverlay,
+              styles.dimOverlay,
               { opacity: overlayOpacity }
-            ]} 
-          />
-          
-          {/* Subtle noise/texture effect */}
-          <Animated.View 
-            style={[
-              styles.textureOverlay,
-              { 
-                opacity: overlayOpacity.interpolate({
-                  inputRange: [0, 1],
-                  outputRange: [0, 0.5]
-                })
-              }
             ]} 
           />
           
           <TouchableOpacity
             style={StyleSheet.absoluteFill}
-            onPress={closeMenu}
+            onPress={handleOverlayPress}
             activeOpacity={1}
           />
         </Animated.View>
       )}
+
+      <View style={styles.container}>
 
       {/* Action buttons container positioned above the tab bar */}
       {isExpanded && (
@@ -485,6 +483,7 @@ const QuickActionMenuButton: React.FC<QuickActionMenuButtonProps> = ({
         </Animated.View>
       </TouchableOpacity>
     </View>
+    </>
   );
 };
 
@@ -510,13 +509,13 @@ const styles = StyleSheet.create({
     shadowColor: '#000',
     shadowOffset: {
       width: 0,
-      height: 8,
+      height: 10,
     },
-    shadowOpacity: 0.3,
-    shadowRadius: 12,
-    elevation: 12,
+    shadowOpacity: 0.4,
+    shadowRadius: 14,
+    elevation: 14,
     borderWidth: 2,
-    borderColor: 'rgba(255, 255, 255, 0.3)',
+    borderColor: 'rgba(255, 255, 255, 0.4)',
   },
   labelContainer: {
     marginTop: 6,
@@ -528,20 +527,28 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   overlay: {
+    ...StyleSheet.absoluteFillObject,
+    zIndex: 1000,
+    backgroundColor: 'transparent',
+  },
+  fullScreenOverlay: {
     position: 'absolute',
     top: 0,
     left: 0,
-    right: 0,
-    bottom: 0,
-    zIndex: 1000,
+    width: SCREEN_WIDTH * 2,
+    height: TOTAL_HEIGHT * 2,
+    zIndex: 999,
+    backgroundColor: 'transparent',
+    marginTop: -TOTAL_HEIGHT * 1.2,
+    marginLeft: -SCREEN_WIDTH * 0.5,
   },
-  darkOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0, 0, 0, 0.7)',
-  },
-  textureOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(255, 255, 255, 0.02)',
+  dimOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    width: '100%',
+    height: '100%',
+    backgroundColor: 'rgba(0, 0, 0, 0.65)',
   },
   blurLayer1: {
     ...StyleSheet.absoluteFillObject,
@@ -559,35 +566,6 @@ const styles = StyleSheet.create({
   gradientOverlay: {
     ...StyleSheet.absoluteFillObject,
     backgroundColor: 'rgba(0, 0, 0, 0.6)',
-  },
-  radialGradient: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'transparent',
-    borderRadius: SCREEN_WIDTH,
-    transform: [{ scale: 2 }],
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.8,
-    shadowRadius: SCREEN_WIDTH / 2,
-    elevation: 50,
-  },
-  connectionLinesContainer: {
-    position: 'absolute',
-    bottom: 120,
-    left: SCREEN_WIDTH / 2,
-    width: 0,
-    height: 0,
-    zIndex: 1001,
-  },
-  connectionLine: {
-    position: 'absolute',
-    width: ACTION_RADIUS * 0.6,
-    height: 2,
-    backgroundColor: 'rgba(255, 255, 255, 0.3)',
-    transformOrigin: 'left center',
-    marginLeft: 10,
-    marginTop: -1,
-    borderRadius: 1,
   },
   actionsContainer: {
     position: 'absolute',
@@ -616,13 +594,13 @@ const styles = StyleSheet.create({
     shadowColor: '#000',
     shadowOffset: {
       width: 0,
-      height: 6,
+      height: 8,
     },
-    shadowOpacity: 0.25,
-    shadowRadius: 8,
-    elevation: 10,
-    borderWidth: 3,
-    borderColor: 'rgba(255, 255, 255, 0.4)',
+    shadowOpacity: 0.35,
+    shadowRadius: 12,
+    elevation: 12,
+    borderWidth: 2,
+    borderColor: 'rgba(255, 255, 255, 0.5)',
     overflow: 'hidden',
   },
   settingsButton: {
@@ -639,27 +617,28 @@ const styles = StyleSheet.create({
   },
   actionLabel: {
     position: 'absolute',
-    bottom: -45,
+    bottom: -48,
     left: -30,
     right: -30,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 16,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 18,
     shadowColor: '#000',
     shadowOffset: {
       width: 0,
-      height: 4,
+      height: 6,
     },
-    shadowOpacity: 0.2,
-    shadowRadius: 6,
-    elevation: 8,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.2)',
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 10,
+    borderWidth: 1.5,
+    borderColor: 'rgba(255, 255, 255, 0.3)',
   },
   actionLabelText: {
-    fontSize: 12,
-    fontWeight: '600',
+    fontSize: 13,
+    fontWeight: '700',
     textAlign: 'center',
+    letterSpacing: 0.3,
   },
   rippleBackground: {
     position: 'absolute',
