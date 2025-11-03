@@ -510,6 +510,22 @@ const QuickSettingsScreen = () => {
 
   const quickActions = [
     {
+      id: 'quick-actions-settings',
+      title: t('quick_actions_settings'),
+      subtitle: t('quick_actions_description'),
+      icon: 'flash-outline',
+      color: '#FF9500',
+      onPress: () => navigation.navigate('QuickActionsSettings' as never),
+    },
+    {
+      id: 'reminders',
+      title: 'Reminders',
+      subtitle: 'Set payment and task reminders',
+      icon: 'notifications-outline',
+      color: '#FF6B6B',
+      onPress: () => navigation.navigate('Reminders' as never),
+    },
+    {
       id: 'notification-preferences',
       title: t('settings_screen_notification_prefs'),
       subtitle: t('settings_screen_notification_prefs_desc'),

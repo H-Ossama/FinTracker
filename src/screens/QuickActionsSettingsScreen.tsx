@@ -215,7 +215,7 @@ const QuickActionsSettingsScreen = () => {
     <View key={action.id || `action-${index}`} style={styles.actionItem}>
       <View style={styles.actionLeft}>
         <View style={[styles.actionIcon, { backgroundColor: action.color + '20' }]}>
-          <Ionicons name={action.icon as any} size={24} color={action.color} />
+          <Ionicons name={action.icon as any} size={20} color={action.color} />
         </View>
         <View style={styles.actionInfo}>
           <View style={styles.actionHeader}>
@@ -353,41 +353,6 @@ const QuickActionsSettingsScreen = () => {
       </View>
 
       <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
-        <View style={styles.instructionsCard}>
-          <View style={[styles.instructionHeader, { backgroundColor: theme.colors.primary + '20' }]}>
-            <Ionicons name="information-circle" size={24} color={theme.colors.primary} />
-            <Text style={[styles.instructionTitle, { color: theme.colors.text }]}>
-              How to Use Quick Actions
-            </Text>
-          </View>
-          <View style={styles.instructionContent}>
-            <View style={styles.instructionStep}>
-              <View style={[styles.stepNumber, { backgroundColor: theme.colors.primary }]}>
-                <Text style={styles.stepNumberText}>1</Text>
-              </View>
-              <Text style={[styles.stepText, { color: theme.colors.text }]}>
-                <Text style={{ fontWeight: '600' }}>Press and hold</Text> the floating action button at the bottom of your screen
-              </Text>
-            </View>
-            <View style={styles.instructionStep}>
-              <View style={[styles.stepNumber, { backgroundColor: theme.colors.primary }]}>
-                <Text style={styles.stepNumberText}>2</Text>
-              </View>
-              <Text style={[styles.stepText, { color: theme.colors.text }]}>
-                <Text style={{ fontWeight: '600' }}>Slide your finger</Text> to the action you want while holding
-              </Text>
-            </View>
-            <View style={styles.instructionStep}>
-              <View style={[styles.stepNumber, { backgroundColor: theme.colors.primary }]}>
-                <Text style={styles.stepNumberText}>3</Text>
-              </View>
-              <Text style={[styles.stepText, { color: theme.colors.text }]}>
-                <Text style={{ fontWeight: '600' }}>Release</Text> to navigate to that screen instantly
-              </Text>
-            </View>
-          </View>
-        </View>
-
         <View style={styles.section}>
           <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>
             Customize Quick Actions
@@ -716,53 +681,6 @@ const createStyles = (theme: any) =>
     },
     loadingText: {
       fontSize: 14,
-    },
-    instructionsCard: {
-      marginTop: 16,
-      marginBottom: 24,
-      backgroundColor: theme.colors.card,
-      borderRadius: 16,
-      overflow: 'hidden',
-      borderWidth: 1,
-      borderColor: theme.colors.border,
-    },
-    instructionHeader: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      padding: 16,
-      gap: 12,
-    },
-    instructionTitle: {
-      fontSize: 18,
-      fontWeight: '600',
-    },
-    instructionContent: {
-      padding: 16,
-      paddingTop: 8,
-    },
-    instructionStep: {
-      flexDirection: 'row',
-      alignItems: 'flex-start',
-      marginBottom: 16,
-    },
-    stepNumber: {
-      width: 28,
-      height: 28,
-      borderRadius: 14,
-      justifyContent: 'center',
-      alignItems: 'center',
-      marginRight: 12,
-      marginTop: 2,
-    },
-    stepNumberText: {
-      color: 'white',
-      fontSize: 14,
-      fontWeight: '700',
-    },
-    stepText: {
-      fontSize: 14,
-      lineHeight: 20,
-      flex: 1,
     },
     infoSection: {
       marginTop: 24,
