@@ -21,6 +21,7 @@ import AccessDeniedScreen from './src/screens/AccessDeniedScreen';
 import UserProfileScreen from './src/screens/UserProfileScreen';
 import SavingsGoalsScreen from './src/screens/SavingsGoalsScreen';
 import QuickSettingsScreen from './src/screens/QuickSettingsScreen';
+import QuickActionsSettingsScreen from './src/screens/QuickActionsSettingsScreen';
 import AppLockSettingsScreen from './src/screens/AppLockSettingsScreen';
 import PinSetupScreen from './src/screens/PinSetupScreen';
 import AppLockScreen from './src/screens/AppLockScreen';
@@ -160,6 +161,14 @@ const AppNavigator = () => {
               <Stack.Screen 
                 name="QuickSettings" 
                 component={QuickSettingsScreen}
+                options={{ 
+                  headerShown: false,
+                  presentation: 'modal',
+                }}
+              />
+              <Stack.Screen 
+                name="QuickActionsSettings" 
+                component={QuickActionsSettingsScreen}
                 options={{ 
                   headerShown: false,
                   presentation: 'modal',

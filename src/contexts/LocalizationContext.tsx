@@ -467,6 +467,16 @@ const translations = {
     'wallet_type_credit': 'Credit Card',
     'wallet_type_credit_desc': 'Credit card account',
 
+    // Quick Actions
+    'quick_actions_settings': 'Quick Actions',
+    'quick_actions_description': 'Customize quick access shortcuts',
+    'quick_actions_settings_description': 'Enable or disable quick action buttons and customize their order',
+    'available_quick_actions': 'Available Actions',
+    'quick_actions_info': 'Enabled actions will appear in your home screen for quick access. Drag to reorder.',
+    'failed_to_load_quick_actions': 'Failed to load quick actions',
+    'failed_to_update_quick_action': 'Failed to update quick action',
+    'failed_to_reorder_quick_actions': 'Failed to reorder quick actions',
+
     // General
     'settings': 'Settings',
     'language': 'Language',
