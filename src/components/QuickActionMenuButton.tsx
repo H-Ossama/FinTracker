@@ -9,12 +9,79 @@ import {
   TouchableOpacity,
   Platform,
   StatusBar,
+  Vibration,
+  GestureResponderEvent,
+  Modal,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../contexts/ThemeContext';
 import { useNavigation, useIsFocused } from '@react-navigation/native';
 import { useQuickActions } from '../contexts/QuickActionsContext';
 import { quickActionsService, QuickAction } from '../services/quickActionsService';
+
+// Import haptics with proper fallback
+let Haptics: any;
+try {
+  Haptics = require('expo-haptics');
+} catch (error) {
+  console.warn('expo-haptics not available');
+  Haptics = {
+    impactAsync: () => Promise.resolve(),
+    selectionAsync: () => Promise.resolve(),
+    ImpactFeedbackStyle: {
+      Light: 'light',
+      Medium: 'medium',
+      Heavy: 'heavy'
+    }
+  };
+}
+
+// Advanced haptic feedback function with different patterns
+const triggerHaptic = (type: 'open' | 'close' | 'select' | 'hover') => {
+  console.log(`🔥 Triggering ${type} haptic feedback`);
+  
+  if (Platform.OS === 'android') {
+    // Custom vibration patterns for different actions
+    const patterns = {
+      open: [0, 50, 30, 80], // Double tap pattern for opening
+      close: [0, 30], // Single short vibration for closing
+      select: [0, 80, 50, 120], // Strong double vibration for selection
+      hover: [0, 25] // Very light vibration for hover
+    };
+    
+    try {
+      if (Vibration && typeof Vibration.vibrate === 'function') {
+        Vibration.vibrate(patterns[type]);
+        console.log(`✅ Android ${type} vibration pattern triggered:`, patterns[type]);
+      } else {
+        console.log('❌ Vibration API not available');
+      }
+    } catch (error) {
+      console.log('❌ Android vibration failed:', error);
+    }
+  } else {
+    // Use expo-haptics for iOS with appropriate feedback types
+    try {
+      const feedbackMap = {
+        open: () => {
+          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+          setTimeout(() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light), 100);
+        },
+        close: () => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light),
+        select: () => {
+          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+          setTimeout(() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium), 80);
+        },
+        hover: () => Haptics.selectionAsync()
+      };
+      
+      feedbackMap[type]();
+      console.log(`✅ iOS ${type} haptic triggered`);
+    } catch (error) {
+      console.log('❌ iOS haptic failed:', error);
+    }
+  }
+};
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 const STATUS_BAR_HEIGHT = Platform.OS === 'android' ? StatusBar.currentHeight || 0 : 0;
@@ -113,6 +180,10 @@ const QuickActionMenuButton: React.FC<QuickActionMenuButtonProps> = ({
   const openMenu = () => {
     setIsExpanded(true);
     
+    // Haptic feedback for menu opening
+    console.log('🔥 Opening menu - triggering haptic feedback');
+    triggerHaptic('open');
+    
     // Enhanced ripple effect
     Animated.sequence([
       Animated.timing(rippleScale, {
@@ -148,7 +219,7 @@ const QuickActionMenuButton: React.FC<QuickActionMenuButtonProps> = ({
     ]).start();
     
     // Staggered animation for action buttons
-    const allActions = [...actions, { id: 'settings', label: 'Settings', icon: 'settings', color: '#8E8E93' }];
+    const allActions = [...actions, { id: 'settings', label: 'Customise Quick Action', icon: 'settings', color: '#8E8E93' }];
     allActions.forEach((action, index) => {
       Animated.spring(actionAnimations[action.id], {
         toValue: 1,
@@ -164,6 +235,9 @@ const QuickActionMenuButton: React.FC<QuickActionMenuButtonProps> = ({
     setIsExpanded(false);
     setSelectedAction(null);
     setLongPressActive(false);
+    
+    // Haptic feedback for menu closing
+    triggerHaptic('close');
     
     // Animate main button back
     Animated.parallel([
@@ -198,6 +272,10 @@ const QuickActionMenuButton: React.FC<QuickActionMenuButtonProps> = ({
   };
 
   const handleActionPress = (actionId: string) => {
+    // Haptic feedback for action selection
+    console.log('⚡ Action selected - triggering haptic feedback:', actionId);
+    triggerHaptic('select');
+    
     closeMenu();
     
     setTimeout(() => {
@@ -282,162 +360,172 @@ const QuickActionMenuButton: React.FC<QuickActionMenuButtonProps> = ({
 
   return (
     <>
-      {/* Full-screen overlay - positioned outside container */}
-      {isExpanded && (
+      {/* Modal overlay - completely blocks all background interactions */}
+      <Modal
+        visible={isExpanded}
+        transparent={true}
+        animationType="none"
+        onRequestClose={handleOverlayPress}
+        supportedOrientations={['portrait', 'landscape']}
+      >
         <Animated.View
           style={[
-            styles.fullScreenOverlay,
+            styles.modalOverlay,
             {
               opacity: overlayOpacity,
             },
           ]}
-          pointerEvents="auto"
         >
           {/* Dark tint to dim background */}
           <Animated.View 
             style={[
               styles.dimOverlay,
-              { opacity: overlayOpacity }
+              { opacity: 1 } // Make completely opaque to hide background elements
             ]} 
           />
           
+          {/* Touch blocker - captures all touch events */}
           <TouchableOpacity
             style={StyleSheet.absoluteFill}
             onPress={handleOverlayPress}
             activeOpacity={1}
           />
+          
+          {/* Action buttons positioned in modal */}
+          <View style={styles.modalActionsContainer} pointerEvents="box-none">
+            {/* User actions */}
+            {actions.map((action, index) => {
+              const position = getActionPosition(index, allActionsCount);
+              const isSelected = selectedAction === action.id;
+              const scale = actionAnimations[action.id] || new Animated.Value(0);
+              
+              return (
+                <Animated.View
+                  key={action.id}
+                  style={[
+                    styles.actionButton,
+                    {
+                      transform: [
+                        { translateX: position.x },
+                        { translateY: position.y },
+                        { scale: scale },
+                      ],
+                      opacity: scale,
+                    },
+                  ]}
+                >
+                  <Pressable
+                    style={[
+                      styles.actionPressable,
+                      {
+                        backgroundColor: action.color,
+                        borderColor: action.color,
+                        transform: [{ scale: isSelected ? 1.15 : 1 }],
+                      },
+                    ]}
+                    onPress={() => handleActionPress(action.id)}
+                    onPressIn={() => {
+                      setSelectedAction(action.id);
+                      triggerHaptic('hover');
+                    }}
+                    onPressOut={() => setSelectedAction(null)}
+                  >
+                    <Ionicons name={action.icon as any} size={24} color="white" />
+                    
+                    {/* Ripple effect for selected state */}
+                    {isSelected && (
+                      <Animated.View style={[styles.rippleEffect, { backgroundColor: action.color + '40' }]} />
+                    )}
+                  </Pressable>
+                  
+                  {/* Enhanced label */}
+                  <Animated.View
+                    style={[
+                      styles.actionLabel,
+                      {
+                        backgroundColor: theme.colors.card,
+                        opacity: scale,
+                        transform: [{ scale: isSelected ? 1.1 : 1 }],
+                      },
+                    ]}
+                  >
+                    <Text style={[styles.actionLabelText, { color: theme.colors.text }]}>
+                      {action.label}
+                    </Text>
+                  </Animated.View>
+                </Animated.View>
+              );
+            })}
+            
+            {/* Enhanced Settings button */}
+            {(() => {
+              const settingsIndex = actions.length;
+              const position = getActionPosition(settingsIndex, allActionsCount);
+              const isSelected = selectedAction === 'settings';
+              const scale = actionAnimations['settings'] || new Animated.Value(0);
+              const settingsColor = theme.colors.textSecondary;
+              
+              return (
+                <Animated.View
+                  key="settings"
+                  style={[
+                    styles.actionButton,
+                    {
+                      transform: [
+                        { translateX: position.x },
+                        { translateY: position.y },
+                        { scale: scale },
+                      ],
+                      opacity: scale,
+                    },
+                  ]}
+                >
+                  <Pressable
+                    style={[
+                      styles.actionPressable,
+                      styles.settingsButton,
+                      {
+                        backgroundColor: settingsColor,
+                        borderColor: settingsColor,
+                        transform: [{ scale: isSelected ? 1.15 : 1 }],
+                      },
+                    ]}
+                    onPress={() => handleActionPress('settings')}
+                    onPressIn={() => {
+                      setSelectedAction('settings');
+                      triggerHaptic('hover');
+                    }}
+                    onPressOut={() => setSelectedAction(null)}
+                  >
+                    <Ionicons name="settings" size={24} color="white" />
+                    
+                    {isSelected && (
+                      <Animated.View style={[styles.rippleEffect, { backgroundColor: settingsColor + '40' }]} />
+                    )}
+                  </Pressable>
+                  
+                  <Animated.View
+                    style={[
+                      styles.actionLabel,
+                      {
+                        backgroundColor: theme.colors.card,
+                        opacity: scale,
+                        transform: [{ scale: isSelected ? 1.1 : 1 }],
+                      },
+                    ]}
+                  >
+                    <Text style={[styles.actionLabelText, { color: theme.colors.text }]} numberOfLines={2}>
+                      Customise Quick Action
+                    </Text>
+                  </Animated.View>
+                </Animated.View>
+              );
+            })()}
+          </View>
         </Animated.View>
-      )}
+      </Modal>
 
       <View style={styles.container}>
-
-      {/* Action buttons container positioned above the tab bar */}
-      {isExpanded && (
-        <View style={styles.actionsContainer} pointerEvents="box-none">
-          {/* User actions */}
-          {actions.map((action, index) => {
-            const position = getActionPosition(index, allActionsCount);
-            const isSelected = selectedAction === action.id;
-            const scale = actionAnimations[action.id] || new Animated.Value(0);
-            
-            return (
-              <Animated.View
-                key={action.id}
-                style={[
-                  styles.actionButton,
-                  {
-                    transform: [
-                      { translateX: position.x },
-                      { translateY: position.y },
-                      { scale: scale },
-                    ],
-                    opacity: scale,
-                  },
-                ]}
-              >
-                <Pressable
-                  style={[
-                    styles.actionPressable,
-                    {
-                      backgroundColor: action.color,
-                      borderColor: action.color,
-                      transform: [{ scale: isSelected ? 1.15 : 1 }],
-                    },
-                  ]}
-                  onPress={() => handleActionPress(action.id)}
-                  onPressIn={() => setSelectedAction(action.id)}
-                  onPressOut={() => setSelectedAction(null)}
-                >
-                  <Ionicons name={action.icon as any} size={24} color="white" />
-                  
-                  {/* Ripple effect for selected state */}
-                  {isSelected && (
-                    <Animated.View style={[styles.rippleEffect, { backgroundColor: action.color + '40' }]} />
-                  )}
-                </Pressable>
-                
-                {/* Enhanced label */}
-                <Animated.View
-                  style={[
-                    styles.actionLabel,
-                    {
-                      backgroundColor: theme.colors.card,
-                      opacity: scale,
-                      transform: [{ scale: isSelected ? 1.1 : 1 }],
-                    },
-                  ]}
-                >
-                  <Text style={[styles.actionLabelText, { color: theme.colors.text }]}>
-                    {action.label}
-                  </Text>
-                </Animated.View>
-              </Animated.View>
-            );
-          })}
-          
-          {/* Enhanced Settings button */}
-          {(() => {
-            const settingsIndex = actions.length;
-            const position = getActionPosition(settingsIndex, allActionsCount);
-            const isSelected = selectedAction === 'settings';
-            const scale = actionAnimations['settings'] || new Animated.Value(0);
-            const settingsColor = theme.colors.textSecondary;
-            
-            return (
-              <Animated.View
-                key="settings"
-                style={[
-                  styles.actionButton,
-                  {
-                    transform: [
-                      { translateX: position.x },
-                      { translateY: position.y },
-                      { scale: scale },
-                    ],
-                    opacity: scale,
-                  },
-                ]}
-              >
-                <Pressable
-                  style={[
-                    styles.actionPressable,
-                    styles.settingsButton,
-                    {
-                      backgroundColor: settingsColor,
-                      borderColor: settingsColor,
-                      transform: [{ scale: isSelected ? 1.15 : 1 }],
-                    },
-                  ]}
-                  onPress={() => handleActionPress('settings')}
-                  onPressIn={() => setSelectedAction('settings')}
-                  onPressOut={() => setSelectedAction(null)}
-                >
-                  <Ionicons name="settings" size={24} color="white" />
-                  
-                  {isSelected && (
-                    <Animated.View style={[styles.rippleEffect, { backgroundColor: settingsColor + '40' }]} />
-                  )}
-                </Pressable>
-                
-                <Animated.View
-                  style={[
-                    styles.actionLabel,
-                    {
-                      backgroundColor: theme.colors.card,
-                      opacity: scale,
-                      transform: [{ scale: isSelected ? 1.1 : 1 }],
-                    },
-                  ]}
-                >
-                  <Text style={[styles.actionLabelText, { color: theme.colors.text }]}>
-                    Settings
-                  </Text>
-                </Animated.View>
-              </Animated.View>
-            );
-          })()}
-        </View>
-      )}
 
       {/* Enhanced Main button */}
       <TouchableOpacity style={styles.buttonWrapper} onPress={handlePress} activeOpacity={0.8}>
@@ -493,7 +581,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     minWidth: 70,
     maxWidth: 90,
-    zIndex: 1001,
+    zIndex: 1004, // Highest z-index to ensure main button stays interactive
     position: 'relative',
   },
   buttonWrapper: {
@@ -533,14 +621,38 @@ const styles = StyleSheet.create({
   },
   fullScreenOverlay: {
     position: 'absolute',
-    top: 0,
-    left: 0,
-    width: SCREEN_WIDTH * 2,
-    height: TOTAL_HEIGHT * 2,
+    top: -1000,
+    left: -1000,
+    right: -1000,
+    bottom: -1000,
+    width: SCREEN_WIDTH + 2000,
+    height: SCREEN_HEIGHT + 2000,
     zIndex: 999,
     backgroundColor: 'transparent',
-    marginTop: -TOTAL_HEIGHT * 1.2,
-    marginLeft: -SCREEN_WIDTH * 0.5,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'transparent',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalActionsContainer: {
+    position: 'absolute',
+    bottom: 80, // Position above the button (tab bar height + some offset)
+    left: '50%',
+    marginLeft: -(ACTION_RADIUS), // Center the container
+    width: ACTION_RADIUS * 2,
+    height: ACTION_RADIUS * 2,
+    zIndex: 1003, // Higher than overlay to ensure interactions work
+  },
+  touchBlocker: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    zIndex: 1001,
+    backgroundColor: 'transparent',
   },
   dimOverlay: {
     position: 'absolute',
@@ -548,7 +660,7 @@ const styles = StyleSheet.create({
     left: 0,
     width: '100%',
     height: '100%',
-    backgroundColor: 'rgba(0, 0, 0, 0.65)',
+    backgroundColor: 'rgba(0, 0, 0, 0.8)',
   },
   blurLayer1: {
     ...StyleSheet.absoluteFillObject,
@@ -566,15 +678,6 @@ const styles = StyleSheet.create({
   gradientOverlay: {
     ...StyleSheet.absoluteFillObject,
     backgroundColor: 'rgba(0, 0, 0, 0.6)',
-  },
-  actionsContainer: {
-    position: 'absolute',
-    bottom: 80, // Position above the button (tab bar height + some offset)
-    left: '50%',
-    marginLeft: -(ACTION_RADIUS), // Center the container
-    width: ACTION_RADIUS * 2,
-    height: ACTION_RADIUS * 2,
-    zIndex: 1002,
   },
   actionButton: {
     position: 'absolute',
@@ -617,28 +720,31 @@ const styles = StyleSheet.create({
   },
   actionLabel: {
     position: 'absolute',
-    bottom: -48,
-    left: -30,
-    right: -30,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    borderRadius: 18,
+    bottom: -42,
+    left: -35,
+    right: -35,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 14,
     shadowColor: '#000',
     shadowOffset: {
       width: 0,
-      height: 6,
+      height: 4,
     },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 10,
-    borderWidth: 1.5,
-    borderColor: 'rgba(255, 255, 255, 0.3)',
+    shadowOpacity: 0.25,
+    shadowRadius: 6,
+    elevation: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.25)',
+    maxWidth: 120,
+    alignSelf: 'center',
   },
   actionLabelText: {
-    fontSize: 13,
-    fontWeight: '700',
+    fontSize: 10,
+    fontWeight: '600',
     textAlign: 'center',
-    letterSpacing: 0.3,
+    letterSpacing: 0.2,
+    lineHeight: 12,
   },
   rippleBackground: {
     position: 'absolute',
