@@ -2,6 +2,8 @@ import React, { createContext, useContext, useState, useEffect, ReactNode } from
 import * as SecureStore from 'expo-secure-store';
 import * as LocalAuthentication from 'expo-local-authentication';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { googleAuthService, GoogleUser } from '../services/googleAuthService';
+import { cloudSyncService } from '../services/cloudSyncService';
 
 // Types
 export interface User {
@@ -11,6 +13,8 @@ export interface User {
   avatar?: string;
   createdAt: string;
   lastLogin: string;
+  googleId?: string;
+  isGoogleUser?: boolean;
 }
 
 export interface AuthState {
@@ -19,6 +23,8 @@ export interface AuthState {
   isLoading: boolean;
   biometricEnabled: boolean;
   rememberMe: boolean;
+  isGoogleAuthenticated: boolean;
+  cloudSyncEnabled: boolean;
   accessDenied: {
     isDenied: boolean;
     reason: string;
@@ -29,6 +35,8 @@ export interface AuthState {
 export interface AuthContextType extends AuthState {
   signUp: (email: string, password: string, name: string) => Promise<{ success: boolean; error?: string }>;
   signIn: (email: string, password: string, remember?: boolean) => Promise<{ success: boolean; error?: string }>;
+  signInWithGoogle: () => Promise<{ success: boolean; error?: string }>;
+  signUpWithGoogle: () => Promise<{ success: boolean; error?: string }>;
   signOut: () => Promise<void>;
   updateProfile: (updates: Partial<User>) => Promise<{ success: boolean; error?: string }>;
   changePassword: (currentPassword: string, newPassword: string) => Promise<{ success: boolean; error?: string }>;
@@ -41,6 +49,9 @@ export interface AuthContextType extends AuthState {
   validateSession: () => Promise<{ valid: boolean; reason?: string }>;
   denyAccess: (reason: string, details?: string) => void;
   clearAccessDenial: () => void;
+  syncWithCloud: () => Promise<{ success: boolean; error?: string }>;
+  enableCloudSync: () => Promise<{ success: boolean; error?: string }>;
+  disableCloudSync: () => Promise<void>;
 }
 
 // Storage keys
@@ -50,6 +61,8 @@ const STORAGE_KEYS = {
   REMEMBER_ME: 'remember_me',
   BIOMETRIC_ENABLED: 'biometric_enabled',
   HAS_LOGGED_IN_BEFORE: 'has_logged_in_before',
+  GOOGLE_USER: 'google_user',
+  CLOUD_SYNC_ENABLED: 'cloud_sync_enabled',
 } as const;
 
 // Create context
@@ -252,6 +265,8 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     isLoading: true,
     biometricEnabled: false,
     rememberMe: false,
+    isGoogleAuthenticated: false,
+    cloudSyncEnabled: false,
     accessDenied: {
       isDenied: false,
       reason: '',
@@ -269,6 +284,8 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       // Check if user chose to be remembered
       const rememberMe = await AsyncStorage.getItem(STORAGE_KEYS.REMEMBER_ME);
       const biometricEnabled = await AsyncStorage.getItem(STORAGE_KEYS.BIOMETRIC_ENABLED);
+      const isGoogleUser = await AsyncStorage.getItem(STORAGE_KEYS.GOOGLE_USER);
+      const cloudSyncEnabled = await AsyncStorage.getItem(STORAGE_KEYS.CLOUD_SYNC_ENABLED);
       
       if (rememberMe === 'true') {
         // Try to get stored token
@@ -289,6 +306,8 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
               isLoading: false,
               biometricEnabled: biometricEnabled === 'true',
               rememberMe: true,
+              isGoogleAuthenticated: isGoogleUser === 'true',
+              cloudSyncEnabled: cloudSyncEnabled === 'true',
             }));
             return;
           } else {
@@ -314,6 +333,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         ...prev,
         isLoading: false,
         biometricEnabled: biometricEnabled === 'true',
+        cloudSyncEnabled: cloudSyncEnabled === 'true',
       }));
     } catch (error) {
       console.error('Error initializing auth:', error);
@@ -422,10 +442,17 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
   const signOut = async () => {
     try {
+      // Sign out from Google if user is Google authenticated
+      if (state.isGoogleAuthenticated) {
+        await googleAuthService.signOut();
+      }
+
       // Clear stored data
       await SecureStore.deleteItemAsync(STORAGE_KEYS.USER_TOKEN);
       await AsyncStorage.removeItem(STORAGE_KEYS.USER_DATA);
       await AsyncStorage.removeItem(STORAGE_KEYS.REMEMBER_ME);
+      await AsyncStorage.removeItem(STORAGE_KEYS.GOOGLE_USER);
+      await AsyncStorage.removeItem(STORAGE_KEYS.CLOUD_SYNC_ENABLED);
       
       setState({
         user: null,
@@ -433,6 +460,8 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         isLoading: false,
         biometricEnabled: state.biometricEnabled, // Keep biometric setting
         rememberMe: false,
+        isGoogleAuthenticated: false,
+        cloudSyncEnabled: false,
         accessDenied: {
           isDenied: false,
           reason: '',
@@ -741,10 +770,204 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     }));
   };
 
+  const signInWithGoogle = async () => {
+    try {
+      setState(prev => ({ ...prev, isLoading: true }));
+      
+      const result = await googleAuthService.signIn();
+      
+      if (!result.success || !result.user) {
+        setState(prev => ({ ...prev, isLoading: false }));
+        return { 
+          success: false, 
+          error: result.error || 'Google Sign-In failed' 
+        };
+      }
+
+      const googleUser = result.user;
+      
+      // Convert Google user to app user format
+      const user: User = {
+        id: googleUser.id,
+        email: googleUser.email,
+        name: googleUser.name,
+        avatar: googleUser.photo,
+        createdAt: new Date().toISOString(),
+        lastLogin: new Date().toISOString(),
+        googleId: googleUser.id,
+        isGoogleUser: true,
+      };
+
+      // Store user data
+      const token = 'google_token_' + user.id;
+      await SecureStore.setItemAsync(STORAGE_KEYS.USER_TOKEN, token);
+      await AsyncStorage.setItem(STORAGE_KEYS.USER_DATA, JSON.stringify(user));
+      await AsyncStorage.setItem(STORAGE_KEYS.REMEMBER_ME, 'true');
+      await AsyncStorage.setItem(STORAGE_KEYS.GOOGLE_USER, 'true');
+      await AsyncStorage.setItem(STORAGE_KEYS.HAS_LOGGED_IN_BEFORE, 'true');
+
+      // Check for existing cloud backup and sync
+      const hasBackup = await cloudSyncService.hasCloudBackup(googleUser);
+      let cloudSyncEnabled = false;
+
+      if (hasBackup) {
+        // Sync existing data
+        const syncResult = await cloudSyncService.downloadUserData(googleUser);
+        if (syncResult.success) {
+          cloudSyncEnabled = true;
+          await AsyncStorage.setItem(STORAGE_KEYS.CLOUD_SYNC_ENABLED, 'true');
+        }
+      }
+
+      setState(prev => ({
+        ...prev,
+        user,
+        isAuthenticated: true,
+        isLoading: false,
+        rememberMe: true,
+        isGoogleAuthenticated: true,
+        cloudSyncEnabled,
+      }));
+      
+      return { success: true };
+    } catch (error) {
+      setState(prev => ({ ...prev, isLoading: false }));
+      return { 
+        success: false, 
+        error: error instanceof Error ? error.message : 'Google Sign-In failed' 
+      };
+    }
+  };
+
+  const signUpWithGoogle = async () => {
+    try {
+      setState(prev => ({ ...prev, isLoading: true }));
+      
+      const result = await googleAuthService.signIn();
+      
+      if (!result.success || !result.user) {
+        setState(prev => ({ ...prev, isLoading: false }));
+        return { 
+          success: false, 
+          error: result.error || 'Google Sign-Up failed' 
+        };
+      }
+
+      const googleUser = result.user;
+      
+      // Convert Google user to app user format
+      const user: User = {
+        id: googleUser.id,
+        email: googleUser.email,
+        name: googleUser.name,
+        avatar: googleUser.photo,
+        createdAt: new Date().toISOString(),
+        lastLogin: new Date().toISOString(),
+        googleId: googleUser.id,
+        isGoogleUser: true,
+      };
+
+      // Clear any existing demo data for new Google accounts
+      await AsyncStorage.removeItem('is_demo_account');
+      await AsyncStorage.removeItem('seed_demo_data');
+
+      // Store user data
+      const token = 'google_token_' + user.id;
+      await SecureStore.setItemAsync(STORAGE_KEYS.USER_TOKEN, token);
+      await AsyncStorage.setItem(STORAGE_KEYS.USER_DATA, JSON.stringify(user));
+      await AsyncStorage.setItem(STORAGE_KEYS.REMEMBER_ME, 'true');
+      await AsyncStorage.setItem(STORAGE_KEYS.GOOGLE_USER, 'true');
+      await AsyncStorage.setItem(STORAGE_KEYS.HAS_LOGGED_IN_BEFORE, 'true');
+
+      // Enable cloud sync for new Google users by default
+      await AsyncStorage.setItem(STORAGE_KEYS.CLOUD_SYNC_ENABLED, 'true');
+      
+      // Upload initial data to cloud
+      await cloudSyncService.uploadUserData(googleUser);
+
+      setState(prev => ({
+        ...prev,
+        user,
+        isAuthenticated: true,
+        isLoading: false,
+        rememberMe: true,
+        isGoogleAuthenticated: true,
+        cloudSyncEnabled: true,
+      }));
+      
+      return { success: true };
+    } catch (error) {
+      setState(prev => ({ ...prev, isLoading: false }));
+      return { 
+        success: false, 
+        error: error instanceof Error ? error.message : 'Google Sign-Up failed' 
+      };
+    }
+  };
+
+  const syncWithCloud = async () => {
+    try {
+      if (!state.user || !state.isGoogleAuthenticated) {
+        return { success: false, error: 'Google authentication required for cloud sync' };
+      }
+
+      const googleUser = await googleAuthService.getCurrentUser();
+      if (!googleUser) {
+        return { success: false, error: 'Google user session expired' };
+      }
+
+      const result = await cloudSyncService.syncUserData(googleUser);
+      return result;
+    } catch (error) {
+      return { 
+        success: false, 
+        error: error instanceof Error ? error.message : 'Cloud sync failed' 
+      };
+    }
+  };
+
+  const enableCloudSync = async () => {
+    try {
+      if (!state.user || !state.isGoogleAuthenticated) {
+        return { success: false, error: 'Google authentication required for cloud sync' };
+      }
+
+      const googleUser = await googleAuthService.getCurrentUser();
+      if (!googleUser) {
+        return { success: false, error: 'Google user session expired' };
+      }
+
+      // Upload current data to cloud
+      const result = await cloudSyncService.uploadUserData(googleUser);
+      if (result.success) {
+        await AsyncStorage.setItem(STORAGE_KEYS.CLOUD_SYNC_ENABLED, 'true');
+        setState(prev => ({ ...prev, cloudSyncEnabled: true }));
+      }
+
+      return result;
+    } catch (error) {
+      return { 
+        success: false, 
+        error: error instanceof Error ? error.message : 'Failed to enable cloud sync' 
+      };
+    }
+  };
+
+  const disableCloudSync = async () => {
+    try {
+      await AsyncStorage.removeItem(STORAGE_KEYS.CLOUD_SYNC_ENABLED);
+      setState(prev => ({ ...prev, cloudSyncEnabled: false }));
+    } catch (error) {
+      console.error('Error disabling cloud sync:', error);
+    }
+  };
+
   const value: AuthContextType = {
     ...state,
     signUp,
     signIn,
+    signInWithGoogle,
+    signUpWithGoogle,
     signOut,
     updateProfile,
     changePassword,
@@ -757,6 +980,9 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     validateSession,
     denyAccess,
     clearAccessDenial,
+    syncWithCloud,
+    enableCloudSync,
+    disableCloudSync,
   };
 
   return (

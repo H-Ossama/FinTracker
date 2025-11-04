@@ -24,12 +24,12 @@
       "fallbackToCacheTimeout": 0
     },
     "ios": {
-      "bundleIdentifier": "com.oussamaaaaa.fintracker",
+      "bundleIdentifier": "com.H_Oussama.financetracker",
       "supportsTablet": true,
       "icon": "./assets/icon.png"
     },
     "android": {
-      "package": "com.oussamaaaaa.fintracker",
+      "package": "com.H_Oussama.financetracker",
       "icon": "./assets/icon.png",
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",

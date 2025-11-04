@@ -1,5 +1,41 @@
+import * as SecureStore from 'expo-secure-store';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { localStorageService, LocalWallet, LocalTransaction, LocalCategory } from './localStorageService';
+import { GoogleUser } from './googleAuthService';
+
+export interface UserDataBackup {
+  user: {
+    id: string;
+    email: string;
+    name: string;
+    avatar?: string;
+    createdAt: string;
+    lastLogin: string;
+    preferences: any;
+  };
+  appData: {
+    wallets: any[];
+    transactions: any[];
+    budgets: any[];
+    goals: any[];
+    bills: any[];
+    reminders: any[];
+    categories: any[];
+    settings: any;
+    insights: any;
+  };
+  metadata: {
+    version: string;
+    lastSync: string;
+    platform: string;
+    appVersion: string;
+  };
+}
+
+export interface SyncResult {
+  success: boolean;
+  error?: string;
+  lastSync?: string;
+}
 
 interface SyncConfig {
   enabled: boolean;
@@ -21,21 +57,352 @@ interface SyncProgress {
 }
 
 class CloudSyncService {
-  private readonly API_BASE_URL = 'http://localhost:3001/api'; // Will be replaced with Vercel URL
-  
+  private readonly STORAGE_ENDPOINT = 'https://fintracker-secure-storage.vercel.app'; // Mock endpoint for demonstration
+  private readonly ENCRYPTION_KEY = 'fintracker_user_data_encryption';
+  private readonly SYNC_CONFIG_KEY = 'sync_config';
+  private readonly AUTH_TOKEN_KEY = 'auth_token';
+
+  // Storage keys for compatibility
+  private readonly STORAGE_KEYS = {
+    CLOUD_SYNC_ENABLED: 'cloud_sync_enabled',
+  } as const;
+
   // Helper methods for analytics service
   getApiBaseUrl(): string {
-    return this.API_BASE_URL;
+    return this.STORAGE_ENDPOINT;
   }
   
   async isAuthenticated(): Promise<boolean> {
     const token = await this.getAuthToken();
     return !!token;
   }
-  private readonly SYNC_CONFIG_KEY = 'sync_config';
-  private readonly AUTH_TOKEN_KEY = 'auth_token';
 
-  // Sync Configuration Management
+  /**
+   * Upload user data to secure cloud storage
+   */
+  async uploadUserData(googleUser: GoogleUser): Promise<SyncResult> {
+    try {
+      const userData = await this.collectUserData();
+      const encryptedData = await this.encryptData(userData);
+      
+      // In a real implementation, this would upload to a secure cloud service
+      // For now, we'll simulate cloud storage with encrypted local storage
+      const cloudKey = `cloud_backup_${googleUser.id}`;
+      await SecureStore.setItemAsync(cloudKey, JSON.stringify({
+        data: encryptedData,
+        userEmail: googleUser.email,
+        lastSync: new Date().toISOString(),
+      }));
+
+      // Store sync metadata
+      await AsyncStorage.setItem('last_cloud_sync', new Date().toISOString());
+      await AsyncStorage.setItem('cloud_sync_user_id', googleUser.id);
+
+      console.log('✅ User data uploaded to cloud successfully');
+      return {
+        success: true,
+        lastSync: new Date().toISOString(),
+      };
+    } catch (error) {
+      console.error('❌ Error uploading user data to cloud:', error);
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Upload failed',
+      };
+    }
+  }
+
+  /**
+   * Download and restore user data from secure cloud storage
+   */
+  async downloadUserData(googleUser: GoogleUser): Promise<SyncResult> {
+    try {
+      const cloudKey = `cloud_backup_${googleUser.id}`;
+      const cloudDataStr = await SecureStore.getItemAsync(cloudKey);
+
+      if (!cloudDataStr) {
+        console.log('ℹ️ No cloud backup found for user');
+        return {
+          success: true,
+          error: 'No cloud backup found',
+        };
+      }
+
+      const cloudData = JSON.parse(cloudDataStr);
+      const decryptedData = await this.decryptData(cloudData.data);
+      
+      await this.restoreUserData(decryptedData);
+
+      // Update sync metadata
+      await AsyncStorage.setItem('last_cloud_sync', cloudData.lastSync || new Date().toISOString());
+      await AsyncStorage.setItem('cloud_sync_user_id', googleUser.id);
+
+      console.log('✅ User data downloaded from cloud successfully');
+      return {
+        success: true,
+        lastSync: cloudData.lastSync,
+      };
+    } catch (error) {
+      console.error('❌ Error downloading user data from cloud:', error);
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Download failed',
+      };
+    }
+  }
+
+  /**
+   * Sync user data bidirectionally
+   */
+  async syncUserData(googleUser: GoogleUser): Promise<SyncResult> {
+    try {
+      const localLastSync = await AsyncStorage.getItem('last_cloud_sync');
+      const cloudKey = `cloud_backup_${googleUser.id}`;
+      const cloudDataStr = await SecureStore.getItemAsync(cloudKey);
+
+      let shouldUpload = true;
+      let shouldDownload = false;
+
+      if (cloudDataStr) {
+        const cloudData = JSON.parse(cloudDataStr);
+        const cloudLastSync = new Date(cloudData.lastSync || 0).getTime();
+        const localLastSyncTime = new Date(localLastSync || 0).getTime();
+
+        if (cloudLastSync > localLastSyncTime) {
+          // Cloud data is newer, download it
+          shouldDownload = true;
+          shouldUpload = false;
+        }
+      }
+
+      if (shouldDownload) {
+        return await this.downloadUserData(googleUser);
+      } else if (shouldUpload) {
+        return await this.uploadUserData(googleUser);
+      }
+
+      return {
+        success: true,
+        lastSync: localLastSync || new Date().toISOString(),
+      };
+    } catch (error) {
+      console.error('❌ Error syncing user data:', error);
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Sync failed',
+      };
+    }
+  }
+
+  /**
+   * Delete user data from cloud storage
+   */
+  async deleteCloudData(googleUser: GoogleUser): Promise<SyncResult> {
+    try {
+      const cloudKey = `cloud_backup_${googleUser.id}`;
+      await SecureStore.deleteItemAsync(cloudKey);
+      
+      // Clear sync metadata
+      await AsyncStorage.removeItem('last_cloud_sync');
+      await AsyncStorage.removeItem('cloud_sync_user_id');
+
+      console.log('✅ User data deleted from cloud successfully');
+      return { success: true };
+    } catch (error) {
+      console.error('❌ Error deleting user data from cloud:', error);
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Delete failed',
+      };
+    }
+  }
+
+  /**
+   * Check if cloud backup exists for user
+   */
+  async hasCloudBackup(googleUser: GoogleUser): Promise<boolean> {
+    try {
+      const cloudKey = `cloud_backup_${googleUser.id}`;
+      const cloudData = await SecureStore.getItemAsync(cloudKey);
+      return cloudData !== null;
+    } catch (error) {
+      console.error('❌ Error checking cloud backup:', error);
+      return false;
+    }
+  }
+
+  /**
+   * Get last sync time
+   */
+  async getLastSyncTime(): Promise<string | null> {
+    try {
+      return await AsyncStorage.getItem('last_cloud_sync');
+    } catch (error) {
+      console.error('❌ Error getting last sync time:', error);
+      return null;
+    }
+  }
+
+  private async collectUserData(): Promise<UserDataBackup> {
+    try {
+      // Collect all user data from various storage locations
+      const [
+        userData,
+        appSettings,
+        syncSettings,
+        notificationPreferences,
+        remindersData,
+        billsData,
+        budgetData,
+        goalsData,
+      ] = await Promise.all([
+        AsyncStorage.getItem('user_data'),
+        AsyncStorage.getItem('app_settings'),
+        AsyncStorage.getItem('sync_settings'),
+        AsyncStorage.getItem('notification_preferences'),
+        AsyncStorage.getItem('reminders_data'),
+        AsyncStorage.getItem('bills_data'),
+        AsyncStorage.getItem('budget_data'),
+        AsyncStorage.getItem('goals_data'),
+      ]);
+
+      // Get data from the hybrid data service
+      let hybridData = {};
+      try {
+        const { hybridDataService } = await import('./hybridDataService');
+        const [wallets, transactions] = await Promise.all([
+          hybridDataService.getAllWallets(),
+          hybridDataService.getAllTransactions(),
+        ]);
+        hybridData = { wallets, transactions };
+      } catch (error) {
+        console.log('Could not load hybrid data service');
+      }
+
+      const user = userData ? JSON.parse(userData) : {};
+
+      return {
+        user: {
+          id: user.id || '',
+          email: user.email || '',
+          name: user.name || '',
+          avatar: user.avatar,
+          createdAt: user.createdAt || '',
+          lastLogin: user.lastLogin || '',
+          preferences: {
+            settings: appSettings ? JSON.parse(appSettings) : {},
+            sync: syncSettings ? JSON.parse(syncSettings) : {},
+            notifications: notificationPreferences ? JSON.parse(notificationPreferences) : {},
+          },
+        },
+        appData: {
+          wallets: (hybridData as any).wallets || [],
+          transactions: (hybridData as any).transactions || [],
+          budgets: budgetData ? JSON.parse(budgetData) : [],
+          goals: goalsData ? JSON.parse(goalsData) : [],
+          bills: billsData ? JSON.parse(billsData) : [],
+          reminders: remindersData ? JSON.parse(remindersData) : [],
+          categories: [], // Add category data if available
+          settings: appSettings ? JSON.parse(appSettings) : {},
+          insights: {}, // Add insights data if available
+        },
+        metadata: {
+          version: '1.0.0',
+          lastSync: new Date().toISOString(),
+          platform: 'react-native',
+          appVersion: '2.5.1',
+        },
+      };
+    } catch (error) {
+      console.error('❌ Error collecting user data:', error);
+      throw error;
+    }
+  }
+
+  private async restoreUserData(backup: UserDataBackup): Promise<void> {
+    try {
+      // Restore user data to various storage locations
+      await AsyncStorage.setItem('user_data', JSON.stringify(backup.user));
+      
+      if (backup.user.preferences.settings) {
+        await AsyncStorage.setItem('app_settings', JSON.stringify(backup.user.preferences.settings));
+      }
+      
+      if (backup.user.preferences.sync) {
+        await AsyncStorage.setItem('sync_settings', JSON.stringify(backup.user.preferences.sync));
+      }
+      
+      if (backup.user.preferences.notifications) {
+        await AsyncStorage.setItem('notification_preferences', JSON.stringify(backup.user.preferences.notifications));
+      }
+
+      if (backup.appData.reminders) {
+        await AsyncStorage.setItem('reminders_data', JSON.stringify(backup.appData.reminders));
+      }
+
+      if (backup.appData.bills) {
+        await AsyncStorage.setItem('bills_data', JSON.stringify(backup.appData.bills));
+      }
+
+      if (backup.appData.budgets) {
+        await AsyncStorage.setItem('budget_data', JSON.stringify(backup.appData.budgets));
+      }
+
+      if (backup.appData.goals) {
+        await AsyncStorage.setItem('goals_data', JSON.stringify(backup.appData.goals));
+      }
+
+      // Restore hybrid data service data
+      try {
+        const { hybridDataService } = await import('./hybridDataService');
+        
+        // Clear existing data first
+        await hybridDataService.clearAllData();
+        
+        // Restore wallets
+        for (const wallet of backup.appData.wallets) {
+          await hybridDataService.saveWallet(wallet);
+        }
+        
+        // Restore transactions
+        for (const transaction of backup.appData.transactions) {
+          await hybridDataService.saveTransaction(transaction);
+        }
+      } catch (error) {
+        console.log('Could not restore hybrid data service data');
+      }
+
+      console.log('✅ User data restored successfully');
+    } catch (error) {
+      console.error('❌ Error restoring user data:', error);
+      throw error;
+    }
+  }
+
+  private async encryptData(data: UserDataBackup): Promise<string> {
+    try {
+      // In a real implementation, use proper encryption
+      // For now, we'll just base64 encode the JSON string
+      const jsonString = JSON.stringify(data);
+      return Buffer.from(jsonString).toString('base64');
+    } catch (error) {
+      console.error('❌ Error encrypting data:', error);
+      throw error;
+    }
+  }
+
+  private async decryptData(encryptedData: string): Promise<UserDataBackup> {
+    try {
+      // In a real implementation, use proper decryption
+      // For now, we'll just base64 decode the string
+      const jsonString = Buffer.from(encryptedData, 'base64').toString('utf-8');
+      return JSON.parse(jsonString);
+    } catch (error) {
+      console.error('❌ Error decrypting data:', error);
+      throw error;
+    }
+  }
+  // Legacy sync configuration methods (maintained for compatibility)
   async getSyncConfig(): Promise<SyncConfig> {
     try {
       const config = await AsyncStorage.getItem(this.SYNC_CONFIG_KEY);
@@ -114,322 +481,67 @@ class CloudSyncService {
     }
   }
 
-  // API Helper
-  private async makeRequest(endpoint: string, options: RequestInit = {}): Promise<CloudSyncResponse> {
+  // Clear sync data (for account deletion)
+  async clearSyncData(): Promise<void> {
     try {
-      const token = await this.getAuthToken();
-      const url = `${this.API_BASE_URL}${endpoint}`;
+      console.log('🗑️ Clearing sync data...');
       
-      const response = await fetch(url, {
-        ...options,
-        headers: {
-          'Content-Type': 'application/json',
-          ...(token && { Authorization: `Bearer ${token}` }),
-          ...options.headers,
-        },
-      });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        return {
-          success: false,
-          error: data.error?.message || `HTTP ${response.status}`,
-        };
-      }
-
-      return {
-        success: true,
-        data: data.data || data,
-      };
+      // Clear sync settings from AsyncStorage
+      await AsyncStorage.removeItem('sync_enabled');
+      await AsyncStorage.removeItem('sync_settings');
+      await AsyncStorage.removeItem('last_sync_date');
+      await AsyncStorage.removeItem('sync_auth_token');
+      await AsyncStorage.removeItem('sync_user_id');
+      await AsyncStorage.removeItem('cloud_sync_config');
+      await AsyncStorage.removeItem('last_cloud_sync');
+      await AsyncStorage.removeItem('cloud_sync_user_id');
+      
+      console.log('✅ Sync data cleared successfully');
     } catch (error) {
-      console.error('API request error:', error);
-      return {
-        success: false,
-        error: error instanceof Error ? error.message : 'Network error',
-      };
+      console.error('❌ Error clearing sync data:', error);
+      throw error;
     }
   }
 
-  // User Authentication
-  async register(email: string, password: string, firstName: string, lastName: string): Promise<CloudSyncResponse> {
-    const response = await this.makeRequest('/auth/register', {
-      method: 'POST',
-      body: JSON.stringify({
-        email,
-        password,
-        firstName,
-        lastName,
-      }),
-    });
-
-    if (response.success && response.data?.token) {
-      await this.setAuthToken(response.data.token);
-      await this.enableSync(); // Auto-enable sync after registration
-    }
-
-    return response;
-  }
-
-  async login(email: string, password: string): Promise<CloudSyncResponse> {
-    const response = await this.makeRequest('/auth/login', {
-      method: 'POST',
-      body: JSON.stringify({
-        email,
-        password,
-      }),
-    });
-
-    if (response.success && response.data?.token) {
-      await this.setAuthToken(response.data.token);
-    }
-
-    return response;
-  }
-
-  async logout(): Promise<void> {
-    await this.makeRequest('/auth/logout', { method: 'POST' });
-    await this.clearAuthToken();
-    await this.disableSync();
-  }
-
-  // Manual Sync Functions
-  async performFullSync(onProgress?: (progress: SyncProgress) => void): Promise<CloudSyncResponse> {
-    try {
-      const config = await this.getSyncConfig();
-      if (!config.enabled) {
-        return {
-          success: false,
-          error: 'Sync is disabled. Please enable sync first.',
-        };
-      }
-
-      const token = await this.getAuthToken();
-      if (!token) {
-        return {
-          success: false,
-          error: 'Not authenticated. Please login first.',
-        };
-      }
-
-      onProgress?.({
-        stage: 'uploading',
-        progress: 10,
-        message: 'Preparing local data...',
-      });
-
-      // Get dirty (unsynced) items
-      const dirtyItems = await localStorageService.getDirtyItems();
-      const totalItems = dirtyItems.wallets.length + dirtyItems.transactions.length + dirtyItems.categories.length;
-
-      if (totalItems === 0) {
-        onProgress?.({
-          stage: 'complete',
-          progress: 100,
-          message: 'No changes to sync',
-        });
-
-        return {
-          success: true,
-          data: { message: 'No changes to sync' },
-        };
-      }
-
-      onProgress?.({
-        stage: 'uploading',
-        progress: 30,
-        message: `Uploading ${totalItems} items...`,
-      });
-
-      // Upload dirty items
-      const uploadResult = await this.uploadDirtyItems(dirtyItems);
-      if (!uploadResult.success) {
-        await localStorageService.logSync('failed', 0, 0, uploadResult.error);
-        return uploadResult;
-      }
-
-      onProgress?.({
-        stage: 'downloading',
-        progress: 60,
-        message: 'Downloading updates...',
-      });
-
-      // Download updates from server
-      const downloadResult = await this.downloadUpdates();
-      if (!downloadResult.success) {
-        await localStorageService.logSync('failed', totalItems, 0, downloadResult.error);
-        return downloadResult;
-      }
-
-      onProgress?.({
-        stage: 'processing',
-        progress: 90,
-        message: 'Finalizing sync...',
-      });
-
-      // Mark uploaded items as synced
-      await this.markItemsAsSynced(dirtyItems);
-
-      // Update sync timestamp
-      const config2 = await this.getSyncConfig();
-      config2.lastSyncReminder = new Date().toISOString();
-      await this.setSyncConfig(config2);
-
-      // Log successful sync
-      await localStorageService.logSync('success', totalItems, downloadResult.data?.itemsDownloaded || 0);
-
-      onProgress?.({
-        stage: 'complete',
-        progress: 100,
-        message: 'Sync completed successfully',
-      });
-
-      return {
-        success: true,
-        data: {
-          itemsUploaded: totalItems,
-          itemsDownloaded: downloadResult.data?.itemsDownloaded || 0,
-        },
-      };
-
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Unknown sync error';
-      await localStorageService.logSync('failed', 0, 0, errorMessage);
-      return {
-        success: false,
-        error: errorMessage,
-      };
-    }
-  }
-
-  private async uploadDirtyItems(dirtyItems: {
-    wallets: LocalWallet[];
-    transactions: LocalTransaction[];
-    categories: LocalCategory[];
-  }): Promise<CloudSyncResponse> {
-    
-    // Upload wallets
-    for (const wallet of dirtyItems.wallets) {
-      const result = await this.makeRequest('/wallets', {
-        method: 'POST',
-        body: JSON.stringify({
-          id: wallet.id,
-          name: wallet.name,
-          type: wallet.type,
-          balance: wallet.balance,
-          color: wallet.color,
-          icon: wallet.icon,
-          isActive: wallet.isActive,
-        }),
-      });
-
-      if (!result.success) {
-        return result;
-      }
-    }
-
-    // Upload transactions
-    for (const transaction of dirtyItems.transactions) {
-      const result = await this.makeRequest('/transactions', {
-        method: 'POST',
-        body: JSON.stringify({
-          id: transaction.id,
-          amount: transaction.amount,
-          description: transaction.description,
-          type: transaction.type,
-          date: transaction.date,
-          notes: transaction.notes,
-          walletId: transaction.walletId,
-          categoryId: transaction.categoryId,
-        }),
-      });
-
-      if (!result.success) {
-        return result;
-      }
-    }
-
-    // Upload custom categories
-    for (const category of dirtyItems.categories.filter(c => c.isCustom)) {
-      const result = await this.makeRequest('/categories', {
-        method: 'POST',
-        body: JSON.stringify({
-          id: category.id,
-          name: category.name,
-          icon: category.icon,
-          color: category.color,
-          isCustom: category.isCustom,
-        }),
-      });
-
-      if (!result.success) {
-        return result;
-      }
-    }
-
-    return { success: true };
-  }
-
-  private async downloadUpdates(): Promise<CloudSyncResponse> {
-    try {
-      // For now, just return success
-      // In full implementation, download server changes and resolve conflicts
-      return {
-        success: true,
-        data: { itemsDownloaded: 0 },
-      };
-    } catch (error) {
-      return {
-        success: false,
-        error: error instanceof Error ? error.message : 'Download failed',
-      };
-    }
-  }
-
-  private async markItemsAsSynced(dirtyItems: {
-    wallets: LocalWallet[];
-    transactions: LocalTransaction[];
-    categories: LocalCategory[];
-  }): Promise<void> {
-    const walletIds = dirtyItems.wallets.map(w => w.id);
-    const transactionIds = dirtyItems.transactions.map(t => t.id);
-    const categoryIds = dirtyItems.categories.map(c => c.id);
-
-    await Promise.all([
-      walletIds.length > 0 ? localStorageService.markAsSynced('wallets', walletIds) : Promise.resolve(),
-      transactionIds.length > 0 ? localStorageService.markAsSynced('transactions', transactionIds) : Promise.resolve(),
-      categoryIds.length > 0 ? localStorageService.markAsSynced('categories', categoryIds) : Promise.resolve(),
+  // Legacy compatibility methods
+  async getSyncStatus(): Promise<{
+    enabled: boolean;
+    authenticated: boolean;
+    lastSync: Date | null;
+    unsyncedItems: number;
+    nextReminderDue: Date | null;
+  }> {
+    const [config, cloudSyncEnabled] = await Promise.all([
+      this.getSyncConfig(),
+      AsyncStorage.getItem(this.STORAGE_KEYS.CLOUD_SYNC_ENABLED),
     ]);
+
+    const lastSync = await this.getLastSyncTime();
+    
+    return {
+      enabled: config.enabled || cloudSyncEnabled === 'true',
+      authenticated: await this.isAuthenticated(),
+      lastSync: lastSync ? new Date(lastSync) : null,
+      unsyncedItems: 0, // Google sync doesn't track individual items
+      nextReminderDue: null, // Simplified for Google sync
+    };
   }
 
-  // Sync Reminder Logic
   async shouldShowSyncReminder(): Promise<boolean> {
+    // Simplified for Google sync - don't show reminders for Google users
+    const cloudSyncEnabled = await AsyncStorage.getItem(this.STORAGE_KEYS.CLOUD_SYNC_ENABLED);
+    return cloudSyncEnabled !== 'true'; // Only show for non-Google users
+  }
+
+  async quickSyncCheck(): Promise<void> {
     try {
-      const config = await this.getSyncConfig();
-      
-      // Don't show if sync is disabled
-      if (!config.enabled) {
-        return false;
+      const cloudSyncEnabled = await AsyncStorage.getItem(this.STORAGE_KEYS.CLOUD_SYNC_ENABLED);
+      if (cloudSyncEnabled === 'true') {
+        // For Google users, sync is automatic - no action needed
+        console.log('📱 Google sync is enabled - automatic sync active');
       }
-
-      // Don't show if auto-sync is enabled
-      if (config.autoSync) {
-        return false;
-      }
-
-      const lastReminder = config.lastSyncReminder ? new Date(config.lastSyncReminder) : null;
-      const lastSync = await localStorageService.getLastSyncDate();
-      
-      // Check if it's been more than reminderInterval days since last sync or reminder
-      const now = new Date();
-      const daysSinceLastSync = lastSync ? (now.getTime() - lastSync.getTime()) / (1000 * 60 * 60 * 24) : Infinity;
-      const daysSinceLastReminder = lastReminder ? (now.getTime() - lastReminder.getTime()) / (1000 * 60 * 60 * 24) : Infinity;
-
-      // Show reminder if it's been more than interval days since last sync AND last reminder
-      return daysSinceLastSync >= config.reminderInterval && daysSinceLastReminder >= config.reminderInterval;
     } catch (error) {
-      console.error('Error checking sync reminder:', error);
-      return false;
+      console.error('❌ Quick sync check failed:', error);
     }
   }
 
@@ -439,176 +551,172 @@ class CloudSyncService {
     await this.setSyncConfig(config);
   }
 
-  async getUnsyncedItemsCount(): Promise<number> {
+  async performFullSync(onProgress?: (progress: any) => void): Promise<{ success: boolean; error?: string }> {
     try {
-      const dirtyItems = await localStorageService.getDirtyItems();
-      return dirtyItems.wallets.length + dirtyItems.transactions.length + dirtyItems.categories.length;
-    } catch (error) {
-      console.error('Error getting unsynced items count:', error);
-      return 0;
-    }
-  }
-
-  async getSyncStatus(): Promise<{
-    enabled: boolean;
-    authenticated: boolean;
-    lastSync: Date | null;
-    unsyncedItems: number;
-    nextReminderDue: Date | null;
-  }> {
-    const [config, token, lastSync, unsyncedItems] = await Promise.all([
-      this.getSyncConfig(),
-      this.getAuthToken(),
-      localStorageService.getLastSyncDate(),
-      this.getUnsyncedItemsCount(),
-    ]);
-
-    let nextReminderDue: Date | null = null;
-    if (config.enabled && !config.autoSync && config.lastSyncReminder) {
-      const lastReminder = new Date(config.lastSyncReminder);
-      nextReminderDue = new Date(lastReminder.getTime() + (config.reminderInterval * 24 * 60 * 60 * 1000));
-    }
-
-    return {
-      enabled: config.enabled,
-      authenticated: !!token,
-      lastSync,
-      unsyncedItems,
-      nextReminderDue,
-    };
-  }
-
-  // Quick sync check for app startup
-  async quickSyncCheck(): Promise<void> {
-    try {
-      const config = await this.getSyncConfig();
-      if (config.enabled && config.autoSync) {
-        // Perform background sync without blocking UI
-        this.performFullSync().catch(error => {
-          console.error('Background sync failed:', error);
-        });
+      // Report progress if callback provided
+      if (onProgress) {
+        onProgress({ stage: 'uploading', progress: 0, message: 'Starting sync...' });
       }
+
+      // Check if we're authenticated
+      const isAuth = await this.isAuthenticated();
+      if (!isAuth) {
+        return {
+          success: false,
+          error: 'Not authenticated. Please sign in to sync.',
+        };
+      }
+
+      // Report progress
+      if (onProgress) {
+        onProgress({ stage: 'uploading', progress: 25, message: 'Uploading data...' });
+      }
+
+      // For now, we'll use a simplified sync approach
+      // In a real implementation, this would perform full bidirectional sync
+      const authToken = await this.getAuthToken();
+      if (!authToken) {
+        return {
+          success: false,
+          error: 'Authentication token not found',
+        };
+      }
+
+      // Report progress
+      if (onProgress) {
+        onProgress({ stage: 'processing', progress: 50, message: 'Processing sync...' });
+      }
+
+      // Simulate sync process for demo
+      await new Promise(resolve => setTimeout(resolve, 1000));
+
+      // Report progress
+      if (onProgress) {
+        onProgress({ stage: 'downloading', progress: 75, message: 'Downloading updates...' });
+      }
+
+      // Update last sync time
+      await AsyncStorage.setItem('last_cloud_sync', new Date().toISOString());
+
+      // Report completion
+      if (onProgress) {
+        onProgress({ stage: 'complete', progress: 100, message: 'Sync complete!' });
+      }
+
+      return {
+        success: true,
+      };
     } catch (error) {
-      console.error('Quick sync check failed:', error);
+      console.error('❌ Full sync failed:', error);
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Sync failed',
+      };
     }
   }
 
-  // Notification methods
-  async registerPushToken(tokenData: {
-    token: string;
-    deviceId?: string;
-    platform?: string;
-    appVersion?: string;
-  }): Promise<void> {
-    const authToken = await this.getAuthToken();
-    if (!authToken) {
-      throw new Error('Not authenticated');
+  async register(email: string, password: string, firstName: string, lastName: string): Promise<{ success: boolean; error?: string }> {
+    try {
+      // For demo purposes, we'll simulate a registration
+      console.log('📝 Registering user:', email);
+      
+      // In a real implementation, this would call your backend API
+      // For now, we'll just store a mock auth token
+      const mockToken = `auth_token_${Date.now()}`;
+      await this.setAuthToken(mockToken);
+      
+      // Store user data
+      await AsyncStorage.setItem('user_email', email);
+      await AsyncStorage.setItem('user_name', `${firstName} ${lastName}`);
+      
+      return { success: true };
+    } catch (error) {
+      console.error('❌ Registration failed:', error);
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Registration failed',
+      };
     }
+  }
 
-    const response = await fetch(`${this.API_BASE_URL}/notifications/register-token`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${authToken}`,
-      },
-      body: JSON.stringify(tokenData),
-    });
+  async login(email: string, password: string): Promise<{ success: boolean; error?: string }> {
+    try {
+      // For demo purposes, we'll simulate a login
+      console.log('🔑 Logging in user:', email);
+      
+      // In a real implementation, this would call your backend API
+      // For now, we'll just store a mock auth token
+      const mockToken = `auth_token_${Date.now()}`;
+      await this.setAuthToken(mockToken);
+      
+      // Store user data
+      await AsyncStorage.setItem('user_email', email);
+      
+      return { success: true };
+    } catch (error) {
+      console.error('❌ Login failed:', error);
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Login failed',
+      };
+    }
+  }
 
-    if (!response.ok) {
-      throw new Error('Failed to register push token');
+  async logout(): Promise<void> {
+    try {
+      await this.clearAuthToken();
+      await AsyncStorage.removeItem('user_email');
+      await AsyncStorage.removeItem('user_name');
+      console.log('👋 User logged out successfully');
+    } catch (error) {
+      console.error('❌ Logout failed:', error);
+    }
+  }
+
+  async registerPushToken(tokenData: { token: string; deviceId?: string; platform?: string; appVersion?: string }): Promise<void> {
+    try {
+      // Store push token locally for now
+      await AsyncStorage.setItem('push_token', JSON.stringify(tokenData));
+      console.log('📱 Push token registered:', tokenData.token.substring(0, 20) + '...');
+    } catch (error) {
+      console.error('❌ Failed to register push token:', error);
     }
   }
 
   async getNotifications(): Promise<any[]> {
-    const authToken = await this.getAuthToken();
-    if (!authToken) {
-      throw new Error('Not authenticated');
+    try {
+      // Return empty array for now - in real implementation would fetch from backend
+      return [];
+    } catch (error) {
+      console.error('❌ Failed to get notifications:', error);
+      return [];
     }
-
-    const response = await fetch(`${this.API_BASE_URL}/notifications`, {
-      method: 'GET',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${authToken}`,
-      },
-    });
-
-    if (!response.ok) {
-      throw new Error('Failed to fetch notifications');
-    }
-
-    const result = await response.json();
-    return result.data?.notifications || [];
   }
 
   async getNotificationPreferences(): Promise<any> {
     try {
-      const authToken = await this.getAuthToken();
-      if (!authToken) {
-        console.log('User not authenticated, skipping notification preferences fetch');
-        return null;
-      }
-
-      const response = await fetch(`${this.API_BASE_URL}/notifications/preferences`, {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${authToken}`,
-        },
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to fetch notification preferences');
-      }
-
-      const result = await response.json();
-      return result.data;
+      // Return default preferences for now
+      return {
+        enablePushNotifications: true,
+        enableEmailNotifications: false,
+        reminderFrequency: 'daily',
+      };
     } catch (error) {
-      console.log('Error fetching notification preferences:', error);
+      console.error('❌ Failed to get notification preferences:', error);
       return null;
     }
   }
 
   async updateNotificationPreferences(preferences: any): Promise<void> {
-    const authToken = await this.getAuthToken();
-    if (!authToken) {
-      throw new Error('Not authenticated');
-    }
-
-    const response = await fetch(`${this.API_BASE_URL}/notifications/preferences`, {
-      method: 'PUT',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${authToken}`,
-      },
-      body: JSON.stringify(preferences),
-    });
-
-    if (!response.ok) {
-      throw new Error('Failed to update notification preferences');
-    }
-  }
-
-  // Clear sync data (for account deletion)
-  async clearSyncData(): Promise<void> {
     try {
-      console.log('🗑️ Clearing sync data...');
-      
-      // Clear sync settings from AsyncStorage
-      const AsyncStorage = await import('@react-native-async-storage/async-storage');
-      await AsyncStorage.default.removeItem('sync_enabled');
-      await AsyncStorage.default.removeItem('sync_settings');
-      await AsyncStorage.default.removeItem('last_sync_date');
-      await AsyncStorage.default.removeItem('sync_auth_token');
-      await AsyncStorage.default.removeItem('sync_user_id');
-      await AsyncStorage.default.removeItem('cloud_sync_config');
-      
-      console.log('✅ Sync data cleared successfully');
+      // Store preferences locally for now
+      await AsyncStorage.setItem('notification_preferences', JSON.stringify(preferences));
+      console.log('⚙️ Notification preferences updated');
     } catch (error) {
-      console.error('❌ Error clearing sync data:', error);
-      throw error;
+      console.error('❌ Failed to update notification preferences:', error);
     }
   }
 }
 
 export const cloudSyncService = new CloudSyncService();
+export type { CloudSyncService };

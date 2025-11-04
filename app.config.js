@@ -64,6 +64,12 @@ export default {
           color: "#20C6F7",
           defaultChannel: "default"
         }
+      ],
+      [
+        "@react-native-google-signin/google-signin",
+        {
+          iosUrlScheme: "com.googleusercontent.apps.1034435232632-cfdpko20rk29mphsbo1o7i5pvk9lq1dq"
+        }
       ]
     ],
     extra: {

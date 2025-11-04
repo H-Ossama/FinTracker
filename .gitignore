@@ -33,6 +33,20 @@ yarn-error.*
 .env*.local
 .env
 
+# Firebase/Google Services - Contains sensitive API keys and project IDs
+android/app/google-services.json
+ios/GoogleService-Info.plist
+
+# Keystore files - Contains signing certificates
+*.keystore
+android/app/debug.keystore
+android/app/release.keystore
+android/app/upload-keystore.jks
+
+# EAS credentials and build artifacts
+credentials.json
+.eas/
+
 # Typescript
 *.tsbuildinfo
 
@@ -87,4 +101,9 @@ ios/*.xcuserdata
 backend/node_modules/
 backend/dist/
 backend/.env
+backend/.env.local
+backend/.env.production
 backend/uploads/
+backend/logs/
+backend/database.sqlite
+backend/database.db

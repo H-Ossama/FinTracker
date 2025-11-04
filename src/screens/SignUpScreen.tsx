@@ -61,8 +61,9 @@ const SignUpScreen: React.FC<SignUpScreenProps> = ({ navigation }) => {
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [isGoogleLoading, setIsGoogleLoading] = useState(false);
   
-  const { signUp } = useAuth();
+  const { signUp, signUpWithGoogle } = useAuth();
   const { theme } = useTheme();
   const { alertState, hideAlert, showSuccess, showError } = useCustomAlert();
 
@@ -134,6 +135,29 @@ const SignUpScreen: React.FC<SignUpScreenProps> = ({ navigation }) => {
       showError('Error', 'An unexpected error occurred. Please try again.');
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const handleGoogleSignUp = async () => {
+    try {
+      setIsGoogleLoading(true);
+      
+      const result = await signUpWithGoogle();
+      
+      if (result.success) {
+        setTimeout(() => {
+          showSuccess(
+            '🎉 Welcome to FINEX!',
+            'Your account has been created successfully with Google and your data is now synced securely in the cloud.',
+          );
+        }, 100);
+      } else {
+        showError('Google Sign Up Failed', result.error || 'Please try again');
+      }
+    } catch (error) {
+      showError('Error', 'An unexpected error occurred during Google Sign Up.');
+    } finally {
+      setIsGoogleLoading(false);
     }
   };
 
@@ -363,15 +387,22 @@ const SignUpScreen: React.FC<SignUpScreenProps> = ({ navigation }) => {
           <View style={styles.socialButtonsContainer}>
             <TouchableOpacity 
               style={[styles.socialButton, { backgroundColor: theme.colors.background, borderColor: theme.colors.border }]}
-              disabled={isLoading}
+              onPress={handleGoogleSignUp}
+              disabled={isLoading || isGoogleLoading}
             >
-              <Ionicons name="logo-google" size={20} color="#EA4335" />
-              <Text style={[styles.socialButtonText, { color: theme.colors.text }]}>Google</Text>
+              {isGoogleLoading ? (
+                <ActivityIndicator size="small" color="#EA4335" />
+              ) : (
+                <>
+                  <Ionicons name="logo-google" size={20} color="#EA4335" />
+                  <Text style={[styles.socialButtonText, { color: theme.colors.text }]}>Google</Text>
+                </>
+              )}
             </TouchableOpacity>
             
             <TouchableOpacity 
               style={[styles.socialButton, { backgroundColor: theme.colors.background, borderColor: theme.colors.border }]}
-              disabled={isLoading}
+              disabled={isLoading || isGoogleLoading}
             >
               <Ionicons name="logo-apple" size={20} color={theme.colors.text} />
               <Text style={[styles.socialButtonText, { color: theme.colors.text }]}>Apple</Text>

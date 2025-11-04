@@ -48,8 +48,9 @@ const SignInScreen: React.FC<SignInScreenProps> = ({ navigation }) => {
   const [biometricAvailable, setBiometricAvailable] = useState(false);
   const [showBiometricOption, setShowBiometricOption] = useState(false);
   const [showAutoBiometric, setShowAutoBiometric] = useState(false);
+  const [isGoogleLoading, setIsGoogleLoading] = useState(false);
   
-  const { signIn, authenticateWithBiometric, checkBiometricAvailability, biometricEnabled, user } = useAuth();
+  const { signIn, signInWithGoogle, authenticateWithBiometric, checkBiometricAvailability, biometricEnabled, user } = useAuth();
   const { theme } = useTheme();
   const { alertState, hideAlert, showSuccess, showError, showConfirm } = useCustomAlert();
 
@@ -178,6 +179,29 @@ const SignInScreen: React.FC<SignInScreenProps> = ({ navigation }) => {
       () => {}, // Contact Support action
       undefined // Cancel action
     );
+  };
+
+  const handleGoogleSignIn = async () => {
+    try {
+      setIsGoogleLoading(true);
+      
+      const result = await signInWithGoogle();
+      
+      if (result.success) {
+        setTimeout(() => {
+          showSuccess(
+            '🎉 Welcome Back!',
+            'You have successfully signed in with Google.',
+          );
+        }, 100);
+      } else {
+        showError('Google Sign In Failed', result.error || 'Please try again');
+      }
+    } catch (error) {
+      showError('Error', 'An unexpected error occurred during Google Sign In.');
+    } finally {
+      setIsGoogleLoading(false);
+    }
   };
 
   const fillDemoCredentials = () => {
@@ -342,15 +366,22 @@ const SignInScreen: React.FC<SignInScreenProps> = ({ navigation }) => {
           <View style={styles.socialButtonsContainer}>
             <TouchableOpacity 
               style={[styles.socialButton, { backgroundColor: theme.colors.background, borderColor: theme.colors.border }]}
-              disabled={isLoading}
+              onPress={handleGoogleSignIn}
+              disabled={isLoading || isGoogleLoading}
             >
-              <Ionicons name="logo-google" size={20} color="#EA4335" />
-              <Text style={[styles.socialButtonText, { color: theme.colors.text }]}>Google</Text>
+              {isGoogleLoading ? (
+                <ActivityIndicator size="small" color="#EA4335" />
+              ) : (
+                <>
+                  <Ionicons name="logo-google" size={20} color="#EA4335" />
+                  <Text style={[styles.socialButtonText, { color: theme.colors.text }]}>Google</Text>
+                </>
+              )}
             </TouchableOpacity>
             
             <TouchableOpacity 
               style={[styles.socialButton, { backgroundColor: theme.colors.background, borderColor: theme.colors.border }]}
-              disabled={isLoading}
+              disabled={isLoading || isGoogleLoading}
             >
               <Ionicons name="logo-apple" size={20} color={theme.colors.text} />
               <Text style={[styles.socialButtonText, { color: theme.colors.text }]}>Apple</Text>
