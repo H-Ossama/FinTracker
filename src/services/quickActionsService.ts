@@ -28,6 +28,7 @@ export interface QuickActionScreenOption {
 }
 
 const QUICK_ACTIONS_KEY = '@quick_actions_settings';
+const MAX_ENABLED_ACTIONS = 5;
 
 const DEFAULT_QUICK_ACTIONS: QuickAction[] = [
   // Financial Actions (Modal-based)
@@ -591,11 +592,32 @@ class QuickActionsService {
   async getEnabledQuickActions(): Promise<QuickAction[]> {
     try {
       const actions = await this.getQuickActions();
-      return this.sortActions(actions.filter(action => action.enabled));
+      const enabledActions = actions.filter(action => action.enabled);
+      // Enforce the limit by taking only the first MAX_ENABLED_ACTIONS actions
+      return this.sortActions(enabledActions.slice(0, MAX_ENABLED_ACTIONS));
     } catch (error) {
       console.error('Error getting enabled quick actions:', error);
       return [];
     }
+  }
+
+  getMaxEnabledActions(): number {
+    return MAX_ENABLED_ACTIONS;
+  }
+
+  async getEnabledActionsCount(): Promise<number> {
+    try {
+      const actions = await this.getQuickActions();
+      return actions.filter(action => action.enabled).length;
+    } catch (error) {
+      console.error('Error getting enabled actions count:', error);
+      return 0;
+    }
+  }
+
+  async canEnableMoreActions(): Promise<boolean> {
+    const count = await this.getEnabledActionsCount();
+    return count < MAX_ENABLED_ACTIONS;
   }
 
   async getQuickActionsByCategory(category: string): Promise<QuickAction[]> {
@@ -676,6 +698,12 @@ class QuickActionsService {
       )
     ) {
       return actions;
+    }
+
+    // Check if we can enable more actions (considering the new action will be enabled by default)
+    const enabledCount = actions.filter(action => action.enabled).length;
+    if (enabledCount >= MAX_ENABLED_ACTIONS) {
+      throw new Error(`Cannot add more than ${MAX_ENABLED_ACTIONS} enabled quick actions. Please disable some actions first.`);
     }
 
     const nextOrder = this.getNextOrder(actions);

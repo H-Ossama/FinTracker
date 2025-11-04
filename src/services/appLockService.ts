@@ -16,7 +16,6 @@ class AppLockService {
   private backgroundTime: number | null = null;
   private lastActivity: number = Date.now();
   private lockTimer: NodeJS.Timeout | null = null;
-  private activityTimer: NodeJS.Timeout | null = null;
   private appStateSubscription: any = null;
   private settings: AppLockSettings | null = null;
   private onLockStateChange: ((isLocked: boolean) => void) | null = null;
@@ -24,7 +23,6 @@ class AppLockService {
 
   private constructor() {
     this.setupAppStateListener();
-    this.startActivityMonitoring();
   }
 
   public static getInstance(): AppLockService {
@@ -219,29 +217,8 @@ class AppLockService {
     this.resetAutoLockTimer();
   }
 
-  private startActivityMonitoring(): void {
-    this.activityTimer = setInterval(() => {
-      this.checkInactivity();
-    }, 1000); // Check every second
-  }
-
-  private checkInactivity(): void {
-    if (!this.settings?.isEnabled || this.isLocked) return;
-    
-    const timeSinceLastActivity = Date.now() - this.lastActivity;
-    const autoLockTimeMs = this.getAutoLockTimeInMs();
-    
-    if (autoLockTimeMs > 0 && timeSinceLastActivity >= autoLockTimeMs) {
-      this.lock();
-    }
-  }
-
-  private stopActivityMonitoring(): void {
-    if (this.activityTimer) {
-      clearInterval(this.activityTimer);
-      this.activityTimer = null;
-    }
-  }
+  // Removed battery-draining setInterval monitoring
+  // Activity tracking is now event-driven via touch events only
 
   public async checkShouldLockOnStart(): Promise<boolean> {
     if (!this.settings?.isEnabled) return false;
@@ -253,7 +230,6 @@ class AppLockService {
 
   public cleanup(): void {
     this.clearAutoLockTimer();
-    this.stopActivityMonitoring();
     if (this.appStateSubscription) {
       this.appStateSubscription.remove();
       this.appStateSubscription = null;

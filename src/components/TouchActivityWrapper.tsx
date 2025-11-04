@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useCallback, useRef } from 'react';
 import { View, ViewProps } from 'react-native';
 import AppLockService from '../services/appLockService';
 
@@ -12,10 +12,17 @@ const TouchActivityWrapper: React.FC<TouchActivityWrapperProps> = ({
   ...props 
 }) => {
   const appLockService = AppLockService.getInstance();
+  const lastTouchTime = useRef(0);
+  const DEBOUNCE_DELAY = 1000; // Only record activity once per second
 
-  const handleTouch = () => {
-    appLockService.recordActivity();
-  };
+  const handleTouch = useCallback(() => {
+    const now = Date.now();
+    // Debounce touch events to reduce battery usage
+    if (now - lastTouchTime.current > DEBOUNCE_DELAY) {
+      lastTouchTime.current = now;
+      appLockService.recordActivity();
+    }
+  }, [appLockService]);
 
   return (
     <View
@@ -29,4 +36,4 @@ const TouchActivityWrapper: React.FC<TouchActivityWrapperProps> = ({
   );
 };
 
-export default TouchActivityWrapper;
+export default React.memo(TouchActivityWrapper);

@@ -28,6 +28,8 @@ const QuickActionsSettingsScreen = () => {
   const [addScreenModalVisible, setAddScreenModalVisible] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [modalSearchQuery, setModalSearchQuery] = useState('');
+  const [enabledCount, setEnabledCount] = useState(0);
+  const [maxActions] = useState(quickActionsService.getMaxEnabledActions());
 
   const styles = createStyles(theme);
 
@@ -51,6 +53,8 @@ const QuickActionsSettingsScreen = () => {
       setLoading(true);
       const quickActions = await quickActionsService.getAllActionsWithUserSettings();
       setActions(quickActions);
+      const enabled = quickActions.filter(action => action.enabled).length;
+      setEnabledCount(enabled);
     } catch (error) {
       console.error('Error loading quick actions:', error);
       Alert.alert(t('error'), t('failed_to_load_quick_actions'));
@@ -68,12 +72,30 @@ const QuickActionsSettingsScreen = () => {
       return;
     }
 
+    const action = actions.find(a => a.id === actionId);
+    if (!action) return;
+
+    // Check if we're trying to enable an action when we're at the limit
+    if (!action.enabled && enabledCount >= maxActions) {
+      Alert.alert(
+        t('limit_reached') || 'Limit Reached',
+        t('max_quick_actions_message') || `You can only have ${maxActions} quick actions enabled at once. Please disable another action first.`,
+        [{ text: t('ok') || 'OK' }]
+      );
+      return;
+    }
+
     try {
       setIsSaving(true);
-      const updatedActions = actions.map(action =>
-        action.id === actionId ? { ...action, enabled: !action.enabled } : action
+      const updatedActions = actions.map(actionItem =>
+        actionItem.id === actionId ? { ...actionItem, enabled: !actionItem.enabled } : actionItem
       );
       setActions(updatedActions);
+      
+      // Update enabled count
+      const newEnabledCount = updatedActions.filter(a => a.enabled).length;
+      setEnabledCount(newEnabledCount);
+      
       await quickActionsService.saveQuickActions(updatedActions);
     } catch (error) {
       console.error('Error toggling quick action:', error);
@@ -82,7 +104,7 @@ const QuickActionsSettingsScreen = () => {
     } finally {
       setIsSaving(false);
     }
-  }, [actions, isSaving, t, loadQuickActions]);
+  }, [actions, isSaving, t, loadQuickActions, enabledCount, maxActions]);
 
   const handleReorderAction = useCallback(async (actionId: string, direction: 'up' | 'down') => {
     if (isSaving) {
@@ -126,19 +148,32 @@ const QuickActionsSettingsScreen = () => {
       return;
     }
 
+    // Check if we're at the limit before adding
+    if (enabledCount >= maxActions) {
+      Alert.alert(
+        t('limit_reached') || 'Limit Reached',
+        t('max_quick_actions_message') || `You can only have ${maxActions} quick actions enabled at once. Please disable some actions first.`,
+        [{ text: t('ok') || 'OK' }]
+      );
+      return;
+    }
+
     try {
       setIsSaving(true);
       const updatedActions = await quickActionsService.addScreenAction(screenId);
       setActions(updatedActions);
+      const newEnabledCount = updatedActions.filter(a => a.enabled).length;
+      setEnabledCount(newEnabledCount);
       setAddScreenModalVisible(false);
       setModalSearchQuery(''); // Clear search query
     } catch (error) {
       console.error('Error adding quick action screen:', error);
-      Alert.alert(t('error'), 'Unable to add this screen right now. Please try again later.');
+      const errorMessage = error instanceof Error ? error.message : 'Unable to add this screen right now. Please try again later.';
+      Alert.alert(t('error'), errorMessage);
     } finally {
       setIsSaving(false);
     }
-  }, [isSaving, t]);
+  }, [isSaving, t, enabledCount, maxActions]);
 
   const handleRemoveAction = useCallback(async (actionId: string) => {
     if (isSaving) {
@@ -149,6 +184,8 @@ const QuickActionsSettingsScreen = () => {
       setIsSaving(true);
       const updatedActions = await quickActionsService.removeScreenAction(actionId);
       setActions(updatedActions);
+      const newEnabledCount = updatedActions.filter(a => a.enabled).length;
+      setEnabledCount(newEnabledCount);
     } catch (error) {
       console.error('Error removing quick action:', error);
       Alert.alert(t('error'), 'Unable to remove this action. Only custom actions can be removed.');
@@ -211,80 +248,95 @@ const QuickActionsSettingsScreen = () => {
     }
   }, [actions, searchQuery, sortMode]);
 
-  const renderActionItem = useCallback(({ item: action, index }: { item: QuickAction; index: number }) => (
-    <View key={action.id || `action-${index}`} style={styles.actionItem}>
-      <View style={styles.actionLeft}>
-        <View style={[styles.actionIcon, { backgroundColor: action.color + '20' }]}>
-          <Ionicons name={action.icon as any} size={20} color={action.color} />
-        </View>
-        <View style={styles.actionInfo}>
-          <View style={styles.actionHeader}>
-            <Text style={styles.actionLabel}>{action.label}</Text>
-            <View style={styles.badgeContainer}>
-              {action.isModal && (
-                <View style={styles.modalBadge}>
-                  <Text style={styles.modalBadgeText}>Modal</Text>
-                </View>
-              )}
-              {action.isCustom && (
-                <View style={[styles.customBadge, { backgroundColor: theme.colors.success + '20' }]}>
-                  <Text style={[styles.customBadgeText, { color: theme.colors.success }]}>Custom</Text>
-                </View>
-              )}
-            </View>
+  const renderActionItem = useCallback(({ item: action, index }: { item: QuickAction; index: number }) => {
+    const canToggle = action.enabled || enabledCount < maxActions;
+    
+    return (
+      <View key={action.id || `action-${index}`} style={styles.actionItem}>
+        <View style={styles.actionLeft}>
+          <View style={[styles.actionIcon, { backgroundColor: action.color + '20' }]}>
+            <Ionicons name={action.icon as any} size={20} color={action.color} />
           </View>
-          <Text style={styles.actionDescription}>{action.description}</Text>
+          <View style={styles.actionInfo}>
+            <View style={styles.actionHeader}>
+              <Text style={styles.actionLabel}>{action.label}</Text>
+              <View style={styles.badgeContainer}>
+                {action.isModal && (
+                  <View style={styles.modalBadge}>
+                    <Text style={styles.modalBadgeText}>Modal</Text>
+                  </View>
+                )}
+                {action.isCustom && (
+                  <View style={[styles.customBadge, { backgroundColor: theme.colors.success + '20' }]}>
+                    <Text style={[styles.customBadgeText, { color: theme.colors.success }]}>Custom</Text>
+                  </View>
+                )}
+              </View>
+            </View>
+            <Text style={styles.actionDescription}>{action.description}</Text>
+          </View>
+        </View>
+        <View style={styles.actionRight}>
+          {action.isCustom && (
+            <TouchableOpacity
+              style={[styles.removeButton, { backgroundColor: theme.colors.error + '15' }]}
+              onPress={() => handleRemoveAction(action.id)}
+              disabled={isSaving}
+            >
+              <Ionicons
+                name="trash-outline"
+                size={16}
+                color={theme.colors.error}
+              />
+            </TouchableOpacity>
+          )}
+          <View style={styles.reorderButtons}>
+            <TouchableOpacity
+              onPress={() => handleReorderAction(action.id, 'up')}
+              disabled={index === 0}
+              style={styles.reorderButton}
+            >
+              <Ionicons
+                name="chevron-up"
+                size={20}
+                color={index === 0 ? theme.colors.textSecondary : theme.colors.text}
+              />
+            </TouchableOpacity>
+            <TouchableOpacity
+              onPress={() => handleReorderAction(action.id, 'down')}
+              disabled={index === actions.length - 1}
+              style={styles.reorderButton}
+            >
+              <Ionicons
+                name="chevron-down"
+                size={20}
+                color={
+                  index === actions.length - 1 ? theme.colors.textSecondary : theme.colors.text
+                }
+              />
+            </TouchableOpacity>
+          </View>
+          <View style={styles.switchContainer}>
+            <Switch
+              value={action.enabled}
+              onValueChange={() => handleToggleAction(action.id)}
+              disabled={!canToggle || isSaving}
+              trackColor={{ 
+                false: canToggle ? '#767577' : theme.colors.textSecondary + '40', 
+                true: theme.colors.primary + '80' 
+              }}
+              thumbColor={action.enabled ? theme.colors.primary : (canToggle ? '#f4f3f4' : theme.colors.textSecondary)}
+            />
+            {!canToggle && !action.enabled && (
+              <Text style={[styles.limitHint, { color: theme.colors.textSecondary }]}>
+                Limit reached
+              </Text>
+            )}
+          </View>
         </View>
       </View>
-      <View style={styles.actionRight}>
-        {action.isCustom && (
-          <TouchableOpacity
-            style={[styles.removeButton, { backgroundColor: theme.colors.error + '15' }]}
-            onPress={() => handleRemoveAction(action.id)}
-            disabled={isSaving}
-          >
-            <Ionicons
-              name="trash-outline"
-              size={16}
-              color={theme.colors.error}
-            />
-          </TouchableOpacity>
-        )}
-        <View style={styles.reorderButtons}>
-          <TouchableOpacity
-            onPress={() => handleReorderAction(action.id, 'up')}
-            disabled={index === 0}
-            style={styles.reorderButton}
-          >
-            <Ionicons
-              name="chevron-up"
-              size={20}
-              color={index === 0 ? theme.colors.textSecondary : theme.colors.text}
-            />
-          </TouchableOpacity>
-          <TouchableOpacity
-            onPress={() => handleReorderAction(action.id, 'down')}
-            disabled={index === actions.length - 1}
-            style={styles.reorderButton}
-          >
-            <Ionicons
-              name="chevron-down"
-              size={20}
-              color={
-                index === actions.length - 1 ? theme.colors.textSecondary : theme.colors.text
-              }
-            />
-          </TouchableOpacity>
-        </View>
-        <Switch
-          value={action.enabled}
-          onValueChange={() => handleToggleAction(action.id)}
-          trackColor={{ false: '#767577', true: theme.colors.primary + '80' }}
-          thumbColor={action.enabled ? theme.colors.primary : '#f4f3f4'}
-        />
-      </View>
-    </View>
-  ), [actions, theme, handleReorderAction, handleToggleAction, handleRemoveAction, isSaving]);
+    );
+  }, [actions, theme, handleReorderAction, handleToggleAction, handleRemoveAction, isSaving, enabledCount, maxActions]);
 
   const renderSectionHeader = useCallback(({ section }: { section: any }) => (
     <View style={styles.sectionHeader}>
@@ -353,12 +405,65 @@ const QuickActionsSettingsScreen = () => {
       </View>
 
       <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
+        {/* Limit Information Section */}
+        <View style={styles.limitSection}>
+          <View style={[styles.limitCard, { 
+            backgroundColor: theme.colors.card, 
+            borderColor: enabledCount >= maxActions ? theme.colors.warning : theme.colors.border 
+          }]}>
+            <View style={styles.limitHeader}>
+              <View style={[styles.limitIcon, { 
+                backgroundColor: enabledCount >= maxActions ? theme.colors.warning + '20' : theme.colors.primary + '20' 
+              }]}>
+                <Ionicons 
+                  name={enabledCount >= maxActions ? "warning" : "flash"} 
+                  size={20} 
+                  color={enabledCount >= maxActions ? theme.colors.warning : theme.colors.primary} 
+                />
+              </View>
+              <Text style={[styles.limitTitle, { color: theme.colors.text }]}>
+                Quick Actions Limit
+              </Text>
+            </View>
+            <View style={styles.limitContent}>
+              <Text style={[styles.limitDescription, { color: theme.colors.textSecondary }]}>
+                You can enable up to {maxActions} quick actions at once for optimal performance.
+              </Text>
+              <View style={styles.limitStatus}>
+                <View style={styles.limitBar}>
+                  <View style={[styles.limitBarBackground, { backgroundColor: theme.colors.border }]} />
+                  <View style={[
+                    styles.limitBarFill, 
+                    { 
+                      backgroundColor: enabledCount >= maxActions ? theme.colors.warning : theme.colors.primary,
+                      width: `${Math.min((enabledCount / maxActions) * 100, 100)}%`
+                    }
+                  ]} />
+                </View>
+                <Text style={[styles.limitText, { 
+                  color: enabledCount >= maxActions ? theme.colors.warning : theme.colors.text 
+                }]}>
+                  {enabledCount} / {maxActions} enabled
+                </Text>
+              </View>
+              {enabledCount >= maxActions && (
+                <View style={[styles.warningBanner, { backgroundColor: theme.colors.warning + '15', borderColor: theme.colors.warning + '50' }]}>
+                  <Ionicons name="warning" size={16} color={theme.colors.warning} />
+                  <Text style={[styles.warningText, { color: theme.colors.warning }]}>
+                    You've reached the maximum limit. Disable some actions to add new ones.
+                  </Text>
+                </View>
+              )}
+            </View>
+          </View>
+        </View>
+
         <View style={styles.section}>
           <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>
             Customize Quick Actions
           </Text>
           <Text style={[styles.sectionDescription, { color: theme.colors.textSecondary }]}>
-            Enable the actions you use most frequently. You can reorder them by using the up/down arrows. Enabled actions will appear in the quick action menu.
+            Enable the actions you use most frequently (up to {maxActions} actions). You can reorder them by using the up/down arrows. Enabled actions will appear in the quick action menu.
           </Text>
         </View>
 
@@ -368,14 +473,14 @@ const QuickActionsSettingsScreen = () => {
             {
               backgroundColor: theme.colors.primary + '10',
               borderColor: theme.colors.primary + '50',
-              opacity: availableScreens.length === 0 || isSaving ? 0.6 : 1,
+              opacity: (availableScreens.length === 0 || isSaving || enabledCount >= maxActions) ? 0.6 : 1,
             },
           ]}
           onPress={() => setAddScreenModalVisible(true)}
-          disabled={availableScreens.length === 0 || isSaving}
+          disabled={availableScreens.length === 0 || isSaving || enabledCount >= maxActions}
         >
           <Ionicons
-            name={availableScreens.length === 0 ? 'checkmark-circle-outline' : 'add'}
+            name={availableScreens.length === 0 ? 'checkmark-circle-outline' : enabledCount >= maxActions ? 'warning' : 'add'}
             size={18}
             color={theme.colors.primary}
           />
@@ -387,6 +492,8 @@ const QuickActionsSettingsScreen = () => {
           >
             {availableScreens.length === 0
               ? 'All available screens added'
+              : enabledCount >= maxActions
+              ? `Maximum ${maxActions} actions reached`
               : 'Add Screen Shortcut'}
           </Text>
         </TouchableOpacity>
@@ -415,7 +522,7 @@ const QuickActionsSettingsScreen = () => {
             <Ionicons name="bulb" size={20} color={theme.colors.success} />
             <Text style={[styles.tipText, { color: theme.colors.text }]}>
               <Text style={{ fontWeight: '600' }}>Tip: </Text>
-              Enable 3-5 actions for the best experience. Too many actions can make the menu cluttered.
+              You can enable up to {maxActions} actions for the best experience. The quick action menu works best with 3-5 frequently used actions.
             </Text>
           </View>
         </View>
@@ -852,6 +959,94 @@ const createStyles = (theme: any) =>
     searchResultsText: {
       fontSize: 12,
       fontStyle: 'italic',
+    },
+    // Limit Section Styles
+    limitSection: {
+      marginTop: 16,
+      marginBottom: 16,
+    },
+    limitCard: {
+      borderRadius: 12,
+      borderWidth: 1,
+      padding: 16,
+    },
+    limitHeader: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      marginBottom: 12,
+    },
+    limitIcon: {
+      width: 36,
+      height: 36,
+      borderRadius: 18,
+      justifyContent: 'center',
+      alignItems: 'center',
+      marginRight: 12,
+    },
+    limitTitle: {
+      fontSize: 16,
+      fontWeight: '600',
+    },
+    limitContent: {
+      gap: 12,
+    },
+    limitDescription: {
+      fontSize: 14,
+      lineHeight: 20,
+    },
+    limitStatus: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      gap: 12,
+    },
+    limitBar: {
+      flex: 1,
+      height: 8,
+      position: 'relative',
+      borderRadius: 4,
+      overflow: 'hidden',
+    },
+    limitBarBackground: {
+      position: 'absolute',
+      top: 0,
+      left: 0,
+      right: 0,
+      bottom: 0,
+      borderRadius: 4,
+    },
+    limitBarFill: {
+      height: '100%',
+      borderRadius: 4,
+      minWidth: 2,
+    },
+    limitText: {
+      fontSize: 14,
+      fontWeight: '600',
+      minWidth: 80,
+      textAlign: 'right',
+    },
+    warningBanner: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      padding: 12,
+      borderRadius: 8,
+      borderWidth: 1,
+      gap: 8,
+    },
+    warningText: {
+      fontSize: 13,
+      fontWeight: '500',
+      flex: 1,
+    },
+    switchContainer: {
+      alignItems: 'center',
+      gap: 4,
+    },
+    limitHint: {
+      fontSize: 10,
+      fontWeight: '500',
+      textAlign: 'center',
     },
   });
 

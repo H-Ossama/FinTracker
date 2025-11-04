@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react';
 import { Appearance, ColorSchemeName } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
@@ -79,7 +79,7 @@ const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
 
 const THEME_STORAGE_KEY = '@fintracker_theme';
 
-export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+export const ThemeProvider: React.FC<{ children: React.ReactNode }> = React.memo(({ children }) => {
   const [themeMode, setThemeMode] = useState<'light' | 'dark' | 'auto'>('auto');
   const [systemColorScheme, setSystemColorScheme] = useState<ColorSchemeName>(
     Appearance.getColorScheme()
@@ -97,7 +97,7 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     return () => subscription?.remove();
   }, []);
 
-  const loadThemePreference = async () => {
+  const loadThemePreference = useCallback(async () => {
     try {
       const savedTheme = await AsyncStorage.getItem(THEME_STORAGE_KEY);
       if (savedTheme && ['light', 'dark', 'auto'].includes(savedTheme)) {
@@ -106,52 +106,52 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     } catch (error) {
       console.error('Error loading theme preference:', error);
     }
-  };
+  }, []);
 
-  const saveThemePreference = async (theme: 'light' | 'dark' | 'auto') => {
+  const saveThemePreference = useCallback(async (theme: 'light' | 'dark' | 'auto') => {
     try {
       await AsyncStorage.setItem(THEME_STORAGE_KEY, theme);
     } catch (error) {
       console.error('Error saving theme preference:', error);
     }
-  };
+  }, []);
 
   // Determine current theme based on mode and system preference
-  const getCurrentTheme = (): Theme => {
+  const getCurrentTheme = useCallback((): Theme => {
     if (themeMode === 'auto') {
       return systemColorScheme === 'dark' ? darkTheme : lightTheme;
     }
     return themeMode === 'dark' ? darkTheme : lightTheme;
-  };
+  }, [themeMode, systemColorScheme]);
 
   const theme = getCurrentTheme();
   const isDark = theme.isDark;
 
-  const toggleTheme = () => {
+  const toggleTheme = useCallback(() => {
     const newMode = isDark ? 'light' : 'dark';
     setThemeMode(newMode);
     saveThemePreference(newMode);
-  };
+  }, [isDark, saveThemePreference]);
 
-  const setTheme = (newTheme: 'light' | 'dark' | 'auto') => {
+  const setTheme = useCallback((newTheme: 'light' | 'dark' | 'auto') => {
     setThemeMode(newTheme);
     saveThemePreference(newTheme);
-  };
+  }, [saveThemePreference]);
+
+  const contextValue = useMemo(() => ({
+    theme,
+    isDark,
+    toggleTheme,
+    setTheme,
+    themeMode,
+  }), [theme, isDark, toggleTheme, setTheme, themeMode]);
 
   return (
-    <ThemeContext.Provider
-      value={{
-        theme,
-        isDark,
-        toggleTheme,
-        setTheme,
-        themeMode,
-      }}
-    >
+    <ThemeContext.Provider value={contextValue}>
       {children}
     </ThemeContext.Provider>
   );
-};
+});
 
 export const useTheme = (): ThemeContextType => {
   const context = useContext(ThemeContext);

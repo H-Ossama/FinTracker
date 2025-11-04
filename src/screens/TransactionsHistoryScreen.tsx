@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   View,
   Text,
@@ -8,15 +8,38 @@ import {
   RefreshControl,
   ActivityIndicator,
   FlatList,
+  TextInput,
+  Animated,
+  Dimensions,
+  Vibration,
+  Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Ionicons } from '@expo/vector-icons';
+import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { useTheme } from '../contexts/ThemeContext';
 import { useLocalization } from '../contexts/LocalizationContext';
 import { hybridDataService, HybridTransaction } from '../services/hybridDataService';
 import useSafeAreaHelper from '../hooks/useSafeAreaHelper';
+import TransactionDetailsModal from '../components/TransactionDetailsModal';
+
+const { width } = Dimensions.get('window');
+
+interface GroupedTransaction {
+  date: string;
+  transactions: HybridTransaction[];
+  totalIncome: number;
+  totalExpense: number;
+}
+
+interface FilterState {
+  type: 'all' | 'income' | 'expense' | 'transfer';
+  dateRange: 'all' | 'week' | 'month' | 'year';
+  search: string;
+  minAmount?: number;
+  maxAmount?: number;
+}
 
 const TransactionsHistoryScreen = () => {
   const navigation = useNavigation();
@@ -27,181 +50,416 @@ const TransactionsHistoryScreen = () => {
   const [transactions, setTransactions] = useState<HybridTransaction[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [filter, setFilter] = useState<'all' | 'income' | 'expense' | 'transfer'>('all');
-  const [hasMore, setHasMore] = useState(true);
-  const [loadingMore, setLoadingMore] = useState(false);
+  const [searchVisible, setSearchVisible] = useState(false);
+  const [selectedTransaction, setSelectedTransaction] = useState<HybridTransaction | null>(null);
+  const [showTransactionDetails, setShowTransactionDetails] = useState(false);
+  const [animatedValues] = useState(() => ({
+    searchHeight: new Animated.Value(0),
+    filterScroll: new Animated.Value(0),
+  }));
+
+  // Enhanced filter state
+  const [filter, setFilter] = useState<FilterState>({
+    type: 'all',
+    dateRange: 'all',
+    search: '',
+  });
 
   useEffect(() => {
     loadTransactions();
-  }, [filter]);
+  }, []);
 
-  const loadTransactions = async (reset = true) => {
+  const loadTransactions = async () => {
     try {
-      if (reset) {
-        setLoading(true);
-        setTransactions([]);
-      }
-      
-      const limit = reset ? 50 : 20; // Load more initially, then smaller chunks
-      
-      // Get all transactions first
-      const allTransactions = await hybridDataService.getTransactions(undefined, reset ? 50 : transactions.length + 20);
-      
-      // Apply client-side filtering
-      let filteredTransactions = allTransactions;
-      if (filter !== 'all') {
-        const filterType = filter.toUpperCase();
-        filteredTransactions = allTransactions.filter(t => t.type === filterType);
-      }
-      
-      if (reset) {
-        setTransactions(filteredTransactions);
-      } else {
-        // For "load more", we would need to implement pagination differently
-        // For now, just set all filtered transactions
-        setTransactions(filteredTransactions);
-      }
-      
-      // Simple check if there might be more data
-      setHasMore(allTransactions.length >= limit);
+      setLoading(true);
+      const allTransactions = await hybridDataService.getTransactions(undefined, 100);
+      setTransactions(allTransactions);
     } catch (error) {
       console.error('Error loading transactions:', error);
+      Alert.alert(t('error'), t('failed_to_load_transactions'));
     } finally {
       setLoading(false);
-      setLoadingMore(false);
     }
   };
 
   const onRefresh = async () => {
     setRefreshing(true);
-    await loadTransactions(true);
+    await loadTransactions();
     setRefreshing(false);
   };
 
-  const loadMore = async () => {
-    if (!hasMore || loadingMore || filter !== 'all') return; // Disable load more for filtered views
+  // Enhanced filtering logic
+  const filteredTransactions = useMemo(() => {
+    let filtered = transactions;
+
+    // Filter by type
+    if (filter.type !== 'all') {
+      const filterType = filter.type.toUpperCase();
+      filtered = filtered.filter(t => t.type === filterType);
+    }
+
+    // Filter by search
+    if (filter.search) {
+      const searchLower = filter.search.toLowerCase();
+      filtered = filtered.filter(t => 
+        t.description?.toLowerCase().includes(searchLower) ||
+        t.notes?.toLowerCase().includes(searchLower) ||
+        t.amount.toString().includes(searchLower)
+      );
+    }
+
+    // Filter by date range
+    if (filter.dateRange !== 'all') {
+      const now = new Date();
+      const filterDate = new Date();
+      
+      switch (filter.dateRange) {
+        case 'week':
+          filterDate.setDate(now.getDate() - 7);
+          break;
+        case 'month':
+          filterDate.setMonth(now.getMonth() - 1);
+          break;
+        case 'year':
+          filterDate.setFullYear(now.getFullYear() - 1);
+          break;
+      }
+      
+      filtered = filtered.filter(t => new Date(t.date) >= filterDate);
+    }
+
+    // Filter by amount range
+    if (filter.minAmount !== undefined) {
+      filtered = filtered.filter(t => t.amount >= filter.minAmount!);
+    }
+    if (filter.maxAmount !== undefined) {
+      filtered = filtered.filter(t => t.amount <= filter.maxAmount!);
+    }
+
+    return filtered.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+  }, [transactions, filter]);
+
+  // Group transactions by date
+  const groupedTransactions = useMemo(() => {
+    const groups: { [key: string]: GroupedTransaction } = {};
     
-    setLoadingMore(true);
-    await loadTransactions(false);
+    filteredTransactions.forEach(transaction => {
+      const dateKey = new Date(transaction.date).toDateString();
+      
+      if (!groups[dateKey]) {
+        groups[dateKey] = {
+          date: dateKey,
+          transactions: [],
+          totalIncome: 0,
+          totalExpense: 0,
+        };
+      }
+      
+      groups[dateKey].transactions.push(transaction);
+      
+      if (transaction.type === 'INCOME') {
+        groups[dateKey].totalIncome += transaction.amount;
+      } else if (transaction.type === 'EXPENSE') {
+        groups[dateKey].totalExpense += transaction.amount;
+      }
+    });
+    
+    return Object.values(groups).sort((a, b) => 
+      new Date(b.date).getTime() - new Date(a.date).getTime()
+    );
+  }, [filteredTransactions]);
+
+  // Enhanced statistics
+  const statistics = useMemo(() => {
+    const income = filteredTransactions
+      .filter(t => t.type === 'INCOME')
+      .reduce((sum, t) => sum + t.amount, 0);
+    
+    const expense = filteredTransactions
+      .filter(t => t.type === 'EXPENSE')
+      .reduce((sum, t) => sum + t.amount, 0);
+    
+    const transfers = filteredTransactions.filter(t => t.type === 'TRANSFER').length;
+    const avgTransaction = filteredTransactions.length > 0 
+      ? (income + expense) / filteredTransactions.length 
+      : 0;
+    
+    return {
+      income,
+      expense,
+      transfers,
+      total: filteredTransactions.length,
+      avgTransaction,
+      netIncome: income - expense,
+    };
+  }, [filteredTransactions]);
+
+  const toggleSearch = () => {
+    const newVisible = !searchVisible;
+    setSearchVisible(newVisible);
+    
+    Animated.timing(animatedValues.searchHeight, {
+      toValue: newVisible ? 60 : 0,
+      duration: 300,
+      useNativeDriver: false,
+    }).start();
+    
+    if (!newVisible) {
+      setFilter(prev => ({ ...prev, search: '' }));
+    }
   };
 
-  const getTransactionEmoji = (type: string, description?: string) => {
-    if (type === 'INCOME') return '💰';
-    if (type === 'TRANSFER') return '🔄';
+  const getTransactionIcon = (type: string, description?: string) => {
+    if (type === 'INCOME') return { name: 'trending-up', color: theme.colors.success };
+    if (type === 'TRANSFER') return { name: 'swap-horizontal', color: theme.colors.primary };
     
-    // For expenses, try to guess based on description
+    // Smart categorization for expenses
     const desc = description?.toLowerCase() || '';
-    if (desc.includes('food') || desc.includes('restaurant') || desc.includes('grocery')) return '🍔';
-    if (desc.includes('gas') || desc.includes('fuel') || desc.includes('electricity') || desc.includes('utility')) return '💡';
-    if (desc.includes('netflix') || desc.includes('subscription') || desc.includes('spotify')) return '📱';
-    if (desc.includes('transport') || desc.includes('uber') || desc.includes('taxi')) return '🚗';
-    if (desc.includes('shopping') || desc.includes('clothes') || desc.includes('store')) return '🛒';
-    if (desc.includes('health') || desc.includes('medical') || desc.includes('doctor')) return '🏥';
-    if (desc.includes('entertainment') || desc.includes('movie') || desc.includes('game')) return '🎬';
-    return '💳';
+    
+    if (desc.includes('food') || desc.includes('restaurant') || desc.includes('grocery')) 
+      return { name: 'restaurant', color: '#FF6B6B' };
+    if (desc.includes('gas') || desc.includes('fuel') || desc.includes('electricity') || desc.includes('utility')) 
+      return { name: 'flash', color: '#F39C12' };
+    if (desc.includes('netflix') || desc.includes('subscription') || desc.includes('spotify')) 
+      return { name: 'play-circle', color: '#9B59B6' };
+    if (desc.includes('transport') || desc.includes('uber') || desc.includes('taxi')) 
+      return { name: 'car', color: '#3498DB' };
+    if (desc.includes('shopping') || desc.includes('clothes') || desc.includes('store')) 
+      return { name: 'bag', color: '#E67E22' };
+    if (desc.includes('health') || desc.includes('medical') || desc.includes('doctor')) 
+      return { name: 'medical', color: '#E74C3C' };
+    if (desc.includes('entertainment') || desc.includes('movie') || desc.includes('game')) 
+      return { name: 'game-controller', color: '#8E44AD' };
+    
+    return { name: 'card', color: theme.colors.textSecondary };
   };
 
-  const formatTransactionDate = (dateStr: string) => {
+  const formatRelativeDate = (dateStr: string) => {
     const date = new Date(dateStr);
     const today = new Date();
-    const diffTime = Math.abs(today.getTime() - date.getTime());
+    const diffTime = today.getTime() - date.getTime();
     const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
     
-    if (diffDays === 1) return t('today');
-    if (diffDays === 2) return t('yesterday');
-    if (diffDays <= 7) return `${diffDays - 1} ${t('days_ago')}`;
+    if (diffDays === 0) return t('today');
+    if (diffDays === 1) return t('yesterday');
+    if (diffDays <= 7) return `${diffDays} ${t('days_ago')}`;
+    
     return date.toLocaleDateString('en-US', {
+      weekday: 'short',
       month: 'short',
       day: 'numeric',
       year: date.getFullYear() !== today.getFullYear() ? 'numeric' : undefined,
     });
   };
 
-  const getTransactionTypeColor = (type: string) => {
-    switch (type) {
-      case 'INCOME': return theme.colors.success || '#00C851';
-      case 'EXPENSE': return '#FF3B30';
-      case 'TRANSFER': return theme.colors.primary || '#007AFF';
-      default: return theme.colors.textSecondary;
+  const handleTransactionPress = (transaction: HybridTransaction) => {
+    Vibration.vibrate(50);
+    setSelectedTransaction(transaction);
+    setShowTransactionDetails(true);
+  };
+
+  const handleTransactionLongPress = (transaction: HybridTransaction) => {
+    Vibration.vibrate([50, 50, 50]);
+    Alert.alert(
+      t('transaction_options'),
+      t('choose_action'),
+      [
+        { text: t('edit'), onPress: () => handleEditTransaction(transaction) },
+        { text: t('duplicate'), onPress: () => handleDuplicateTransaction(transaction) },
+        { text: t('delete'), style: 'destructive', onPress: () => handleDeleteTransaction(transaction.id) },
+        { text: t('cancel'), style: 'cancel' }
+      ]
+    );
+  };
+
+  const handleEditTransaction = (transaction: HybridTransaction) => {
+    // TODO: Navigate to edit transaction screen
+    console.log('Edit transaction:', transaction.id);
+  };
+
+  const handleDuplicateTransaction = (transaction: HybridTransaction) => {
+    // TODO: Implement duplicate functionality
+    console.log('Duplicate transaction:', transaction.id);
+  };
+
+  const handleDeleteTransaction = async (transactionId: string) => {
+    try {
+      // TODO: Implement delete functionality with hybridDataService
+      console.log('Delete transaction:', transactionId);
+      // Refresh the list after deletion
+      await loadTransactions();
+    } catch (error) {
+      console.error('Error deleting transaction:', error);
+      Alert.alert(t('error'), t('failed_to_delete_transaction'));
     }
   };
 
-  const getTransactionSign = (type: string) => {
-    switch (type) {
-      case 'INCOME': return '+';
-      case 'TRANSFER': return '↔';
-      default: return '';
-    }
-  };
-
-  const renderTransactionItem = ({ item: transaction }: { item: HybridTransaction }) => (
-    <TouchableOpacity 
-      style={[styles.transactionItem, { borderBottomColor: theme.colors.border }]}
-      onPress={() => {
-        // TODO: Navigate to transaction details
-        console.log('Transaction pressed:', transaction.id);
-      }}
-    >
-      <View style={styles.transactionLeft}>
-        <View style={[styles.transactionIcon, { backgroundColor: theme.colors.background }]}>
-          <Text style={styles.transactionEmoji}>
-            {getTransactionEmoji(transaction.type, transaction.description)}
-          </Text>
-        </View>
-        <View style={styles.transactionInfo}>
-          <Text style={[styles.transactionTitle, { color: theme.colors.text }]}>
-            {transaction.description || `${transaction.type.toLowerCase()} transaction`}
-          </Text>
-          <View style={styles.transactionMeta}>
-            <Text style={[styles.transactionDate, { color: theme.colors.textSecondary }]}>
-              {formatTransactionDate(transaction.date)}
+  const renderTransactionItem = ({ item: transaction }: { item: HybridTransaction }) => {
+    const icon = getTransactionIcon(transaction.type, transaction.description);
+    
+    return (
+      <TouchableOpacity 
+        style={[styles.transactionItem, { backgroundColor: theme.colors.surface }]}
+        onPress={() => handleTransactionPress(transaction)}
+        onLongPress={() => handleTransactionLongPress(transaction)}
+        activeOpacity={0.7}
+      >
+        <View style={styles.transactionLeft}>
+          <View style={[styles.transactionIconContainer, { backgroundColor: `${icon.color}15` }]}>
+            <Ionicons name={icon.name as any} size={20} color={icon.color} />
+          </View>
+          <View style={styles.transactionInfo}>
+            <Text style={[styles.transactionTitle, { color: theme.colors.text }]} numberOfLines={1}>
+              {transaction.description || `${transaction.type.toLowerCase()} transaction`}
             </Text>
-            {transaction.notes && (
-              <>
-                <Text style={[styles.transactionSeparator, { color: theme.colors.textSecondary }]}>
-                  {' • '}
-                </Text>
-                <Text style={[styles.transactionNotes, { color: theme.colors.textSecondary }]} numberOfLines={1}>
-                  {transaction.notes}
-                </Text>
-              </>
-            )}
+            <View style={styles.transactionMeta}>
+              <Text style={[styles.transactionCategory, { color: theme.colors.textSecondary }]}>
+                {transaction.type.toLowerCase()}
+              </Text>
+              {transaction.notes && (
+                <>
+                  <Text style={[styles.metaSeparator, { color: theme.colors.textSecondary }]}>•</Text>
+                  <Text style={[styles.transactionNotes, { color: theme.colors.textSecondary }]} numberOfLines={1}>
+                    {transaction.notes}
+                  </Text>
+                </>
+              )}
+            </View>
           </View>
         </View>
+        <View style={styles.transactionRight}>
+          <Text style={[
+            styles.transactionAmount,
+            { 
+              color: transaction.type === 'INCOME' 
+                ? theme.colors.success 
+                : transaction.type === 'TRANSFER' 
+                  ? theme.colors.primary 
+                  : '#FF3B30' 
+            }
+          ]}>
+            {transaction.type === 'INCOME' ? '+' : transaction.type === 'TRANSFER' ? '↔' : ''}
+            {formatCurrency(transaction.amount)}
+          </Text>
+          <Text style={[styles.transactionTime, { color: theme.colors.textSecondary }]}>
+            {new Date(transaction.date).toLocaleTimeString('en-US', { 
+              hour: '2-digit', 
+              minute: '2-digit' 
+            })}
+          </Text>
+        </View>
+      </TouchableOpacity>
+    );
+  };
+
+  const renderDateGroup = ({ item: group }: { item: GroupedTransaction }) => (
+    <View style={[styles.dateGroup, { backgroundColor: theme.colors.background }]}>
+      {/* Date Header */}
+      <View style={[styles.dateHeader, { backgroundColor: theme.colors.surface }]}>
+        <View style={styles.dateHeaderLeft}>
+          <Text style={[styles.dateHeaderTitle, { color: theme.colors.text }]}>
+            {formatRelativeDate(group.date)}
+          </Text>
+          <Text style={[styles.dateHeaderSubtitle, { color: theme.colors.textSecondary }]}>
+            {group.transactions.length} {group.transactions.length === 1 ? t('transaction_singular') : t('transaction_plural')}
+          </Text>
+        </View>
+        <View style={styles.dateHeaderRight}>
+          {group.totalIncome > 0 && (
+            <Text style={[styles.dateHeaderAmount, { color: theme.colors.success }]}>
+              +{formatCurrency(group.totalIncome)}
+            </Text>
+          )}
+          {group.totalExpense > 0 && (
+            <Text style={[styles.dateHeaderAmount, { color: '#FF3B30' }]}>
+              -{formatCurrency(group.totalExpense)}
+            </Text>
+          )}
+        </View>
       </View>
-      <View style={styles.transactionRight}>
-        <Text style={[
-          styles.transactionAmount,
-          { color: getTransactionTypeColor(transaction.type) }
+      
+      {/* Transactions */}
+      <View style={styles.transactionsContainer}>
+        {group.transactions.map((transaction, index) => (
+          <View key={transaction.id}>
+            {renderTransactionItem({ item: transaction })}
+            {index < group.transactions.length - 1 && (
+              <View style={[styles.transactionSeparator, { backgroundColor: theme.colors.border }]} />
+            )}
+          </View>
+        ))}
+      </View>
+    </View>
+  );
+
+  const renderFilterChip = (
+    type: FilterState['type'], 
+    label: string, 
+    icon?: string,
+    count?: number
+  ) => (
+    <TouchableOpacity
+      key={type}
+      style={[
+        styles.filterChip,
+        {
+          backgroundColor: filter.type === type ? theme.colors.primary : theme.colors.surface,
+          borderColor: filter.type === type ? theme.colors.primary : theme.colors.border,
+        }
+      ]}
+      onPress={() => setFilter(prev => ({ ...prev, type }))}
+    >
+      {icon && (
+        <Ionicons 
+          name={icon as any} 
+          size={16} 
+          color={filter.type === type ? 'white' : theme.colors.textSecondary} 
+          style={styles.filterChipIcon}
+        />
+      )}
+      <Text style={[
+        styles.filterChipText,
+        {
+          color: filter.type === type ? 'white' : theme.colors.text
+        }
+      ]}>
+        {label}
+      </Text>
+      {count !== undefined && count > 0 && (
+        <View style={[
+          styles.filterChipBadge,
+          { backgroundColor: filter.type === type ? 'rgba(255,255,255,0.2)' : theme.colors.primary }
         ]}>
-          {getTransactionSign(transaction.type)}{formatCurrency(transaction.amount)}
-        </Text>
-        <Text style={[styles.transactionType, { color: theme.colors.textSecondary }]}>
-          {transaction.type.toLowerCase()}
-        </Text>
-      </View>
+          <Text style={[
+            styles.filterChipBadgeText,
+            { color: filter.type === type ? 'white' : 'white' }
+          ]}>
+            {count}
+          </Text>
+        </View>
+      )}
     </TouchableOpacity>
   );
 
-  const renderFilterTab = (filterType: typeof filter, label: string) => (
+  const renderDateRangeChip = (
+    range: FilterState['dateRange'], 
+    label: string
+  ) => (
     <TouchableOpacity
-      key={filterType}
+      key={range}
       style={[
-        styles.filterTab,
+        styles.dateRangeChip,
         {
-          backgroundColor: filter === filterType 
-            ? theme.colors.primary 
-            : theme.colors.surface
+          backgroundColor: filter.dateRange === range ? theme.colors.primary : 'transparent',
+          borderColor: filter.dateRange === range ? theme.colors.primary : theme.colors.border,
         }
       ]}
-      onPress={() => setFilter(filterType)}
+      onPress={() => setFilter(prev => ({ ...prev, dateRange: range }))}
     >
       <Text style={[
-        styles.filterTabText,
+        styles.dateRangeChipText,
         {
-          color: filter === filterType 
-            ? 'white' 
-            : theme.colors.text
+          color: filter.dateRange === range ? 'white' : theme.colors.textSecondary
         }
       ]}>
         {label}
@@ -211,45 +469,37 @@ const TransactionsHistoryScreen = () => {
 
   const renderEmpty = () => (
     <View style={styles.emptyContainer}>
-      <Ionicons 
-        name="receipt-outline" 
-        size={48} 
-        color={theme.colors.textSecondary} 
-      />
+      <LinearGradient
+        colors={[`${theme.colors.primary}20`, `${theme.colors.primary}05`]}
+        style={styles.emptyIconContainer}
+      >
+        <MaterialCommunityIcons 
+          name="receipt-text-outline" 
+          size={48} 
+          color={theme.colors.primary} 
+        />
+      </LinearGradient>
       <Text style={[styles.emptyTitle, { color: theme.colors.text }]}>
-        {t('no_transactions')}
+        {filter.search ? t('no_search_results') : t('no_transactions')}
       </Text>
       <Text style={[styles.emptySubtitle, { color: theme.colors.textSecondary }]}>
-        {filter === 'all' 
-          ? t('no_transactions_subtitle')
-          : t('no_filtered_transactions').replace('{filter}', t(filter))
+        {filter.search 
+          ? t('try_different_search_terms')
+          : filter.type === 'all' 
+            ? t('start_tracking_expenses')
+            : t('no_transactions_for_filter').replace('{filter}', t(filter.type))
         }
       </Text>
+      {!filter.search && filter.type === 'all' && (
+        <TouchableOpacity 
+          style={[styles.emptyAction, { backgroundColor: theme.colors.primary }]}
+          onPress={() => navigation.goBack()}
+        >
+          <Text style={styles.emptyActionText}>{t('add_first_transaction')}</Text>
+        </TouchableOpacity>
+      )}
     </View>
   );
-
-  const renderFooter = () => {
-    if (!loadingMore) return null;
-    
-    return (
-      <View style={styles.footerLoading}>
-        <ActivityIndicator size="small" color={theme.colors.primary} />
-        <Text style={[styles.footerLoadingText, { color: theme.colors.textSecondary }]}>
-          {t('loading_more')}
-        </Text>
-      </View>
-    );
-  };
-
-  const getTransactionStats = () => {
-    const income = transactions.filter(t => t.type === 'INCOME').reduce((sum, t) => sum + t.amount, 0);
-    const expense = transactions.filter(t => t.type === 'EXPENSE').reduce((sum, t) => sum + t.amount, 0);
-    const transfers = transactions.filter(t => t.type === 'TRANSFER').length;
-    
-    return { income, expense, transfers };
-  };
-
-  const stats = getTransactionStats();
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: theme.colors.background }]}>
@@ -257,7 +507,7 @@ const TransactionsHistoryScreen = () => {
         colors={[theme.colors.gradientStart, theme.colors.gradientEnd]}
         style={styles.gradient}
       >
-        {/* Header */}
+        {/* Enhanced Header */}
         <View style={[styles.header, headerPadding]}>
           <TouchableOpacity 
             onPress={() => navigation.goBack()}
@@ -268,45 +518,128 @@ const TransactionsHistoryScreen = () => {
           <Text style={[styles.title, { color: theme.colors.text }]}>
             {t('transactions_history')}
           </Text>
-          <View style={styles.headerSpacer} />
+          <View style={styles.headerActions}>
+            <TouchableOpacity onPress={toggleSearch} style={styles.headerAction}>
+              <Ionicons 
+                name={searchVisible ? "close" : "search"} 
+                size={22} 
+                color={theme.colors.text} 
+              />
+            </TouchableOpacity>
+          </View>
         </View>
 
-        {/* Stats Overview */}
+        {/* Search Bar */}
+        <Animated.View style={[
+          styles.searchContainer, 
+          { height: animatedValues.searchHeight }
+        ]}>
+          <View style={[styles.searchInputContainer, { backgroundColor: theme.colors.surface }]}>
+            <Ionicons name="search" size={20} color={theme.colors.textSecondary} />
+            <TextInput
+              style={[styles.searchInput, { color: theme.colors.text }]}
+              placeholder={t('search_transactions')}
+              placeholderTextColor={theme.colors.textSecondary}
+              value={filter.search}
+              onChangeText={(text) => setFilter(prev => ({ ...prev, search: text }))}
+              autoFocus={searchVisible}
+            />
+            {filter.search.length > 0 && (
+              <TouchableOpacity onPress={() => setFilter(prev => ({ ...prev, search: '' }))}>
+                <Ionicons name="close-circle" size={20} color={theme.colors.textSecondary} />
+              </TouchableOpacity>
+            )}
+          </View>
+        </Animated.View>
+
+        {/* Enhanced Statistics */}
         <View style={[styles.statsContainer, { backgroundColor: theme.colors.surface }]}>
-          <View style={styles.statItem}>
-            <Text style={[styles.statValue, { color: theme.colors.success }]}>
-              {formatCurrency(stats.income)}
-            </Text>
-            <Text style={[styles.statLabel, { color: theme.colors.textSecondary }]}>
-              {t('income')}
-            </Text>
+          <View style={styles.statsRow}>
+            <View style={styles.statItem}>
+              <View style={styles.statHeader}>
+                <Ionicons name="trending-up" size={16} color={theme.colors.success} />
+                <Text style={[styles.statLabel, { color: theme.colors.textSecondary }]}>
+                  {t('income')}
+                </Text>
+              </View>
+              <Text style={[styles.statValue, { color: theme.colors.success }]}>
+                {formatCurrency(statistics.income)}
+              </Text>
+            </View>
+            
+            <View style={[styles.statDivider, { backgroundColor: theme.colors.border }]} />
+            
+            <View style={styles.statItem}>
+              <View style={styles.statHeader}>
+                <Ionicons name="trending-down" size={16} color="#FF3B30" />
+                <Text style={[styles.statLabel, { color: theme.colors.textSecondary }]}>
+                  {t('expenses')}
+                </Text>
+              </View>
+              <Text style={[styles.statValue, { color: '#FF3B30' }]}>
+                {formatCurrency(statistics.expense)}
+              </Text>
+            </View>
+            
+            <View style={[styles.statDivider, { backgroundColor: theme.colors.border }]} />
+            
+            <View style={styles.statItem}>
+              <View style={styles.statHeader}>
+                <Ionicons name="analytics" size={16} color={theme.colors.primary} />
+                <Text style={[styles.statLabel, { color: theme.colors.textSecondary }]}>
+                  {t('net')}
+                </Text>
+              </View>
+              <Text style={[
+                styles.statValue, 
+                { color: statistics.netIncome >= 0 ? theme.colors.success : '#FF3B30' }
+              ]}>
+                {statistics.netIncome >= 0 ? '+' : ''}{formatCurrency(statistics.netIncome)}
+              </Text>
+            </View>
           </View>
-          <View style={styles.statDivider} />
-          <View style={styles.statItem}>
-            <Text style={[styles.statValue, { color: '#FF3B30' }]}>
-              {formatCurrency(stats.expense)}
-            </Text>
-            <Text style={[styles.statLabel, { color: theme.colors.textSecondary }]}>
-              {t('expenses')}
-            </Text>
-          </View>
-          <View style={styles.statDivider} />
-          <View style={styles.statItem}>
-            <Text style={[styles.statValue, { color: theme.colors.primary }]}>
-              {stats.transfers}
-            </Text>
-            <Text style={[styles.statLabel, { color: theme.colors.textSecondary }]}>
-              {t('transfers')}
+          
+          <View style={styles.statsSecondRow}>
+            <Text style={[styles.statsSecondaryText, { color: theme.colors.textSecondary }]}>
+              {statistics.total} {t('transaction_plural')} • {t('avg')} {formatCurrency(statistics.avgTransaction)}
             </Text>
           </View>
         </View>
 
-        {/* Filter Tabs */}
-        <View style={styles.filterContainer}>
-          {renderFilterTab('all', t('all'))}
-          {renderFilterTab('income', t('income'))}
-          {renderFilterTab('expense', t('expenses'))}
-          {renderFilterTab('transfer', t('transfers'))}
+        {/* Enhanced Filter Chips */}
+        <View style={styles.filtersSection}>
+          <Text style={[styles.filterSectionTitle, { color: theme.colors.text }]}>
+            {t('type')}
+          </Text>
+          <ScrollView 
+            horizontal 
+            showsHorizontalScrollIndicator={false}
+            style={styles.filterScrollView}
+            contentContainerStyle={styles.filterScrollContent}
+          >
+            {renderFilterChip('all', t('all'), 'list', statistics.total)}
+            {renderFilterChip('income', t('income'), 'trending-up', 
+              transactions.filter(t => t.type === 'INCOME').length)}
+            {renderFilterChip('expense', t('expenses'), 'trending-down', 
+              transactions.filter(t => t.type === 'EXPENSE').length)}
+            {renderFilterChip('transfer', t('transfers'), 'swap-horizontal', 
+              transactions.filter(t => t.type === 'TRANSFER').length)}
+          </ScrollView>
+
+          <Text style={[styles.filterSectionTitle, { color: theme.colors.text, marginTop: 16 }]}>
+            {t('period')}
+          </Text>
+          <ScrollView 
+            horizontal 
+            showsHorizontalScrollIndicator={false}
+            style={styles.filterScrollView}
+            contentContainerStyle={styles.filterScrollContent}
+          >
+            {renderDateRangeChip('all', t('all_time'))}
+            {renderDateRangeChip('week', t('this_week'))}
+            {renderDateRangeChip('month', t('this_month'))}
+            {renderDateRangeChip('year', t('this_year'))}
+          </ScrollView>
         </View>
 
         {/* Transactions List */}
@@ -319,14 +652,11 @@ const TransactionsHistoryScreen = () => {
           </View>
         ) : (
           <FlatList
-            data={transactions}
-            renderItem={renderTransactionItem}
-            keyExtractor={(item) => item.id}
+            data={groupedTransactions}
+            renderItem={renderDateGroup}
+            keyExtractor={(item) => item.date}
             style={styles.transactionsList}
-            contentContainerStyle={[
-              styles.transactionsListContent,
-              { backgroundColor: theme.colors.surface }
-            ]}
+            contentContainerStyle={styles.transactionsListContent}
             showsVerticalScrollIndicator={false}
             refreshControl={
               <RefreshControl
@@ -336,13 +666,21 @@ const TransactionsHistoryScreen = () => {
                 tintColor={theme.colors.primary} // iOS
               />
             }
-            onEndReached={loadMore}
-            onEndReachedThreshold={0.1}
-            ListFooterComponent={renderFooter}
             ListEmptyComponent={renderEmpty}
+            ItemSeparatorComponent={() => <View style={styles.groupSeparator} />}
           />
         )}
       </LinearGradient>
+
+      {/* Transaction Details Modal */}
+      <TransactionDetailsModal
+        visible={showTransactionDetails}
+        onClose={() => setShowTransactionDetails(false)}
+        transaction={selectedTransaction}
+        onEdit={handleEditTransaction}
+        onDuplicate={handleDuplicateTransaction}
+        onDelete={handleDeleteTransaction}
+      />
     </SafeAreaView>
   );
 };
@@ -357,97 +695,239 @@ const styles = StyleSheet.create({
   header: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'space-between',
     paddingHorizontal: 20,
-    paddingBottom: 20,
+    paddingBottom: 16,
   },
   backButton: {
     padding: 8,
     marginLeft: -8,
+    borderRadius: 20,
   },
   title: {
+    fontSize: 22,
+    fontWeight: '700',
     flex: 1,
-    fontSize: 24,
-    fontWeight: 'bold',
     textAlign: 'center',
-    marginRight: 32, // Compensate for back button
   },
-  headerSpacer: {
-    width: 32,
-  },
-  statsContainer: {
+  headerActions: {
     flexDirection: 'row',
+  },
+  headerAction: {
+    padding: 8,
+    marginRight: -8,
+    borderRadius: 20,
+  },
+  
+  // Search
+  searchContainer: {
+    paddingHorizontal: 20,
+    overflow: 'hidden',
+  },
+  searchInputContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderRadius: 12,
+    marginBottom: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    elevation: 2,
+  },
+  searchInput: {
+    flex: 1,
+    fontSize: 16,
+    marginLeft: 12,
+    marginRight: 8,
+  },
+
+  // Enhanced Statistics
+  statsContainer: {
     marginHorizontal: 20,
     marginBottom: 20,
-    borderRadius: 12,
+    borderRadius: 16,
     padding: 20,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
+    shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 2,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  statsRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
   },
   statItem: {
     flex: 1,
     alignItems: 'center',
   },
-  statValue: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    marginBottom: 4,
+  statHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
   },
   statLabel: {
     fontSize: 12,
-    textAlign: 'center',
+    fontWeight: '500',
+    marginLeft: 4,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  statValue: {
+    fontSize: 16,
+    fontWeight: '700',
   },
   statDivider: {
     width: 1,
-    backgroundColor: '#E5E5EA',
+    height: 40,
     marginHorizontal: 16,
   },
-  filterContainer: {
-    flexDirection: 'row',
+  statsSecondRow: {
+    marginTop: 12,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(0,0,0,0.05)',
+    alignItems: 'center',
+  },
+  statsSecondaryText: {
+    fontSize: 12,
+    fontWeight: '500',
+  },
+
+  // Enhanced Filters
+  filtersSection: {
     paddingHorizontal: 20,
     marginBottom: 20,
   },
-  filterTab: {
-    flex: 1,
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    borderRadius: 8,
-    marginHorizontal: 4,
-    alignItems: 'center',
-  },
-  filterTabText: {
+  filterSectionTitle: {
     fontSize: 14,
-    fontWeight: '500',
+    fontWeight: '600',
+    marginBottom: 12,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
   },
-  transactionsList: {
-    flex: 1,
-    marginHorizontal: 20,
-    borderRadius: 12,
+  filterScrollView: {
+    flexGrow: 0,
+  },
+  filterScrollContent: {
+    paddingRight: 20,
+  },
+  filterChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 20,
+    marginRight: 12,
+    borderWidth: 1,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
     shadowRadius: 4,
     elevation: 2,
   },
-  transactionsListContent: {
-    paddingVertical: 8,
+  filterChipIcon: {
+    marginRight: 6,
   },
-  transactionItem: {
+  filterChipText: {
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  filterChipBadge: {
+    marginLeft: 8,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 10,
+    minWidth: 20,
+    alignItems: 'center',
+  },
+  filterChipBadgeText: {
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  dateRangeChip: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 16,
+    marginRight: 12,
+    borderWidth: 1,
+  },
+  dateRangeChipText: {
+    fontSize: 13,
+    fontWeight: '600',
+  },
+
+  // Transactions List
+  transactionsList: {
+    flex: 1,
+    paddingHorizontal: 20,
+  },
+  transactionsListContent: {
+    paddingBottom: 40,
+  },
+  groupSeparator: {
+    height: 16,
+  },
+
+  // Date Groups
+  dateGroup: {
+    borderRadius: 12,
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 6,
+    elevation: 3,
+  },
+  dateHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingVertical: 16,
     paddingHorizontal: 16,
+    paddingVertical: 12,
     borderBottomWidth: 1,
+    borderBottomColor: 'rgba(0,0,0,0.05)',
+  },
+  dateHeaderLeft: {
+    flex: 1,
+  },
+  dateHeaderTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    marginBottom: 2,
+  },
+  dateHeaderSubtitle: {
+    fontSize: 12,
+    fontWeight: '500',
+  },
+  dateHeaderRight: {
+    alignItems: 'flex-end',
+  },
+  dateHeaderAmount: {
+    fontSize: 13,
+    fontWeight: '600',
+    marginBottom: 2,
+  },
+  transactionsContainer: {
+    backgroundColor: 'transparent',
+  },
+
+  // Transaction Items
+  transactionItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 16,
   },
   transactionLeft: {
     flexDirection: 'row',
     alignItems: 'center',
     flex: 1,
   },
-  transactionIcon: {
+  transactionIconContainer: {
     width: 44,
     height: 44,
     borderRadius: 22,
@@ -455,29 +935,31 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginRight: 12,
   },
-  transactionEmoji: {
-    fontSize: 20,
-  },
   transactionInfo: {
     flex: 1,
   },
   transactionTitle: {
     fontSize: 16,
-    fontWeight: '500',
+    fontWeight: '600',
     marginBottom: 4,
+    lineHeight: 20,
   },
   transactionMeta: {
     flexDirection: 'row',
     alignItems: 'center',
   },
-  transactionDate: {
+  transactionCategory: {
     fontSize: 12,
+    fontWeight: '500',
+    textTransform: 'capitalize',
   },
-  transactionSeparator: {
+  metaSeparator: {
     fontSize: 12,
+    marginHorizontal: 6,
   },
   transactionNotes: {
     fontSize: 12,
+    fontWeight: '400',
     flex: 1,
   },
   transactionRight: {
@@ -485,53 +967,69 @@ const styles = StyleSheet.create({
   },
   transactionAmount: {
     fontSize: 16,
-    fontWeight: '600',
-    marginBottom: 2,
+    fontWeight: '700',
+    marginBottom: 4,
   },
-  transactionType: {
-    fontSize: 10,
-    textTransform: 'uppercase',
+  transactionTime: {
+    fontSize: 11,
     fontWeight: '500',
   },
+  transactionSeparator: {
+    height: 1,
+    marginHorizontal: 16,
+  },
+
+  // Loading States
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    paddingVertical: 50,
+    paddingVertical: 60,
   },
   loadingText: {
     marginTop: 16,
     fontSize: 16,
-    textAlign: 'center',
+    fontWeight: '500',
   },
+
+  // Empty States
   emptyContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    paddingVertical: 50,
+    paddingVertical: 60,
     paddingHorizontal: 32,
   },
+  emptyIconContainer: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 20,
+  },
   emptyTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    marginTop: 16,
+    fontSize: 20,
+    fontWeight: '700',
     marginBottom: 8,
     textAlign: 'center',
   },
   emptySubtitle: {
     fontSize: 14,
+    fontWeight: '400',
     textAlign: 'center',
     lineHeight: 20,
+    marginBottom: 24,
   },
-  footerLoading: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingVertical: 20,
+  emptyAction: {
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    borderRadius: 24,
   },
-  footerLoadingText: {
-    marginLeft: 8,
+  emptyActionText: {
+    color: 'white',
     fontSize: 14,
+    fontWeight: '600',
   },
 });
 

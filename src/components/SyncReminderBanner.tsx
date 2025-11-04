@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   View,
   Text,
@@ -16,39 +16,47 @@ interface SyncReminderProps {
   onSyncComplete?: () => void;
 }
 
-export const SyncReminderBanner: React.FC<SyncReminderProps> = ({ onSyncComplete }) => {
+export const SyncReminderBanner: React.FC<SyncReminderProps> = React.memo(({ onSyncComplete }) => {
   const { theme } = useTheme();
   const [visible, setVisible] = useState(false);
   const [unsyncedItems, setUnsyncedItems] = useState(0);
   const [isLoading, setIsLoading] = useState(false);
   const [showModal, setShowModal] = useState(false);
-  const [fadeAnim] = useState(new Animated.Value(0));
+  
+  // Use a single animated value and optimize animations
+  const fadeAnim = useMemo(() => new Animated.Value(0), []);
 
   useEffect(() => {
-    checkSyncReminder();
-  }, []);
-
-  const checkSyncReminder = async () => {
-    try {
-      const shouldShow = await hybridDataService.shouldShowSyncReminder();
-      if (shouldShow) {
-        const syncStatus = await hybridDataService.getSyncStatus();
-        setUnsyncedItems(syncStatus.unsyncedItems);
-        setVisible(true);
-        
-        // Animate banner in
-        Animated.timing(fadeAnim, {
-          toValue: 1,
-          duration: 300,
-          useNativeDriver: true,
-        }).start();
+    let isMounted = true;
+    
+    const checkSyncReminder = async () => {
+      try {
+        const shouldShow = await hybridDataService.shouldShowSyncReminder();
+        if (shouldShow && isMounted) {
+          const syncStatus = await hybridDataService.getSyncStatus();
+          setUnsyncedItems(syncStatus.unsyncedItems);
+          setVisible(true);
+          
+          // Optimize animation with native driver
+          Animated.timing(fadeAnim, {
+            toValue: 1,
+            duration: 300,
+            useNativeDriver: true,
+          }).start();
+        }
+      } catch (error) {
+        console.error('Error checking sync reminder:', error);
       }
-    } catch (error) {
-      console.error('Error checking sync reminder:', error);
-    }
-  };
+    };
 
-  const handleSyncNow = async () => {
+    checkSyncReminder();
+    
+    return () => {
+      isMounted = false;
+    };
+  }, [fadeAnim]);
+
+  const handleSyncNow = useCallback(async () => {
     setIsLoading(true);
     try {
       const result = await hybridDataService.performManualSync();
@@ -61,13 +69,13 @@ export const SyncReminderBanner: React.FC<SyncReminderProps> = ({ onSyncComplete
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [onSyncComplete]);
 
-  const handleDismiss = async () => {
+  const handleDismiss = useCallback(async () => {
     try {
       await hybridDataService.markSyncReminderShown();
       
-      // Animate banner out
+      // Optimize animation with native driver
       Animated.timing(fadeAnim, {
         toValue: 0,
         duration: 300,
@@ -78,11 +86,35 @@ export const SyncReminderBanner: React.FC<SyncReminderProps> = ({ onSyncComplete
     } catch (error) {
       console.error('Error dismissing reminder:', error);
     }
-  };
+  }, [fadeAnim]);
 
-  const handleShowDetails = () => {
+  const handleShowDetails = useCallback(() => {
     setShowModal(true);
-  };
+  }, []);
+
+  const handleCloseModal = useCallback(() => {
+    setShowModal(false);
+  }, []);
+
+  const handleSyncFromModal = useCallback(() => {
+    setShowModal(false);
+    handleSyncNow();
+  }, [handleSyncNow]);
+
+  // Memoize styles to prevent recreation on every render
+  const bannerStyles = useMemo(() => [
+    styles.banner, 
+    { 
+      opacity: fadeAnim, 
+      backgroundColor: theme.colors.surface, 
+      borderLeftColor: theme.colors.primary 
+    }
+  ], [fadeAnim, theme.colors.surface, theme.colors.primary]);
+
+  const iconContainerStyle = useMemo(() => [
+    styles.iconContainer, 
+    { backgroundColor: theme.isDark ? 'rgba(0, 122, 255, 0.2)' : '#f0f8ff' }
+  ], [theme.isDark]);
 
   if (!visible) {
     return null;
@@ -90,9 +122,9 @@ export const SyncReminderBanner: React.FC<SyncReminderProps> = ({ onSyncComplete
 
   return (
     <>
-      <Animated.View style={[styles.banner, { opacity: fadeAnim, backgroundColor: theme.colors.surface, borderLeftColor: theme.colors.primary }]}>
+      <Animated.View style={bannerStyles}>
         <View style={styles.bannerContent}>
-          <View style={[styles.iconContainer, { backgroundColor: theme.isDark ? 'rgba(0, 122, 255, 0.2)' : '#f0f8ff' }]}>
+          <View style={iconContainerStyle}>
             <Ionicons name="cloud-upload-outline" size={24} color={theme.colors.primary} />
           </View>
           
@@ -136,86 +168,85 @@ export const SyncReminderBanner: React.FC<SyncReminderProps> = ({ onSyncComplete
         </View>
       </Animated.View>
 
-      {/* Details Modal */}
-      <Modal
-        visible={showModal}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setShowModal(false)}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={[styles.modalContent, { backgroundColor: theme.colors.surface }]}>
-            <View style={[styles.modalHeader, { backgroundColor: theme.colors.background }]}>
-              <Ionicons name="cloud-upload" size={32} color={theme.colors.primary} />
-              <Text style={[styles.modalTitle, { color: theme.colors.text }]}>Sync Reminder</Text>
-            </View>
-
-            <View style={styles.modalBody}>
-              <Text style={[styles.modalDescription, { color: theme.colors.textSecondary }]}>
-                We recommend syncing your financial data regularly to:
-              </Text>
-
-              <View style={styles.benefitsList}>
-                <View style={styles.benefitItem}>
-                  <Ionicons name="shield-checkmark" size={20} color="#4CAF50" />
-                  <Text style={[styles.benefitText, { color: theme.colors.textSecondary }]}>Keep your data safely backed up</Text>
-                </View>
-                <View style={styles.benefitItem}>
-                  <Ionicons name="sync" size={20} color={theme.colors.primary} />
-                  <Text style={[styles.benefitText, { color: theme.colors.textSecondary }]}>Access from multiple devices</Text>
-                </View>
-                <View style={styles.benefitItem}>
-                  <Ionicons name="time" size={20} color="#FF9500" />
-                  <Text style={[styles.benefitText, { color: theme.colors.textSecondary }]}>Never lose your transaction history</Text>
-                </View>
+      {/* Optimized Modal with proper memory management */}
+      {showModal && (
+        <Modal
+          visible={showModal}
+          transparent
+          animationType="fade"
+          onRequestClose={handleCloseModal}
+        >
+          <View style={styles.modalOverlay}>
+            <View style={[styles.modalContent, { backgroundColor: theme.colors.surface }]}>
+              <View style={[styles.modalHeader, { backgroundColor: theme.colors.background }]}>
+                <Ionicons name="cloud-upload" size={32} color={theme.colors.primary} />
+                <Text style={[styles.modalTitle, { color: theme.colors.text }]}>Sync Reminder</Text>
               </View>
 
-              {unsyncedItems > 0 && (
-                <View style={[styles.unsyncedWarning, { backgroundColor: theme.isDark ? 'rgba(255, 107, 107, 0.1)' : '#fff5f5' }]}>
-                  <Ionicons name="warning" size={20} color="#FF6B6B" />
-                  <Text style={[styles.warningText, { color: '#FF6B6B' }]}>
-                    You have {unsyncedItems} items that haven't been backed up yet.
-                  </Text>
+              <View style={styles.modalBody}>
+                <Text style={[styles.modalDescription, { color: theme.colors.textSecondary }]}>
+                  We recommend syncing your financial data regularly to:
+                </Text>
+
+                <View style={styles.benefitsList}>
+                  <View style={styles.benefitItem}>
+                    <Ionicons name="shield-checkmark" size={20} color="#4CAF50" />
+                    <Text style={[styles.benefitText, { color: theme.colors.textSecondary }]}>Keep your data safely backed up</Text>
+                  </View>
+                  <View style={styles.benefitItem}>
+                    <Ionicons name="sync" size={20} color={theme.colors.primary} />
+                    <Text style={[styles.benefitText, { color: theme.colors.textSecondary }]}>Access from multiple devices</Text>
+                  </View>
+                  <View style={styles.benefitItem}>
+                    <Ionicons name="time" size={20} color="#FF9500" />
+                    <Text style={[styles.benefitText, { color: theme.colors.textSecondary }]}>Never lose your transaction history</Text>
+                  </View>
                 </View>
-              )}
 
-              <Text style={[styles.reminderNote, { color: theme.colors.textSecondary }]}>
-                💡 You can disable these reminders in sync settings
-              </Text>
-            </View>
-
-            <View style={styles.modalActions}>
-              <TouchableOpacity
-                style={[styles.modalButton, styles.secondaryButton, { borderColor: theme.colors.border }]}
-                onPress={() => setShowModal(false)}
-              >
-                <Text style={[styles.secondaryButtonText, { color: theme.colors.textSecondary }]}>Maybe Later</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={[styles.modalButton, styles.primaryButton, { backgroundColor: theme.colors.primary }]}
-                onPress={() => {
-                  setShowModal(false);
-                  handleSyncNow();
-                }}
-                disabled={isLoading}
-              >
-                {isLoading ? (
-                  <ActivityIndicator size="small" color="white" />
-                ) : (
-                  <>
-                    <Ionicons name="sync" size={18} color="white" />
-                    <Text style={styles.primaryButtonText}>Sync Now</Text>
-                  </>
+                {unsyncedItems > 0 && (
+                  <View style={[styles.unsyncedWarning, { backgroundColor: theme.isDark ? 'rgba(255, 107, 107, 0.1)' : '#fff5f5' }]}>
+                    <Ionicons name="warning" size={20} color="#FF6B6B" />
+                    <Text style={[styles.warningText, { color: '#FF6B6B' }]}>
+                      You have {unsyncedItems} items that haven't been backed up yet.
+                    </Text>
+                  </View>
                 )}
-              </TouchableOpacity>
+
+                <Text style={[styles.reminderNote, { color: theme.colors.textSecondary }]}>
+                  💡 You can disable these reminders in sync settings
+                </Text>
+              </View>
+
+              <View style={styles.modalActions}>
+                <TouchableOpacity
+                  style={[styles.modalButton, styles.secondaryButton, { borderColor: theme.colors.border }]}
+                  onPress={handleCloseModal}
+                >
+                  <Text style={[styles.secondaryButtonText, { color: theme.colors.textSecondary }]}>Maybe Later</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={[styles.modalButton, styles.primaryButton, { backgroundColor: theme.colors.primary }]}
+                  onPress={handleSyncFromModal}
+                  disabled={isLoading}
+                >
+                  {isLoading ? (
+                    <ActivityIndicator size="small" color="white" />
+                  ) : (
+                    <>
+                      <Ionicons name="sync" size={18} color="white" />
+                      <Text style={styles.primaryButtonText}>Sync Now</Text>
+                    </>
+                  )}
+                </TouchableOpacity>
+              </View>
             </View>
           </View>
-        </View>
-      </Modal>
+        </Modal>
+      )}
     </>
   );
-};
+});
 
 // Hook for checking and showing sync reminders
 export const useSyncReminder = () => {

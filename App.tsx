@@ -1,33 +1,34 @@
 // Import console override first to silence production logs
 import './src/utils/consoleOverride';
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback, Suspense, lazy } from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { createStackNavigator } from '@react-navigation/stack';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { View, Text, ActivityIndicator, StyleSheet } from 'react-native';
 
-import SwipeableBottomTabNavigator from './src/components/SwipeableBottomTabNavigator';
-import TouchActivityWrapper from './src/components/TouchActivityWrapper';
-import AddIncomeScreen from './src/screens/AddIncomeScreen';
-import BorrowedMoneyHistoryScreen from './src/screens/BorrowedMoneyHistoryScreen';
-import TransactionsHistoryScreen from './src/screens/TransactionsHistoryScreen';
-import NotificationCenterScreen from './src/screens/NotificationCenterScreen';
-import NotificationPreferencesScreen from './src/screens/NotificationPreferencesScreen';
-import SignUpScreen from './src/screens/SignUpScreen';
-import SignInScreen from './src/screens/SignInScreen';
-import AccessDeniedScreen from './src/screens/AccessDeniedScreen';
-import UserProfileScreen from './src/screens/UserProfileScreen';
-import SavingsGoalsScreen from './src/screens/SavingsGoalsScreen';
-import QuickSettingsScreen from './src/screens/QuickSettingsScreen';
-import QuickActionsSettingsScreen from './src/screens/QuickActionsSettingsScreen';
-import AppLockSettingsScreen from './src/screens/AppLockSettingsScreen';
-import PinSetupScreen from './src/screens/PinSetupScreen';
-import AppLockScreen from './src/screens/AppLockScreen';
-import BillsTrackerScreen from './src/screens/BillsTrackerScreen';
-import BudgetPlannerScreen from './src/screens/BudgetPlannerScreen';
-import RemindersScreen from './src/screens/RemindersScreen';
+// Lazy load components to reduce initial bundle size and improve performance
+const SwipeableBottomTabNavigator = lazy(() => import('./src/components/SwipeableBottomTabNavigator'));
+const TouchActivityWrapper = lazy(() => import('./src/components/TouchActivityWrapper'));
+const AddIncomeScreen = lazy(() => import('./src/screens/AddIncomeScreen'));
+const BorrowedMoneyHistoryScreen = lazy(() => import('./src/screens/BorrowedMoneyHistoryScreen'));
+const TransactionsHistoryScreen = lazy(() => import('./src/screens/TransactionsHistoryScreen'));
+const NotificationCenterScreen = lazy(() => import('./src/screens/NotificationCenterScreen'));
+const NotificationPreferencesScreen = lazy(() => import('./src/screens/NotificationPreferencesScreen'));
+const SignUpScreen = lazy(() => import('./src/screens/SignUpScreen'));
+const SignInScreen = lazy(() => import('./src/screens/SignInScreen'));
+const AccessDeniedScreen = lazy(() => import('./src/screens/AccessDeniedScreen'));
+const UserProfileScreen = lazy(() => import('./src/screens/UserProfileScreen'));
+const SavingsGoalsScreen = lazy(() => import('./src/screens/SavingsGoalsScreen'));
+const QuickSettingsScreen = lazy(() => import('./src/screens/QuickSettingsScreen'));
+const QuickActionsSettingsScreen = lazy(() => import('./src/screens/QuickActionsSettingsScreen'));
+const AppLockSettingsScreen = lazy(() => import('./src/screens/AppLockSettingsScreen'));
+const PinSetupScreen = lazy(() => import('./src/screens/PinSetupScreen'));
+const AppLockScreen = lazy(() => import('./src/screens/AppLockScreen'));
+const BillsTrackerScreen = lazy(() => import('./src/screens/BillsTrackerScreen'));
+const BudgetPlannerScreen = lazy(() => import('./src/screens/BudgetPlannerScreen'));
+const RemindersScreen = lazy(() => import('./src/screens/RemindersScreen'));
 import { ThemeProvider, useTheme } from './src/contexts/ThemeContext';
 import { LocalizationProvider } from './src/contexts/LocalizationContext';
 import { AuthProvider, useAuth } from './src/contexts/AuthContext';
@@ -35,32 +36,28 @@ import { NotificationProvider } from './src/contexts/NotificationContext';
 import { QuickActionsProvider } from './src/contexts/QuickActionsContext';
 import { hybridDataService, AppInitResult } from './src/services/hybridDataService';
 import AppLockService from './src/services/appLockService';
-import SyncReminderBanner from './src/components/SyncReminderBanner';
+import BatteryOptimizer from './src/utils/batteryOptimizer';
+const SyncReminderBanner = lazy(() => import('./src/components/SyncReminderBanner'));
 import { navigationRef, onNavigationReady } from './src/navigation/navigationService';
 
 const Stack = createStackNavigator();
 
-const AppNavigator = () => {
+// Suspense fallback component for lazy loading
+const LazyLoadingFallback = () => (
+  <View style={styles.loadingContainer}>
+    <ActivityIndicator size="small" color="#007AFF" />
+  </View>
+);
+
+const AppNavigator = React.memo(() => {
   const { isDark } = useTheme();
   const { isAuthenticated, isLoading: authLoading, accessDenied } = useAuth();
   const [isAppLocked, setIsAppLocked] = useState(false);
   const [appLockInitialized, setAppLockInitialized] = useState(false);
   const appLockService = AppLockService.getInstance();
 
-  useEffect(() => {
-    if (isAuthenticated) {
-      initializeAppLock();
-    }
-    
-    // Cleanup function
-    return () => {
-      if (isAuthenticated) {
-        appLockService.cleanup();
-      }
-    };
-  }, [isAuthenticated]);
-
-  const initializeAppLock = async () => {
+  // ALL HOOKS MUST BE DEFINED BEFORE ANY CONDITIONAL RETURNS
+  const initializeAppLock = useCallback(async () => {
     try {
       await appLockService.initialize();
       const settings = appLockService.getSettings();
@@ -80,11 +77,24 @@ const AppNavigator = () => {
       console.error('Failed to initialize app lock:', error);
       setAppLockInitialized(true);
     }
-  };
+  }, [appLockService]);
 
-  const handleUnlock = () => {
+  const handleUnlock = useCallback(() => {
     appLockService.unlock();
-  };
+  }, [appLockService]);
+
+  useEffect(() => {
+    if (isAuthenticated) {
+      initializeAppLock();
+    }
+    
+    // Cleanup function - optimize cleanup to reduce background processing
+    return () => {
+      if (isAuthenticated) {
+        appLockService.cleanup();
+      }
+    };
+  }, [isAuthenticated, initializeAppLock, appLockService]);
 
   if (authLoading || (isAuthenticated && !appLockInitialized)) {
     return <LoadingScreen />;
@@ -103,138 +113,144 @@ const AppNavigator = () => {
 
   // Show lock screen if app is locked and user is authenticated
   if (isAuthenticated && isAppLocked) {
-    return <AppLockScreen onUnlock={handleUnlock} />;
+    return (
+      <Suspense fallback={<LazyLoadingFallback />}>
+        <AppLockScreen onUnlock={handleUnlock} />
+      </Suspense>
+    );
   }
 
   return (
-    <TouchActivityWrapper>
-  <NavigationContainer ref={navigationRef} onReady={onNavigationReady}>
-        <StatusBar style={isDark ? "light" : "dark"} />
-        <Stack.Navigator screenOptions={{ headerShown: false }}>
-          {isAuthenticated ? (
-            // Authenticated user screens
-            <>
-              <Stack.Screen name="TabNavigator" component={SwipeableBottomTabNavigator} />
-              <Stack.Screen name="AddIncome" component={AddIncomeScreen} />
-              <Stack.Screen 
-                name="BorrowedMoneyHistory" 
-                component={BorrowedMoneyHistoryScreen}
-                options={{ 
-                  headerShown: false,
-                }}
-              />
-              <Stack.Screen 
-                name="TransactionsHistory" 
-                component={TransactionsHistoryScreen}
-                options={{ 
-                  headerShown: false,
-                }}
-              />
-              <Stack.Screen 
-                name="NotificationCenter" 
-                component={NotificationCenterScreen}
-                options={{ 
-                  headerShown: false,
-                  presentation: 'modal',
-                }}
-              />
-              <Stack.Screen 
-                name="NotificationPreferences" 
-                component={NotificationPreferencesScreen}
-                options={{ 
-                  headerShown: false,
-                  presentation: 'modal',
-                }}
-              />
-              <Stack.Screen 
-                name="UserProfile" 
-                component={UserProfileScreen}
-                options={{ 
-                  headerShown: false,
-                  presentation: 'modal',
-                }}
-              />
-              <Stack.Screen 
-                name="SavingsGoals" 
-                component={SavingsGoalsScreen}
-                options={{ 
-                  headerShown: false,
-                }}
-              />
-              <Stack.Screen 
-                name="QuickSettings" 
-                component={QuickSettingsScreen}
-                options={{ 
-                  headerShown: false,
-                  presentation: 'modal',
-                }}
-              />
-              <Stack.Screen 
-                name="QuickActionsSettings" 
-                component={QuickActionsSettingsScreen}
-                options={{ 
-                  headerShown: false,
-                  presentation: 'modal',
-                }}
-              />
-              <Stack.Screen 
-                name="AppLockSettings" 
-                component={AppLockSettingsScreen}
-                options={{ 
-                  headerShown: false,
-                  presentation: 'modal',
-                }}
-              />
-              <Stack.Screen 
-                name="PinSetup" 
-                component={PinSetupScreen}
-                options={{ 
-                  headerShown: false,
-                  presentation: 'modal',
-                }}
-              />
-              <Stack.Screen 
-                name="BillsReminder" 
-                component={BillsTrackerScreen}
-                options={{ 
-                  headerShown: false,
-                }}
-              />
-              <Stack.Screen 
-                name="BudgetPlanner" 
-                component={BudgetPlannerScreen}
-                options={{ 
-                  headerShown: false,
-                }}
-              />
-              <Stack.Screen 
-                name="Reminders" 
-                component={RemindersScreen}
-                options={{ 
-                  headerShown: false,
-                }}
-              />
-            </>
-          ) : (
-            // Unauthenticated user screens
-            <>
-              <Stack.Screen 
-                name="SignIn" 
-                component={SignInScreen}
-                options={{ headerShown: false }}
-              />
-              <Stack.Screen 
-                name="SignUp" 
-                component={SignUpScreen}
-                options={{ headerShown: false }}
-              />
-            </>
-          )}
-        </Stack.Navigator>
-      </NavigationContainer>
-    </TouchActivityWrapper>
+    <Suspense fallback={<LazyLoadingFallback />}>
+      <TouchActivityWrapper>
+        <NavigationContainer ref={navigationRef} onReady={onNavigationReady}>
+          <StatusBar style={isDark ? "light" : "dark"} />
+          <Stack.Navigator screenOptions={{ headerShown: false }}>
+            {isAuthenticated ? (
+              // Authenticated user screens
+              <>
+                <Stack.Screen name="TabNavigator" component={SwipeableBottomTabNavigator} />
+                <Stack.Screen name="AddIncome" component={AddIncomeScreen} />
+                <Stack.Screen 
+                  name="BorrowedMoneyHistory" 
+                  component={BorrowedMoneyHistoryScreen}
+                  options={{ 
+                    headerShown: false,
+                  }}
+                />
+                <Stack.Screen 
+                  name="TransactionsHistory" 
+                  component={TransactionsHistoryScreen}
+                  options={{ 
+                    headerShown: false,
+                  }}
+                />
+                <Stack.Screen 
+                  name="NotificationCenter" 
+                  component={NotificationCenterScreen}
+                  options={{ 
+                    headerShown: false,
+                    presentation: 'modal',
+                  }}
+                />
+                <Stack.Screen 
+                  name="NotificationPreferences" 
+                  component={NotificationPreferencesScreen}
+                  options={{ 
+                    headerShown: false,
+                    presentation: 'modal',
+                  }}
+                />
+                <Stack.Screen 
+                  name="UserProfile" 
+                  component={UserProfileScreen}
+                  options={{ 
+                    headerShown: false,
+                    presentation: 'modal',
+                  }}
+                />
+                <Stack.Screen 
+                  name="SavingsGoals" 
+                  component={SavingsGoalsScreen}
+                  options={{ 
+                    headerShown: false,
+                  }}
+                />
+                <Stack.Screen 
+                  name="QuickSettings" 
+                  component={QuickSettingsScreen}
+                  options={{ 
+                    headerShown: false,
+                    presentation: 'modal',
+                  }}
+                />
+                <Stack.Screen 
+                  name="QuickActionsSettings" 
+                  component={QuickActionsSettingsScreen}
+                  options={{ 
+                    headerShown: false,
+                    presentation: 'modal',
+                  }}
+                />
+                <Stack.Screen 
+                  name="AppLockSettings" 
+                  component={AppLockSettingsScreen}
+                  options={{ 
+                    headerShown: false,
+                    presentation: 'modal',
+                  }}
+                />
+                <Stack.Screen 
+                  name="PinSetup" 
+                  component={PinSetupScreen}
+                  options={{ 
+                    headerShown: false,
+                    presentation: 'modal',
+                  }}
+                />
+                <Stack.Screen 
+                  name="BillsReminder" 
+                  component={BillsTrackerScreen}
+                  options={{ 
+                    headerShown: false,
+                  }}
+                />
+                <Stack.Screen 
+                  name="BudgetPlanner" 
+                  component={BudgetPlannerScreen}
+                  options={{ 
+                    headerShown: false,
+                  }}
+                />
+                <Stack.Screen 
+                  name="Reminders" 
+                  component={RemindersScreen}
+                  options={{ 
+                    headerShown: false,
+                  }}
+                />
+              </>
+            ) : (
+              // Unauthenticated user screens
+              <>
+                <Stack.Screen 
+                  name="SignIn" 
+                  component={SignInScreen}
+                  options={{ headerShown: false }}
+                />
+                <Stack.Screen 
+                  name="SignUp" 
+                  component={SignUpScreen}
+                  options={{ headerShown: false }}
+                />
+              </>
+            )}
+          </Stack.Navigator>
+        </NavigationContainer>
+      </TouchActivityWrapper>
+    </Suspense>
   );
-};
+});
 
 // Loading screen component
 const LoadingScreen = () => (
@@ -258,8 +274,20 @@ const ErrorScreen = ({ error, onRetry }: { error: string; onRetry: () => void })
 export default function App() {
   const [initResult, setInitResult] = useState<AppInitResult | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  
+  // ALL HOOKS MUST BE AT THE TOP BEFORE ANY CONDITIONAL RETURNS
+  
+  // Initialize battery optimizer
+  useEffect(() => {
+    const batteryOptimizer = BatteryOptimizer.getInstance();
+    
+    return () => {
+      // Cleanup battery optimizer on app unmount
+      batteryOptimizer.cleanup();
+    };
+  }, []);
 
-  const initializeApp = async () => {
+  const initializeApp = useCallback(async () => {
     setIsLoading(true);
     try {
       console.log('🚀 Initializing FINEX...');
@@ -286,12 +314,18 @@ export default function App() {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
     initializeApp();
+  }, [initializeApp]);
+
+  const handleSyncComplete = useCallback(() => {
+    console.log('🔄 Sync completed from reminder');
   }, []);
 
+  // CONDITIONAL RETURNS AFTER ALL HOOKS
+  
   // Show loading screen while initializing
   if (isLoading) {
     return (
@@ -320,10 +354,10 @@ export default function App() {
           <AuthProvider>
             <NotificationProvider>
               <QuickActionsProvider>
-                {/* Sync reminder banner - shows at top level */}
-                <SyncReminderBanner onSyncComplete={() => {
-                  console.log('🔄 Sync completed from reminder');
-                }} />
+                {/* Lazy load sync reminder banner */}
+                <Suspense fallback={null}>
+                  <SyncReminderBanner onSyncComplete={handleSyncComplete} />
+                </Suspense>
                 
                 <AppNavigator />
               </QuickActionsProvider>

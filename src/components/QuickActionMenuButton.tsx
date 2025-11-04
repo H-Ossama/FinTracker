@@ -137,8 +137,7 @@ const QuickActionMenuButton: React.FC<QuickActionMenuButtonProps> = ({
 
   const loadQuickActions = async () => {
     try {
-      const quickActions = await quickActionsService.getQuickActions();
-      const enabledActions = quickActions.filter(action => action.enabled);
+      const enabledActions = await quickActionsService.getEnabledQuickActions();
       setActions(enabledActions);
       
       // Initialize animations for each action
