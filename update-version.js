@@ -33,6 +33,24 @@ const FILES_TO_UPDATE = [
     ]
   },
   {
+    file: 'app.config.js',
+    updates: [
+      {
+        type: 'string',
+        search: /version: "[^"]*"/g,
+        replace: `version: "${NEW_VERSION}"`
+      },
+      {
+        type: 'string',
+        search: /versionCode: \d+/g,
+        replace: (match) => {
+          const currentCode = parseInt(match.split(': ')[1]);
+          return `versionCode: ${currentCode + 1}`;
+        }
+      }
+    ]
+  },
+  {
     file: 'src/contexts/NotificationContext.tsx',
     updates: [
       {
@@ -94,7 +112,13 @@ function updateStringFile(filePath, updates) {
     updates.forEach(update => {
       const matches = content.match(update.search);
       if (matches) {
-        content = content.replace(update.search, update.replace);
+        if (typeof update.replace === 'function') {
+          // Handle function-based replacements (like incrementing versionCode)
+          content = content.replace(update.search, update.replace);
+        } else {
+          // Handle string replacements
+          content = content.replace(update.search, update.replace);
+        }
         console.log(`✅ Updated ${matches.length} occurrence(s) in ${filePath}`);
       } else {
         console.warn(`⚠️  No matches found in ${filePath} for pattern: ${update.search}`);

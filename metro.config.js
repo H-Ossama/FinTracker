@@ -127,21 +127,21 @@ config.resolver.blockList = [
   /.*\/\.(md|txt|log)$/,
 ];
 
-// Enable experimental features for better performance
+// Tree shaking configuration
 config.resolver.enableGlobalPackages = false;
 config.resolver.enableSymlinks = false;
 
-// Tree shaking configuration
-config.resolver.resolveRequest = (context, moduleName, platform) => {
-  // Custom resolution for better tree shaking
-  if (moduleName.includes('lodash')) {
-    // Force lodash-es for better tree shaking
-    return {
-      ...context.resolveRequest(context, moduleName.replace('lodash', 'lodash-es'), platform),
-    };
-  }
-  
-  return context.resolveRequest(context, moduleName, platform);
-};
+// Commented out lodash resolver as it's causing bundling issues
+// config.resolver.resolveRequest = (context, moduleName, platform) => {
+//   // Custom resolution for better tree shaking
+//   if (moduleName.includes('lodash')) {
+//     // Force lodash-es for better tree shaking
+//     return {
+//       ...context.resolveRequest(context, moduleName.replace('lodash', 'lodash-es'), platform),
+//     };
+//   }
+//   
+//   return context.resolveRequest(context, moduleName, platform);
+// };
 
 module.exports = config;

@@ -350,7 +350,7 @@ const QuickActionsSettingsScreen = () => {
   ), [theme]);
 
   return (
-    <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
+    <SafeAreaView style={[styles.container, { backgroundColor: theme.colors.background }]}>
       <View style={styles.header}>
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
           <Ionicons name="arrow-back" size={24} color={theme.colors.text} />
@@ -592,40 +592,7 @@ const QuickActionsSettingsScreen = () => {
             </View>
 
             <ScrollView style={styles.modalScroll} showsVerticalScrollIndicator={false}>
-              {filteredAvailableScreens.length === 0 ? (
-                <View style={styles.emptyModalState}>
-                  <Ionicons name="checkmark-circle" size={36} color={theme.colors.success} />
-                  <Text style={[styles.emptyModalText, { color: theme.colors.textSecondary }]}> 
-                    No matching screens found.
-                  </Text>
-                </View>
-              ) : (
-                filteredAvailableScreens.map(option => (
-                  <View key={option.id} style={[styles.modalOption, { borderColor: theme.colors.border }]}> 
-                    <View style={styles.modalOptionInfo}>
-                      <View style={[styles.modalOptionIcon, { backgroundColor: option.color + '20' }]}> 
-                        <Ionicons name={option.icon as any} size={22} color={option.color} />
-                      </View>
-                      <View style={styles.modalOptionCopy}>
-                        <Text style={[styles.modalOptionLabel, { color: theme.colors.text }]}>
-                          {option.label}
-                        </Text>
-                        <Text style={[styles.modalOptionDescription, { color: theme.colors.textSecondary }]}> 
-                          {option.description}
-                        </Text>
-                      </View>
-                    </View>
-                    <TouchableOpacity
-                      style={[styles.modalOptionButton, { backgroundColor: theme.colors.primary, opacity: isSaving ? 0.6 : 1 }]}
-                      onPress={() => handleAddScreenShortcut(option.id)}
-                      disabled={isSaving}
-                    >
-                      <Ionicons name="add" size={16} color="#FFFFFF" />
-                      <Text style={styles.modalOptionButtonText}>Add</Text>
-                    </TouchableOpacity>
-                  </View>
-                ))
-              )}
+              <Text>Test content</Text>
             </ScrollView>
           </View>
         </View>
