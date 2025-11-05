@@ -1,5 +1,5 @@
 import { ApiResponse } from '../types';
-import { cloudSyncService } from './cloudSyncService';
+import { firebaseAuthService } from './firebaseAuthService';
 
 interface SpendingCategory {
   id: string;
@@ -64,32 +64,21 @@ interface RecommendationsData {
 }
 
 class AnalyticsService {
-  private readonly API_URL = cloudSyncService.getApiBaseUrl();
+  // For now, we'll use local calculations only
+  // Later, we can add Firebase Functions for advanced analytics
 
   async getSpendingByCategory(period: 'week' | 'month' | 'year'): Promise<ApiResponse<SpendingData>> {
     try {
       // Check if user is authenticated
-      const isAuth = await cloudSyncService.isAuthenticated();
+      const isAuth = firebaseAuthService.isAuthenticated();
       
       if (isAuth) {
-        // Online mode - use backend API
-        const token = await cloudSyncService.getAuthToken();
-        const response = await fetch(`${this.API_URL}/analytics/spending?period=${period}`, {
-          method: 'GET',
-          headers: {
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json',
-          },
-        });
-        
-        if (!response.ok) {
-          throw new Error(`Server responded with ${response.status}: ${response.statusText}`);
-        }
-        
-        const data = await response.json();
-        return data;
+        // For now, use local calculations even when authenticated
+        // TODO: Implement Firebase Functions for server-side analytics
+        this.logOnce('Using local analytics (Firebase Functions coming soon...)', '📊');
+        return this.getLocalSpendingByCategory(period);
       } else {
-        // Offline mode - use local calculations (hybrid service)
+        // Offline mode - use local calculations
         return this.getLocalSpendingByCategory(period);
       }
     } catch (error) {
@@ -105,28 +94,12 @@ class AnalyticsService {
   ): Promise<ApiResponse<TrendData>> {
     try {
       // Check if user is authenticated
-      const isAuth = await cloudSyncService.isAuthenticated();
+      const isAuth = firebaseAuthService.isAuthenticated();
       
       if (isAuth) {
-        // Online mode - use backend API
-        const token = await cloudSyncService.getAuthToken();
-        const response = await fetch(
-          `${this.API_URL}/analytics/trend?period=${period}&groupBy=${groupBy}`, 
-          {
-            method: 'GET',
-            headers: {
-              'Authorization': `Bearer ${token}`,
-              'Content-Type': 'application/json',
-            },
-          }
-        );
-        
-        if (!response.ok) {
-          throw new Error(`Server responded with ${response.status}: ${response.statusText}`);
-        }
-        
-        const data = await response.json();
-        return data;
+        // For now, use local calculations even when authenticated
+        this.logOnce('Using local trend analysis (Firebase Functions coming soon...)', '📈');
+        return this.getLocalTrendData(period, groupBy);
       } else {
         // Offline mode - use local calculations
         return this.getLocalTrendData(period, groupBy);
@@ -141,25 +114,12 @@ class AnalyticsService {
   async getRecommendations(): Promise<ApiResponse<RecommendationsData>> {
     try {
       // Check if user is authenticated
-      const isAuth = await cloudSyncService.isAuthenticated();
+      const isAuth = firebaseAuthService.isAuthenticated();
       
       if (isAuth) {
-        // Online mode - use backend API
-        const token = await cloudSyncService.getAuthToken();
-        const response = await fetch(`${this.API_URL}/analytics/recommendations`, {
-          method: 'GET',
-          headers: {
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json',
-          },
-        });
-        
-        if (!response.ok) {
-          throw new Error(`Server responded with ${response.status}: ${response.statusText}`);
-        }
-        
-        const data = await response.json();
-        return data;
+        // For now, use local calculations even when authenticated
+        this.logOnce('Using local recommendations (Firebase Functions coming soon...)', '💡');
+        return this.getLocalRecommendations();
       } else {
         // Offline mode - use local calculations or mock data
         return this.getLocalRecommendations();

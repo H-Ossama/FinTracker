@@ -498,4 +498,4 @@ const styles = StyleSheet.create({
   },
 });
 
-export default AddIncomeModal;
+export default React.memo(AddIncomeModal);

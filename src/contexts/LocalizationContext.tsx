@@ -427,6 +427,7 @@ const translations = {
     'settings_screen_select_currency': 'Select Currency',
     'settings_screen_app_version': 'FinTracker v2.5.1',
     'settings_screen_built_with_love': 'Built with ❤️ for your financial freedom',
+    'development_tools_title': 'Development Tools',
 
     // Wallet Screen
     'wallet_screen_title': 'My Wallets',
@@ -1397,6 +1398,7 @@ const translations = {
     'settings_screen_select_currency': 'Währung auswählen',
     'settings_screen_app_version': 'FinTracker v2.5.1',
     'settings_screen_built_with_love': 'Mit ❤️ für Ihre finanzielle Freiheit entwickelt',
+    'development_tools_title': 'Entwicklungstools',
 
     // Wallet Screen
     'wallet_screen_title': 'Meine Geldbörsen',
@@ -2356,6 +2358,7 @@ const translations = {
     'settings_screen_select_currency': 'اختر العملة',
     'settings_screen_app_version': 'FinTracker v2.5.1',
     'settings_screen_built_with_love': 'بُني بـ ❤️ من أجل حريتك المالية',
+    'development_tools_title': 'أدوات التطوير',
 
     // Wallet Screen
     'wallet_screen_title': 'محافظي',

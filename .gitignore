@@ -34,8 +34,11 @@ yarn-error.*
 .env
 
 # Firebase/Google Services - Contains sensitive API keys and project IDs
+google-services.json
 android/app/google-services.json
 ios/GoogleService-Info.plist
+# Allow the android app version to be tracked since it's needed for builds
+!android/app/google-services.json
 
 # Keystore files - Contains signing certificates
 *.keystore

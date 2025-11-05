@@ -1,3 +1,10 @@
+// Import polyfills first
+import 'react-native-get-random-values';
+import { Buffer } from 'buffer';
+
+// Make Buffer available globally
+global.Buffer = Buffer;
+
 // Import console override first to silence production logs
 import './src/utils/consoleOverride';
 
@@ -6,7 +13,7 @@ import { NavigationContainer } from '@react-navigation/native';
 import { createStackNavigator } from '@react-navigation/stack';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
-import { View, Text, ActivityIndicator, StyleSheet } from 'react-native';
+import { View, Text, ActivityIndicator, StyleSheet, InteractionManager } from 'react-native';
 
 // Lazy load components to reduce initial bundle size and improve performance
 const SwipeableBottomTabNavigator = lazy(() => import('./src/components/SwipeableBottomTabNavigator'));
@@ -18,7 +25,7 @@ const NotificationCenterScreen = lazy(() => import('./src/screens/NotificationCe
 const NotificationPreferencesScreen = lazy(() => import('./src/screens/NotificationPreferencesScreen'));
 const SignUpScreen = lazy(() => import('./src/screens/SignUpScreen'));
 const SignInScreen = lazy(() => import('./src/screens/SignInScreen'));
-const AccessDeniedScreen = lazy(() => import('./src/screens/AccessDeniedScreen'));
+import AccessDeniedScreen from './src/screens/AccessDeniedScreen'; // Import directly instead of lazy loading
 const UserProfileScreen = lazy(() => import('./src/screens/UserProfileScreen'));
 const SavingsGoalsScreen = lazy(() => import('./src/screens/SavingsGoalsScreen'));
 const QuickSettingsScreen = lazy(() => import('./src/screens/QuickSettingsScreen'));
@@ -29,6 +36,8 @@ const AppLockScreen = lazy(() => import('./src/screens/AppLockScreen'));
 const BillsTrackerScreen = lazy(() => import('./src/screens/BillsTrackerScreen'));
 const BudgetPlannerScreen = lazy(() => import('./src/screens/BudgetPlannerScreen'));
 const RemindersScreen = lazy(() => import('./src/screens/RemindersScreen'));
+const SyncTestScreen = lazy(() => import('./src/screens/SyncTestScreen'));
+const DevelopmentToolsScreen = lazy(() => import('./src/screens/DevelopmentToolsScreen'));
 import { ThemeProvider, useTheme } from './src/contexts/ThemeContext';
 import { LocalizationProvider } from './src/contexts/LocalizationContext';
 import { AuthProvider, useAuth } from './src/contexts/AuthContext';
@@ -37,6 +46,7 @@ import { QuickActionsProvider } from './src/contexts/QuickActionsContext';
 import { hybridDataService, AppInitResult } from './src/services/hybridDataService';
 import AppLockService from './src/services/appLockService';
 import BatteryOptimizer from './src/utils/batteryOptimizer';
+// import { initializeAppOptimizations } from './src/utils/optimizations';
 const SyncReminderBanner = lazy(() => import('./src/components/SyncReminderBanner'));
 import { navigationRef, onNavigationReady } from './src/navigation/navigationService';
 
@@ -48,6 +58,25 @@ const LazyLoadingFallback = () => (
     <ActivityIndicator size="small" color="#007AFF" />
   </View>
 );
+
+// Optimized screen wrapper for better performance
+const ScreenWrapper = ({ children }: { children: React.ReactNode }) => {
+  const [isReady, setIsReady] = useState(false);
+  
+  useEffect(() => {
+    const task = InteractionManager.runAfterInteractions(() => {
+      setIsReady(true);
+    });
+    
+    return () => task.cancel();
+  }, []);
+  
+  if (!isReady) {
+    return <LazyLoadingFallback />;
+  }
+  
+  return <>{children}</>;
+};
 
 const AppNavigator = React.memo(() => {
   const { isDark } = useTheme();
@@ -123,9 +152,44 @@ const AppNavigator = React.memo(() => {
   return (
     <Suspense fallback={<LazyLoadingFallback />}>
       <TouchActivityWrapper>
-        <NavigationContainer ref={navigationRef} onReady={onNavigationReady}>
+        <NavigationContainer 
+          ref={navigationRef} 
+          onReady={onNavigationReady}
+          theme={{
+            dark: isDark,
+            colors: {
+              primary: '#007AFF',
+              background: isDark ? '#000000' : '#FFFFFF',
+              card: isDark ? '#1C1C1E' : '#FFFFFF',
+              text: isDark ? '#FFFFFF' : '#000000',
+              border: isDark ? '#38383A' : '#C6C6C8',
+              notification: '#FF3B30',
+            },
+          }}
+        >
           <StatusBar style={isDark ? "light" : "dark"} />
-          <Stack.Navigator screenOptions={{ headerShown: false }}>
+          <Stack.Navigator 
+            screenOptions={{ 
+              headerShown: false,
+              animationEnabled: true,
+              gestureEnabled: true,
+              cardStyle: { backgroundColor: 'transparent' },
+              cardStyleInterpolator: ({ current, layouts }) => {
+                return {
+                  cardStyle: {
+                    transform: [
+                      {
+                        translateX: current.progress.interpolate({
+                          inputRange: [0, 1],
+                          outputRange: [layouts.screen.width, 0],
+                        }),
+                      },
+                    ],
+                  },
+                };
+              },
+            }}
+          >
             {isAuthenticated ? (
               // Authenticated user screens
               <>
@@ -182,6 +246,7 @@ const AppNavigator = React.memo(() => {
                   options={{ 
                     headerShown: false,
                     presentation: 'modal',
+                    gestureEnabled: false,
                   }}
                 />
                 <Stack.Screen 
@@ -190,6 +255,7 @@ const AppNavigator = React.memo(() => {
                   options={{ 
                     headerShown: false,
                     presentation: 'modal',
+                    gestureEnabled: false,
                   }}
                 />
                 <Stack.Screen 
@@ -227,6 +293,21 @@ const AppNavigator = React.memo(() => {
                   component={RemindersScreen}
                   options={{ 
                     headerShown: false,
+                  }}
+                />
+                <Stack.Screen 
+                  name="SyncTest" 
+                  component={SyncTestScreen}
+                  options={{ 
+                    headerShown: false,
+                  }}
+                />
+                <Stack.Screen 
+                  name="DevelopmentTools" 
+                  component={DevelopmentToolsScreen}
+                  options={{ 
+                    headerShown: false,
+                    presentation: 'modal',
                   }}
                 />
               </>
@@ -277,13 +358,14 @@ export default function App() {
   
   // ALL HOOKS MUST BE AT THE TOP BEFORE ANY CONDITIONAL RETURNS
   
-  // Initialize battery optimizer
+  // Initialize battery optimizer and general optimizations
   useEffect(() => {
     const batteryOptimizer = BatteryOptimizer.getInstance();
     
     return () => {
-      // Cleanup battery optimizer on app unmount
+      // Cleanup battery optimizer and all optimizations on app unmount
       batteryOptimizer.cleanup();
+      cleanupOptimizations();
     };
   }, []);
 
@@ -291,6 +373,16 @@ export default function App() {
     setIsLoading(true);
     try {
       console.log('🚀 Initializing FINEX...');
+      
+      // Initialize all performance optimizations first
+      // await initializeAppOptimizations({
+      //   enableStorageOptimization: true,
+      //   enableMemoryManagement: true,
+      //   enableNetworkOptimization: true,
+      //   enableCodeSplitting: true,
+      //   enablePerformanceMonitoring: __DEV__, // Only in development
+      // });
+      
       const result = await hybridDataService.initializeApp();
       setInitResult(result);
       
@@ -354,12 +446,13 @@ export default function App() {
           <AuthProvider>
             <NotificationProvider>
               <QuickActionsProvider>
-                {/* Lazy load sync reminder banner */}
-                <Suspense fallback={null}>
-                  <SyncReminderBanner onSyncComplete={handleSyncComplete} />
-                </Suspense>
-                
-                <AppNavigator />
+                <View style={styles.appContainer}>
+                  <AppNavigator />
+                  {/* Lazy load sync reminder banner - positioned after navigator to overlay properly */}
+                  <Suspense fallback={null}>
+                    <SyncReminderBanner onSyncComplete={handleSyncComplete} />
+                  </Suspense>
+                </View>
               </QuickActionsProvider>
             </NotificationProvider>
           </AuthProvider>
@@ -370,6 +463,10 @@ export default function App() {
 }
 
 const styles = StyleSheet.create({
+  appContainer: {
+    flex: 1,
+    position: 'relative',
+  },
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',

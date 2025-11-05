@@ -279,8 +279,29 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     initializeAuth();
   }, []);
 
+  const clearTestUserData = async () => {
+    try {
+      // Check if stored user data contains test user and clear it
+      const userData = await AsyncStorage.getItem(STORAGE_KEYS.USER_DATA);
+      if (userData) {
+        const user = JSON.parse(userData);
+        if (user.email === 'test@example.com') {
+          console.log('🧹 Clearing test user data...');
+          await AsyncStorage.removeItem(STORAGE_KEYS.USER_DATA);
+          await AsyncStorage.removeItem(STORAGE_KEYS.REMEMBER_ME);
+          await SecureStore.deleteItemAsync(STORAGE_KEYS.USER_TOKEN);
+        }
+      }
+    } catch (error) {
+      console.log('Could not clear test user data:', error);
+    }
+  };
+
   const initializeAuth = async () => {
     try {
+      // Clear any test user data that might interfere with real authentication
+      await clearTestUserData();
+      
       // Check if user chose to be remembered
       const rememberMe = await AsyncStorage.getItem(STORAGE_KEYS.REMEMBER_ME);
       const biometricEnabled = await AsyncStorage.getItem(STORAGE_KEYS.BIOMETRIC_ENABLED);
@@ -680,13 +701,13 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       }
       
       // Check token format for regular accounts
-      if (!token.startsWith('jwt_token_') && !token.startsWith('demo_token_')) {
+      if (!token.startsWith('jwt_token_') && !token.startsWith('demo_token_') && !token.startsWith('google_token_')) {
         console.log('❌ Invalid token format:', token.substring(0, 20));
         return { valid: false, reason: 'Invalid session format' };
       }
       
-      // For regular accounts, check if user exists in registered users
-      if (user.email !== 'demo@fintracker.app') {
+      // For regular accounts (not demo or Google), check if user exists in registered users
+      if (user.email !== 'demo@fintracker.app' && !token.startsWith('google_token_')) {
         const existingUsers = await AsyncStorage.getItem('registered_users');
         const users = existingUsers ? JSON.parse(existingUsers) : [];
         const userExists = users.find((u: any) => u.email.toLowerCase() === user.email.toLowerCase());
@@ -703,8 +724,14 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         }
       }
       
-      // Check session age (skip for demo accounts)
-      if (user.email !== 'demo@fintracker.app') {
+      // For Google users, we trust Google's authentication
+      if (token.startsWith('google_token_')) {
+        console.log('✅ Google user session validated:', user.email);
+        return { valid: true };
+      }
+      
+      // Check session age (skip for demo and Google accounts)
+      if (user.email !== 'demo@fintracker.app' && !token.startsWith('google_token_')) {
         const lastLogin = new Date(user.lastLogin);
         const now = new Date();
         const daysSinceLogin = Math.floor((now.getTime() - lastLogin.getTime()) / (1000 * 60 * 60 * 24));

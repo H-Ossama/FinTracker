@@ -29,7 +29,7 @@ export default {
       icon: "./assets/icon.png"
     },
     android: {
-      package: "com.oussamaaaaa.finex",
+      package: "com.H_Oussama.financetracker",
       icon: "./assets/icon.png",
       adaptiveIcon: {
         foregroundImage: "./assets/adaptive-icon.png",
@@ -75,6 +75,14 @@ export default {
     extra: {
       eas: {
         projectId: "c3f94c58-e5f4-4e50-b25d-f2b00bd99d2f"
+      },
+      firebase: {
+        apiKey: process.env.FIREBASE_API_KEY,
+        authDomain: process.env.FIREBASE_AUTH_DOMAIN,
+        projectId: process.env.FIREBASE_PROJECT_ID,
+        storageBucket: process.env.FIREBASE_STORAGE_BUCKET,
+        messagingSenderId: process.env.FIREBASE_MESSAGING_SENDER_ID,
+        appId: process.env.FIREBASE_APP_ID
       }
     },
     owner: "oussamaaaaa"

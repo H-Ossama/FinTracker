@@ -7,10 +7,14 @@ import {
   Modal,
   ActivityIndicator,
   Animated,
+  PanResponder,
+  Dimensions,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { hybridDataService } from '../services/hybridDataService';
 import { useTheme } from '../contexts/ThemeContext';
+import { useAuth } from '../contexts/AuthContext';
 
 interface SyncReminderProps {
   onSyncComplete?: () => void;
@@ -18,6 +22,8 @@ interface SyncReminderProps {
 
 export const SyncReminderBanner: React.FC<SyncReminderProps> = React.memo(({ onSyncComplete }) => {
   const { theme } = useTheme();
+  const { isAuthenticated, isLoading: authLoading } = useAuth();
+  const insets = useSafeAreaInsets();
   const [visible, setVisible] = useState(false);
   const [unsyncedItems, setUnsyncedItems] = useState(0);
   const [isLoading, setIsLoading] = useState(false);
@@ -25,12 +31,62 @@ export const SyncReminderBanner: React.FC<SyncReminderProps> = React.memo(({ onS
   
   // Use a single animated value and optimize animations
   const fadeAnim = useMemo(() => new Animated.Value(0), []);
+  const translateX = useMemo(() => new Animated.Value(0), []);
+  const screenWidth = Dimensions.get('window').width;
+
+  // Pan responder for swipe-to-dismiss
+  const panResponder = useMemo(
+    () =>
+      PanResponder.create({
+        onMoveShouldSetPanResponder: (_, gestureState) => {
+          return Math.abs(gestureState.dx) > 20 && Math.abs(gestureState.dy) < 100;
+        },
+        onPanResponderMove: (_, gestureState) => {
+          translateX.setValue(gestureState.dx);
+        },
+        onPanResponderRelease: (_, gestureState) => {
+          const swipeThreshold = screenWidth * 0.3;
+          
+          if (Math.abs(gestureState.dx) > swipeThreshold) {
+            // Swipe far enough - dismiss
+            const toValue = gestureState.dx > 0 ? screenWidth : -screenWidth;
+            Animated.parallel([
+              Animated.timing(translateX, {
+                toValue,
+                duration: 200,
+                useNativeDriver: true,
+              }),
+              Animated.timing(fadeAnim, {
+                toValue: 0,
+                duration: 200,
+                useNativeDriver: true,
+              }),
+            ]).start(() => {
+              handleDismiss();
+              translateX.setValue(0);
+            });
+          } else {
+            // Snap back to original position
+            Animated.spring(translateX, {
+              toValue: 0,
+              useNativeDriver: true,
+            }).start();
+          }
+        },
+      }),
+    [translateX, fadeAnim, screenWidth, handleDismiss]
+  );
 
   useEffect(() => {
     let isMounted = true;
     
     const checkSyncReminder = async () => {
       try {
+        // Only show sync reminder if user is authenticated and auth is not loading
+        if (!isAuthenticated || authLoading) {
+          return;
+        }
+        
         const shouldShow = await hybridDataService.shouldShowSyncReminder();
         if (shouldShow && isMounted) {
           const syncStatus = await hybridDataService.getSyncStatus();
@@ -54,22 +110,7 @@ export const SyncReminderBanner: React.FC<SyncReminderProps> = React.memo(({ onS
     return () => {
       isMounted = false;
     };
-  }, [fadeAnim]);
-
-  const handleSyncNow = useCallback(async () => {
-    setIsLoading(true);
-    try {
-      const result = await hybridDataService.performManualSync();
-      if (result.success) {
-        handleDismiss();
-        onSyncComplete?.();
-      }
-    } catch (error) {
-      console.error('Sync failed:', error);
-    } finally {
-      setIsLoading(false);
-    }
-  }, [onSyncComplete]);
+  }, [fadeAnim, isAuthenticated, authLoading]);
 
   const handleDismiss = useCallback(async () => {
     try {
@@ -87,6 +128,21 @@ export const SyncReminderBanner: React.FC<SyncReminderProps> = React.memo(({ onS
       console.error('Error dismissing reminder:', error);
     }
   }, [fadeAnim]);
+
+  const handleSyncNow = useCallback(async () => {
+    setIsLoading(true);
+    try {
+      const result = await hybridDataService.performManualSync();
+      if (result.success) {
+        handleDismiss();
+        onSyncComplete?.();
+      }
+    } catch (error) {
+      console.error('Sync failed:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [onSyncComplete, handleDismiss]);
 
   const handleShowDetails = useCallback(() => {
     setShowModal(true);
@@ -107,22 +163,27 @@ export const SyncReminderBanner: React.FC<SyncReminderProps> = React.memo(({ onS
     { 
       opacity: fadeAnim, 
       backgroundColor: theme.colors.surface, 
-      borderLeftColor: theme.colors.primary 
+      borderLeftColor: theme.colors.primary,
+      marginTop: insets.top + 8, // Add safe area top inset plus margin
+      transform: [{ translateX }]
     }
-  ], [fadeAnim, theme.colors.surface, theme.colors.primary]);
+  ], [fadeAnim, theme.colors.surface, theme.colors.primary, insets.top, translateX]);
 
   const iconContainerStyle = useMemo(() => [
     styles.iconContainer, 
     { backgroundColor: theme.isDark ? 'rgba(0, 122, 255, 0.2)' : '#f0f8ff' }
   ], [theme.isDark]);
 
-  if (!visible) {
+  if (!visible || !isAuthenticated || authLoading) {
     return null;
   }
 
   return (
     <>
-      <Animated.View style={bannerStyles}>
+      <Animated.View 
+        style={[bannerStyles, styles.bannerContainer]}
+        {...panResponder.panHandlers}
+      >
         <View style={styles.bannerContent}>
           <View style={iconContainerStyle}>
             <Ionicons name="cloud-upload-outline" size={24} color={theme.colors.primary} />
@@ -280,10 +341,17 @@ export const useSyncReminder = () => {
 };
 
 const styles = StyleSheet.create({
+  bannerContainer: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    zIndex: 1000,
+  },
   banner: {
     borderRadius: 12,
     marginHorizontal: 16,
-    marginVertical: 8,
+    marginBottom: 8,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,

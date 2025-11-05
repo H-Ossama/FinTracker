@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, useCallback } from 'react';
+import React, { useState, useRef, useEffect, useCallback, memo, useMemo } from 'react';
 import {
   View,
   Text,
@@ -28,10 +28,12 @@ import { useTheme } from '../contexts/ThemeContext';
 import { useLocalization } from '../contexts/LocalizationContext';
 import { useNotification } from '../contexts/NotificationContext';
 import { useQuickActions } from '../contexts/QuickActionsContext';
+import { useScreenPerformance } from '../hooks/usePerformance';
 import borrowedMoneyService from '../services/borrowedMoneyService';
 import useSafeAreaHelper from '../hooks/useSafeAreaHelper';
 import { useWalletVisibility } from '../hooks/useWalletVisibility';
 import { hybridDataService, HybridWallet, HybridTransaction } from '../services/hybridDataService';
+import { useOptimizedCallback, useOptimizedMemo, withOptimizedMemo } from '../utils/componentOptimization';
 
 const SAMPLE_NOTIFICATIONS_FLAG = 'sample_notifications_seeded';
 const NOTIFICATION_STORAGE_KEY = 'notification_state';
@@ -1364,4 +1366,4 @@ const styles = StyleSheet.create({
   },
 });
 
-export default HomeScreen;
+export default memo(HomeScreen);

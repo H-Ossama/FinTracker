@@ -1,5 +1,5 @@
 import { localStorageService, LocalWallet, LocalTransaction, LocalCategory } from './localStorageService';
-import { cloudSyncService } from './cloudSyncService';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 interface HybridWallet extends Omit<LocalWallet, 'isDirty'> {
   syncStatus: 'synced' | 'local_only' | 'pending_sync' | 'conflict';
@@ -82,6 +82,7 @@ class HybridDataService {
 
       // Only seed demo data if explicitly requested or this is a demo account
       const shouldSeedDemoData = await this.shouldSeedDemoData();
+      const isReturningUser = await this.isReturningUser();
       
       if (shouldSeedDemoData) {
         console.log('🎭 Seeding demo data...');
@@ -96,21 +97,29 @@ class HybridDataService {
         if (transactions.length === 0) {
           await this.seedSampleTransactions();
         }
-      } else {
+      } else if (!isReturningUser) {
         console.log('✨ New user - starting with clean data');
+      } else {
+        console.log('👋 Welcome back!');
       }
 
-      // Check sync status
-      const syncStatus = await cloudSyncService.getSyncStatus();
-      
-      // Perform quick sync check if enabled
-      await cloudSyncService.quickSyncCheck();
-      
-      // Check if sync reminder should be shown
-      const shouldRemind = await cloudSyncService.shouldShowSyncReminder();
-      if (shouldRemind) {
-        // This will be handled by the UI component
-        console.log('Sync reminder needed');
+      // Check sync status (use dynamic import to avoid circular dependency)
+      let syncStatus = { enabled: false, authenticated: false, unsyncedItems: 0 };
+      try {
+        const { cloudSyncService } = await import('./cloudSyncService');
+        syncStatus = await cloudSyncService.getSyncStatus();
+        
+        // Perform quick sync check if enabled
+        await cloudSyncService.quickSyncCheck();
+        
+        // Check if sync reminder should be shown
+        const shouldRemind = await cloudSyncService.shouldShowSyncReminder();
+        if (shouldRemind) {
+          // This will be handled by the UI component
+          console.log('Sync reminder needed');
+        }
+      } catch (error) {
+        console.log('Could not initialize cloud sync:', error);
       }
 
       this.isInitialized = true;
@@ -120,7 +129,7 @@ class HybridDataService {
         syncStatus: {
           enabled: syncStatus.enabled,
           authenticated: syncStatus.authenticated,
-          pendingItems: syncStatus.unsyncedItems,
+          pendingItems: syncStatus.unsyncedItems || 0,
         },
       };
     } catch (error) {
@@ -154,6 +163,26 @@ class HybridDataService {
       return isDemoAccount === 'true' || seedDemoData === 'true';
     } catch (error) {
       console.log('Could not check demo settings, defaulting to no demo data');
+      return false;
+    }
+  }
+
+  private async isReturningUser(): Promise<boolean> {
+    try {
+      const AsyncStorage = await import('@react-native-async-storage/async-storage');
+      
+      // Check if user has authentication data stored
+      const rememberMe = await AsyncStorage.default.getItem('remember_me');
+      const userData = await AsyncStorage.default.getItem('user_data');
+      const isGoogleUser = await AsyncStorage.default.getItem('google_user');
+      
+      // Consider them a returning user if:
+      // 1. They have "remember me" enabled, OR
+      // 2. They have user data stored, OR  
+      // 3. They are a Google user
+      return rememberMe === 'true' || userData !== null || isGoogleUser === 'true';
+    } catch (error) {
+      console.log('Could not check returning user status');
       return false;
     }
   }
@@ -394,11 +423,21 @@ class HybridDataService {
   }
 
   async disableCloudSync(): Promise<void> {
-    await cloudSyncService.disableSync();
+    try {
+      const { cloudSyncService } = await import('./cloudSyncService');
+      await cloudSyncService.disableSync();
+    } catch (error) {
+      console.log('Could not disable cloud sync:', error);
+    }
   }
 
   async performManualSync(onProgress?: (progress: any) => void): Promise<{ success: boolean; error?: string }> {
-    return cloudSyncService.performFullSync(onProgress);
+    try {
+      const { cloudSyncService } = await import('./cloudSyncService');
+      return cloudSyncService.performFullSync(onProgress);
+    } catch (error) {
+      return { success: false, error: error instanceof Error ? error.message : 'Sync failed' };
+    }
   }
 
   async getSyncStatus(): Promise<{
@@ -408,15 +447,136 @@ class HybridDataService {
     unsyncedItems: number;
     nextReminderDue: Date | null;
   }> {
-    return cloudSyncService.getSyncStatus();
+    try {
+      const { cloudSyncService } = await import('./cloudSyncService');
+      return cloudSyncService.getSyncStatus();
+    } catch (error) {
+      return { enabled: false, authenticated: false, pendingItems: 0, lastSync: null, unsyncedItems: 0, nextReminderDue: null };
+    }
+  }
+
+  async getSyncOverview(): Promise<{
+    wallets: number;
+    transactions: number;
+    categories: number;
+    totalItems: number;
+  }> {
+    try {
+      const wallets = await localStorageService.getWallets();
+      const transactions = await localStorageService.getTransactions();
+      const categories = await localStorageService.getCategories();
+      
+      const walletsCount = wallets.length;
+      const transactionsCount = transactions.length;
+      const categoriesCount = categories.length;
+      
+      return {
+        wallets: walletsCount,
+        transactions: transactionsCount,
+        categories: categoriesCount,
+        totalItems: walletsCount + transactionsCount + categoriesCount,
+      };
+    } catch (error) {
+      console.error('Error getting sync overview:', error);
+      return {
+        wallets: 0,
+        transactions: 0,
+        categories: 0,
+        totalItems: 0,
+      };
+    }
   }
 
   async shouldShowSyncReminder(): Promise<boolean> {
-    return cloudSyncService.shouldShowSyncReminder();
+    try {
+      // Check if sync reminders are suppressed due to auto-sync
+      const suppressed = await this.areSyncRemindersSuppressed();
+      if (suppressed) {
+        return false;
+      }
+      
+      // Check if sync reminders are completely disabled by user
+      const disabled = await this.areSyncRemindersDisabled();
+      if (disabled) {
+        return false;
+      }
+      
+      const { cloudSyncService } = await import('./cloudSyncService');
+      return cloudSyncService.shouldShowSyncReminder();
+    } catch (error) {
+      return false;
+    }
   }
 
   async markSyncReminderShown(): Promise<void> {
-    await cloudSyncService.markReminderShown();
+    try {
+      const { cloudSyncService } = await import('./cloudSyncService');
+      await cloudSyncService.markReminderShown();
+    } catch (error) {
+      console.log('Could not mark sync reminder as shown:', error);
+    }
+  }
+
+  // Auto-sync settings
+  async getAutoSyncSettings(): Promise<{ 
+    enabled: boolean; 
+    period: 'daily' | 'weekly' | 'monthly' | 'custom';
+    customInterval?: number;
+    customUnit?: 'hours' | 'days' | 'weeks';
+  }> {
+    try {
+      const settings = await AsyncStorage.getItem('auto_sync_settings');
+      return settings ? JSON.parse(settings) : { enabled: false, period: 'weekly' };
+    } catch (error) {
+      return { enabled: false, period: 'weekly' };
+    }
+  }
+
+  async setAutoSyncSettings(settings: { 
+    enabled: boolean; 
+    period: 'daily' | 'weekly' | 'monthly' | 'custom';
+    customInterval?: number;
+    customUnit?: 'hours' | 'days' | 'weeks';
+  }): Promise<void> {
+    try {
+      await AsyncStorage.setItem('auto_sync_settings', JSON.stringify(settings));
+    } catch (error) {
+      console.error('Error saving auto-sync settings:', error);
+    }
+  }
+
+  async setSyncRemindersSuppressed(suppressed: boolean): Promise<void> {
+    try {
+      await AsyncStorage.setItem('sync_reminders_suppressed', JSON.stringify(suppressed));
+    } catch (error) {
+      console.error('Error setting sync reminders suppression:', error);
+    }
+  }
+
+  async areSyncRemindersSuppressed(): Promise<boolean> {
+    try {
+      const suppressed = await AsyncStorage.getItem('sync_reminders_suppressed');
+      return suppressed ? JSON.parse(suppressed) : false;
+    } catch (error) {
+      return false;
+    }
+  }
+
+  async setSyncRemindersDisabled(disabled: boolean): Promise<void> {
+    try {
+      await AsyncStorage.setItem('sync_reminders_disabled', JSON.stringify(disabled));
+    } catch (error) {
+      console.error('Error setting sync reminders disabled:', error);
+    }
+  }
+
+  async areSyncRemindersDisabled(): Promise<boolean> {
+    try {
+      const disabled = await AsyncStorage.getItem('sync_reminders_disabled');
+      return disabled ? JSON.parse(disabled) : false;
+    } catch (error) {
+      return false;
+    }
   }
 
   // User Authentication
@@ -426,6 +586,7 @@ class HybridDataService {
     firstName: string;
     lastName: string;
   }): Promise<{ success: boolean; error?: string }> {
+    const { cloudSyncService } = await import('./cloudSyncService');
     const result = await cloudSyncService.register(
       userData.email,
       userData.password,
@@ -442,6 +603,7 @@ class HybridDataService {
   }
 
   async loginUser(email: string, password: string): Promise<{ success: boolean; error?: string }> {
+    const { cloudSyncService } = await import('./cloudSyncService');
     const result = await cloudSyncService.login(email, password);
     
     if (result.success) {
@@ -454,7 +616,62 @@ class HybridDataService {
   }
 
   async logoutUser(): Promise<void> {
+    const { cloudSyncService } = await import('./cloudSyncService');
     await cloudSyncService.logout();
+  }
+
+  async enableCloudSyncForExistingUser(user: any): Promise<{ success: boolean; error?: string }> {
+    try {
+      console.log('🔄 Enabling cloud sync for existing user:', user.email);
+      const { cloudSyncService } = await import('./cloudSyncService');
+      
+      // Set authentication token for the cloud sync service
+      // Use user's existing auth token or create a session token
+      let authToken = user.accessToken || user.idToken;
+      if (!authToken) {
+        // For non-Google users or if no token available, create a session token
+        authToken = `session_${user.uid || user.id}_${Date.now()}`;
+      }
+      
+      console.log('🔑 Setting auth token for cloud sync service');
+      await cloudSyncService.setAuthToken(authToken);
+      
+      // Check if user is already authenticated with Google
+      if (user.isGoogleUser) {
+        console.log('📱 Google user detected, enabling sync directly');
+        // For Google users, enable sync directly since they're already authenticated
+        await cloudSyncService.enableSync();
+        
+        // Store Google sync enabled flag
+        await AsyncStorage.setItem('cloud_sync_enabled', 'true');
+        console.log('✅ Cloud sync enabled for Google user');
+        return { success: true };
+      } else {
+        console.log('📧 Email user detected, enabling sync with credentials');
+        // For email/password users, use their existing credentials to enable sync
+        await cloudSyncService.enableSync();
+        
+        // Store sync enabled flag
+        await AsyncStorage.setItem('cloud_sync_enabled', 'true');
+        console.log('✅ Cloud sync enabled for email user');
+        return { success: true };
+      }
+    } catch (error) {
+      console.error('❌ Error enabling cloud sync for existing user:', error);
+      return { 
+        success: false, 
+        error: error instanceof Error ? error.message : 'Failed to enable sync'
+      };
+    }
+  }
+
+  async disableCloudSync(): Promise<void> {
+    try {
+      const { cloudSyncService } = await import('./cloudSyncService');
+      await cloudSyncService.disableSync();
+    } catch (error) {
+      console.error('Error disabling cloud sync:', error);
+    }
   }
 
   // Helper Methods
@@ -668,6 +885,7 @@ class HybridDataService {
   async getNotifications(): Promise<any[]> {
     try {
       // Try to get from backend first
+      const { cloudSyncService } = await import('./cloudSyncService');
       return await cloudSyncService.getNotifications();
     } catch (error) {
       console.log('Could not fetch notifications from backend:', error);
@@ -679,6 +897,7 @@ class HybridDataService {
   async getNotificationPreferences(): Promise<any> {
     try {
       // Try to get from backend first
+      const { cloudSyncService } = await import('./cloudSyncService');
       return await cloudSyncService.getNotificationPreferences();
     } catch (error) {
       console.log('Could not fetch notification preferences from backend:', error);
@@ -690,6 +909,7 @@ class HybridDataService {
   async updateNotificationPreferences(preferences: any): Promise<void> {
     try {
       // Try to update on backend
+      const { cloudSyncService } = await import('./cloudSyncService');
       await cloudSyncService.updateNotificationPreferences(preferences);
     } catch (error) {
       console.log('Could not update notification preferences on backend:', error);
@@ -734,7 +954,12 @@ class HybridDataService {
       }
       
       // Clear sync status
-      await cloudSyncService.clearSyncData();
+      try {
+        const { cloudSyncService } = await import('./cloudSyncService');
+        await cloudSyncService.clearSyncData();
+      } catch (error) {
+        console.log('Could not clear sync data:', error);
+      }
       
       // Reset initialization state
       this.isInitialized = false;
@@ -817,6 +1042,52 @@ class HybridDataService {
     } catch (error) {
       return false;
     }
+  }
+
+  // Restore methods that preserve original IDs (for sync purposes)
+  async restoreWallet(walletData: HybridWallet | LocalWallet): Promise<HybridWallet> {
+    await this.waitForInitialization();
+
+    // Convert to LocalWallet format if needed
+    const localWallet: LocalWallet = {
+      id: walletData.id,
+      name: walletData.name,
+      type: walletData.type,
+      balance: walletData.balance,
+      color: walletData.color,
+      icon: walletData.icon,
+      isActive: walletData.isActive,
+      createdAt: walletData.createdAt,
+      updatedAt: walletData.updatedAt,
+      lastSynced: walletData.lastSynced,
+      isDirty: false,
+    };
+
+    const restoredWallet = await localStorageService.restoreWallet(localWallet);
+    return this.convertWalletToHybrid(restoredWallet);
+  }
+
+  async restoreTransaction(transactionData: HybridTransaction | LocalTransaction): Promise<HybridTransaction> {
+    await this.waitForInitialization();
+
+    // Convert to LocalTransaction format if needed
+    const localTransaction: LocalTransaction = {
+      id: transactionData.id,
+      amount: transactionData.amount,
+      description: transactionData.description,
+      type: transactionData.type,
+      date: transactionData.date,
+      notes: transactionData.notes,
+      walletId: transactionData.walletId,
+      categoryId: transactionData.categoryId,
+      createdAt: transactionData.createdAt,
+      updatedAt: transactionData.updatedAt,
+      lastSynced: transactionData.lastSynced,
+      isDirty: false,
+    };
+
+    const restoredTransaction = await localStorageService.restoreTransaction(localTransaction);
+    return this.convertTransactionToHybrid(restoredTransaction);
   }
 }
 

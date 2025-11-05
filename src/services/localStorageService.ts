@@ -729,7 +729,83 @@ class LocalStorageService {
       
       console.log('✅ Local database cleared successfully');
     } catch (error) {
-      console.error('❌ Error clearing local database:', error);
+      console.error('❌ Error clearing database:', error);
+      throw error;
+    }
+  }
+
+  // Restore methods that preserve original IDs (for sync purposes)
+  async restoreWallet(wallet: LocalWallet): Promise<LocalWallet> {
+    try {
+      const now = new Date().toISOString();
+      
+      db.runSync(
+        `INSERT OR REPLACE INTO wallets (
+          id, name, type, balance, color, icon, isActive, 
+          createdAt, updatedAt, lastSynced, isDirty
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          wallet.id,
+          wallet.name,
+          wallet.type,
+          wallet.balance,
+          wallet.color,
+          wallet.icon,
+          wallet.isActive ? 1 : 0,
+          wallet.createdAt || now,
+          wallet.updatedAt || now,
+          wallet.lastSynced || now,
+          0 // Mark as not dirty since it's restored from cloud
+        ]
+      );
+
+      return {
+        ...wallet,
+        createdAt: wallet.createdAt || now,
+        updatedAt: wallet.updatedAt || now,
+        lastSynced: wallet.lastSynced || now,
+        isDirty: false,
+      };
+    } catch (error) {
+      console.error('❌ Error restoring wallet:', error);
+      throw error;
+    }
+  }
+
+  async restoreTransaction(transaction: LocalTransaction): Promise<LocalTransaction> {
+    try {
+      const now = new Date().toISOString();
+      
+      db.runSync(
+        `INSERT OR REPLACE INTO transactions (
+          id, amount, description, type, date, notes, walletId, categoryId,
+          createdAt, updatedAt, lastSynced, isDirty
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          transaction.id,
+          transaction.amount,
+          transaction.description || '',
+          transaction.type,
+          transaction.date,
+          transaction.notes || '',
+          transaction.walletId,
+          transaction.categoryId || null,
+          transaction.createdAt || now,
+          transaction.updatedAt || now,
+          transaction.lastSynced || now,
+          0 // Mark as not dirty since it's restored from cloud
+        ]
+      );
+
+      return {
+        ...transaction,
+        createdAt: transaction.createdAt || now,
+        updatedAt: transaction.updatedAt || now,
+        lastSynced: transaction.lastSynced || now,
+        isDirty: false,
+      };
+    } catch (error) {
+      console.error('❌ Error restoring transaction:', error);
       throw error;
     }
   }

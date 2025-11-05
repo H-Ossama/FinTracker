@@ -1,6 +1,7 @@
 import { GoogleSignin, GoogleSigninButton, statusCodes } from '@react-native-google-signin/google-signin';
 import * as SecureStore from 'expo-secure-store';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { firebaseAuthService } from './firebaseAuthService';
 
 export interface GoogleUser {
   id: string;
@@ -9,6 +10,12 @@ export interface GoogleUser {
   photo?: string;
   idToken: string;
   accessToken: string;
+  user: {
+    id: string;
+    email: string;
+    name: string;
+    photo?: string;
+  };
 }
 
 export interface GoogleAuthResult {
@@ -29,7 +36,14 @@ class GoogleAuthService {
       
       console.log('🔧 Configuring Google Sign-In...');
       console.log('📱 Web Client ID:', webClientId.substring(0, 20) + '...');
-      console.log('📦 Expected package: com.H_Oussama.financetracker');
+      console.log('📦 Expected package: com.oussamaaaaa.finex');
+      console.log('🔑 Expected SHA-1: 04:D1:E2:DF:06:D3:F1:B9:9F:25:36:AA:3D:BC:5F:78:AF:AF:3F:93');
+      
+      // Validate configuration before proceeding
+      if (!webClientId || webClientId.includes('abcdefg')) {
+        throw new Error('Invalid or missing Web Client ID in environment variables');
+      }
+      
       if (iosClientId) {
         console.log('🍎 iOS Client ID:', iosClientId.substring(0, 20) + '...');
       } else {
@@ -49,11 +63,17 @@ class GoogleAuthService {
 
       this.isConfigured = true;
       console.log('✅ Google Sign-In configured successfully');
+      console.log('📋 Configuration validated for package: com.oussamaaaaa.finex');
     } catch (error) {
       console.error('❌ Error configuring Google Sign-In:', error);
       
       // Make Google Sign-In optional - don't throw error
       console.log('⚠️ Google Sign-In configuration failed, but app will continue without it');
+      console.log('🔍 Troubleshooting tips:');
+      console.log('   1. Verify package name: com.oussamaaaaa.finex');
+      console.log('   2. Verify SHA-1: 04:D1:E2:DF:06:D3:F1:B9:9F:25:36:AA:3D:BC:5F:78:AF:AF:3F:93');
+      console.log('   3. Check google-services.json in android/app/');
+      console.log('   4. Verify Web Client ID in .env file');
       this.isConfigured = false;
     }
   }
@@ -89,12 +109,30 @@ class GoogleAuthService {
         photo: result.data.user.photo || undefined,
         idToken: result.data.idToken || tokens.idToken,
         accessToken: tokens.accessToken,
+        user: {
+          id: result.data.user.id,
+          email: result.data.user.email,
+          name: result.data.user.name || result.data.user.email,
+          photo: result.data.user.photo || undefined,
+        },
       };
 
       // Store Google tokens securely
       await this.storeTokens(googleUser);
 
       console.log('✅ Google Sign-In successful:', googleUser.email);
+
+      // Also sign in to Firebase
+      console.log('🔥 Signing in to Firebase...');
+      const firebaseResult = await firebaseAuthService.signInWithGoogle();
+      
+      if (!firebaseResult.success) {
+        console.error('❌ Firebase sign-in failed:', firebaseResult.message);
+        // Continue with Google-only auth for now, Firebase can be optional
+      } else {
+        console.log('✅ Firebase sign-in successful:', firebaseResult.user?.email);
+      }
+
       return { success: true, user: googleUser };
 
     } catch (error: any) {
@@ -109,9 +147,16 @@ class GoogleAuthService {
       } else if (error.code === statusCodes.PLAY_SERVICES_NOT_AVAILABLE) {
         errorMessage = 'Google Play Services not available';
       } else if (error.message?.includes('DEVELOPER_ERROR')) {
-        errorMessage = 'Google Sign-In configuration error. Please check SHA fingerprints and package name in Firebase Console.';
-        console.log('🔍 Debug info: Expected package: com.H_Oussama.financetracker');
-        console.log('🔍 Debug info: SHA-1 should be: 04:D1:E2:DF:06:D3:F1:B9:9F:25:36:AA:3D:BC:5F:78:AF:AF:3F:93');
+        errorMessage = 'Google Sign-In configuration error. Configuration mismatch detected.';
+        console.log('🚨 DEVELOPER_ERROR Details:');
+        console.log('🔍 Debug info: Expected package: com.oussamaaaaa.finex');
+        console.log('🔍 Debug info: Expected SHA-1: 04:D1:E2:DF:06:D3:F1:B9:9F:25:36:AA:3D:BC:5F:78:AF:AF:3F:93');
+        console.log('🔍 Debug info: Web Client ID should be: 1034435232632-cfdpko...');
+        console.log('📝 Troubleshooting steps:');
+        console.log('   1. Rebuild the app with: npx expo run:android');
+        console.log('   2. Verify google-services.json is in android/app/');
+        console.log('   3. Check Firebase Console for package name and SHA-1');
+        console.log('   4. Ensure debug keystore matches SHA-1 fingerprint');
       } else if (error.message) {
         errorMessage = error.message;
       }

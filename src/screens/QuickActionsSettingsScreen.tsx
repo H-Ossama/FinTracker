@@ -350,7 +350,7 @@ const QuickActionsSettingsScreen = () => {
   ), [theme]);
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: theme.colors.background }]} edges={['top', 'bottom']}>
+    <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
       <View style={styles.header}>
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
           <Ionicons name="arrow-back" size={24} color={theme.colors.text} />
@@ -404,7 +404,20 @@ const QuickActionsSettingsScreen = () => {
         )}
       </View>
 
-      <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
+      <ScrollView 
+        style={styles.scrollView} 
+        contentContainerStyle={styles.scrollViewContent}
+        showsVerticalScrollIndicator={true}
+        showsHorizontalScrollIndicator={false}
+        nestedScrollEnabled={true}
+        scrollEnabled={true}
+        horizontal={false}
+        directionalLockEnabled={true}
+        alwaysBounceVertical={false}
+        alwaysBounceHorizontal={false}
+        bounces={true}
+        bouncesZoom={false}
+      >
         {/* Limit Information Section */}
         <View style={styles.limitSection}>
           <View style={[styles.limitCard, { 
@@ -632,6 +645,7 @@ const createStyles = (theme: any) =>
       justifyContent: 'space-between',
       paddingHorizontal: 20,
       paddingVertical: 16,
+      paddingTop: 60,
       borderBottomWidth: 1,
       borderBottomColor: theme.colors.border,
     },
@@ -658,8 +672,11 @@ const createStyles = (theme: any) =>
       fontWeight: '600',
     },
     scrollView: {
-      flex: 1,
       paddingHorizontal: 20,
+    },
+    scrollViewContent: {
+      paddingBottom: 40,
+      flexGrow: 1,
     },
     contentContainer: {
       flex: 1,

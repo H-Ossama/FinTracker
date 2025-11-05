@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, memo, useCallback, useMemo } from 'react';
 import {
   View,
   Text,
@@ -20,6 +20,7 @@ import { useTheme } from '../contexts/ThemeContext';
 import { useLocalization } from '../contexts/LocalizationContext';
 import { useQuickActions } from '../contexts/QuickActionsContext';
 import { hybridDataService } from '../services/hybridDataService';
+import { useOptimizedCallback, useOptimizedMemo, createOptimizedListItem } from '../utils/componentOptimization';
 
 const WalletScreen = () => {
   const { theme } = useTheme();
@@ -742,4 +743,4 @@ const styles = StyleSheet.create({
   },
 });
 
-export default WalletScreen;
+export default memo(WalletScreen);

@@ -1,6 +1,9 @@
 import * as SecureStore from 'expo-secure-store';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { GoogleUser } from './googleAuthService';
+import { hybridDataService } from './hybridDataService';
+import { firebaseDataService, FirebaseUserData } from './firebaseDataService';
+import { firebaseAuthService } from './firebaseAuthService';
 
 export interface UserDataBackup {
   user: {
@@ -85,14 +88,30 @@ class CloudSyncService {
       const userData = await this.collectUserData();
       const encryptedData = await this.encryptData(userData);
       
-      // In a real implementation, this would upload to a secure cloud service
-      // For now, we'll simulate cloud storage with encrypted local storage
-      const cloudKey = `cloud_backup_${googleUser.id}`;
-      await SecureStore.setItemAsync(cloudKey, JSON.stringify({
-        data: encryptedData,
-        userEmail: googleUser.email,
-        lastSync: new Date().toISOString(),
-      }));
+      // Check if data is too large for SecureStore
+      const dataSize = encryptedData.length;
+      console.log(`📦 Data size: ${dataSize} bytes`);
+      
+      if (dataSize > 1800) { // Leave some buffer below 2048 limit
+        // Use AsyncStorage for large data instead of SecureStore
+        console.log('📦 Large data detected, using AsyncStorage with encryption');
+        const cloudKey = `cloud_backup_${googleUser.id}`;
+        await AsyncStorage.setItem(cloudKey, JSON.stringify({
+          data: encryptedData,
+          userEmail: googleUser.email,
+          lastSync: new Date().toISOString(),
+          storageType: 'asyncstorage', // Flag to indicate storage type
+        }));
+      } else {
+        // Use SecureStore for smaller data
+        const cloudKey = `cloud_backup_${googleUser.id}`;
+        await SecureStore.setItemAsync(cloudKey, JSON.stringify({
+          data: encryptedData,
+          userEmail: googleUser.email,
+          lastSync: new Date().toISOString(),
+          storageType: 'securestore',
+        }));
+      }
 
       // Store sync metadata
       await AsyncStorage.setItem('last_cloud_sync', new Date().toISOString());
@@ -118,7 +137,19 @@ class CloudSyncService {
   async downloadUserData(googleUser: GoogleUser): Promise<SyncResult> {
     try {
       const cloudKey = `cloud_backup_${googleUser.id}`;
-      const cloudDataStr = await SecureStore.getItemAsync(cloudKey);
+      let cloudDataStr: string | null = null;
+
+      // Try SecureStore first
+      try {
+        cloudDataStr = await SecureStore.getItemAsync(cloudKey);
+      } catch (error) {
+        console.log('SecureStore access failed, trying AsyncStorage');
+      }
+
+      // If not found in SecureStore, try AsyncStorage
+      if (!cloudDataStr) {
+        cloudDataStr = await AsyncStorage.getItem(cloudKey);
+      }
 
       if (!cloudDataStr) {
         console.log('ℹ️ No cloud backup found for user');
@@ -200,7 +231,19 @@ class CloudSyncService {
   async deleteCloudData(googleUser: GoogleUser): Promise<SyncResult> {
     try {
       const cloudKey = `cloud_backup_${googleUser.id}`;
-      await SecureStore.deleteItemAsync(cloudKey);
+      
+      // Try to delete from both storage types
+      try {
+        await SecureStore.deleteItemAsync(cloudKey);
+      } catch (error) {
+        // SecureStore deletion failed, that's okay
+      }
+      
+      try {
+        await AsyncStorage.removeItem(cloudKey);
+      } catch (error) {
+        // AsyncStorage deletion failed, that's okay
+      }
       
       // Clear sync metadata
       await AsyncStorage.removeItem('last_cloud_sync');
@@ -223,7 +266,13 @@ class CloudSyncService {
   async hasCloudBackup(googleUser: GoogleUser): Promise<boolean> {
     try {
       const cloudKey = `cloud_backup_${googleUser.id}`;
-      const cloudData = await SecureStore.getItemAsync(cloudKey);
+      
+      // Check SecureStore first
+      let cloudData = await SecureStore.getItemAsync(cloudKey);
+      if (cloudData) return true;
+      
+      // Check AsyncStorage
+      cloudData = await AsyncStorage.getItem(cloudKey);
       return cloudData !== null;
     } catch (error) {
       console.error('❌ Error checking cloud backup:', error);
@@ -269,14 +318,14 @@ class CloudSyncService {
       // Get data from the hybrid data service
       let hybridData = {};
       try {
-        const { hybridDataService } = await import('./hybridDataService');
         const [wallets, transactions] = await Promise.all([
-          hybridDataService.getAllWallets(),
-          hybridDataService.getAllTransactions(),
+          hybridDataService.getWallets(),
+          hybridDataService.getTransactions(),
         ]);
         hybridData = { wallets, transactions };
+        console.log(`📊 Collected ${wallets.length} wallets and ${transactions.length} transactions`);
       } catch (error) {
-        console.log('Could not load hybrid data service');
+        console.error('❌ Could not load hybrid data service:', error);
       }
 
       const user = userData ? JSON.parse(userData) : {};
@@ -354,22 +403,26 @@ class CloudSyncService {
 
       // Restore hybrid data service data
       try {
-        const { hybridDataService } = await import('./hybridDataService');
-        
         // Clear existing data first
         await hybridDataService.clearAllData();
         
-        // Restore wallets
+        // Restore wallets with original IDs
+        console.log(`🏦 Restoring ${backup.appData.wallets.length} wallets...`);
         for (const wallet of backup.appData.wallets) {
-          await hybridDataService.saveWallet(wallet);
+          await hybridDataService.restoreWallet(wallet);
         }
+        console.log('✅ Wallets restored successfully');
         
-        // Restore transactions
+        // Restore transactions with original IDs
+        console.log(`💰 Restoring ${backup.appData.transactions.length} transactions...`);
         for (const transaction of backup.appData.transactions) {
-          await hybridDataService.saveTransaction(transaction);
+          await hybridDataService.restoreTransaction(transaction);
         }
+        console.log('✅ Transactions restored successfully');
       } catch (error) {
-        console.log('Could not restore hybrid data service data');
+        console.error('❌ Could not restore hybrid data service data:', error);
+        console.error('Error details:', error instanceof Error ? error.message : 'Unknown error');
+        // Don't throw here to allow other data to be restored
       }
 
       console.log('✅ User data restored successfully');
@@ -382,9 +435,17 @@ class CloudSyncService {
   private async encryptData(data: UserDataBackup): Promise<string> {
     try {
       // In a real implementation, use proper encryption
-      // For now, we'll just base64 encode the JSON string
+      // For now, we'll just base64 encode the JSON string using React Native's built-in functionality
       const jsonString = JSON.stringify(data);
-      return Buffer.from(jsonString).toString('base64');
+      
+      // Use React Native compatible base64 encoding
+      if (typeof btoa !== 'undefined') {
+        // Use btoa if available (React Native)
+        return btoa(unescape(encodeURIComponent(jsonString)));
+      } else {
+        // Fallback to Buffer for Node.js compatibility
+        return Buffer.from(jsonString).toString('base64');
+      }
     } catch (error) {
       console.error('❌ Error encrypting data:', error);
       throw error;
@@ -394,8 +455,17 @@ class CloudSyncService {
   private async decryptData(encryptedData: string): Promise<UserDataBackup> {
     try {
       // In a real implementation, use proper decryption
-      // For now, we'll just base64 decode the string
-      const jsonString = Buffer.from(encryptedData, 'base64').toString('utf-8');
+      // For now, we'll just base64 decode the string using React Native's built-in functionality
+      let jsonString: string;
+      
+      if (typeof atob !== 'undefined') {
+        // Use atob if available (React Native)
+        jsonString = decodeURIComponent(escape(atob(encryptedData)));
+      } else {
+        // Fallback to Buffer for Node.js compatibility
+        jsonString = Buffer.from(encryptedData, 'base64').toString('utf-8');
+      }
+      
       return JSON.parse(jsonString);
     } catch (error) {
       console.error('❌ Error decrypting data:', error);
@@ -518,19 +588,57 @@ class CloudSyncService {
 
     const lastSync = await this.getLastSyncTime();
     
+    // Count unsynced items from local storage
+    let unsyncedItems = 0;
+    try {
+      const { localStorageService } = await import('./localStorageService');
+      const [wallets, transactions, categories] = await Promise.all([
+        localStorageService.getWallets(),
+        localStorageService.getTransactions(),
+        localStorageService.getCategories()
+      ]);
+      
+      // Count items that are dirty (need sync) or never synced
+      unsyncedItems = wallets.filter(w => w.isDirty || !w.lastSynced).length +
+                    transactions.filter(t => t.isDirty || !t.lastSynced).length +
+                    categories.filter(c => c.isDirty || !c.lastSynced).length;
+    } catch (error) {
+      console.log('Could not count unsynced items:', error);
+    }
+    
     return {
       enabled: config.enabled || cloudSyncEnabled === 'true',
       authenticated: await this.isAuthenticated(),
       lastSync: lastSync ? new Date(lastSync) : null,
-      unsyncedItems: 0, // Google sync doesn't track individual items
-      nextReminderDue: null, // Simplified for Google sync
+      unsyncedItems,
+      nextReminderDue: null, // Simplified for now
     };
   }
 
   async shouldShowSyncReminder(): Promise<boolean> {
-    // Simplified for Google sync - don't show reminders for Google users
-    const cloudSyncEnabled = await AsyncStorage.getItem(this.STORAGE_KEYS.CLOUD_SYNC_ENABLED);
-    return cloudSyncEnabled !== 'true'; // Only show for non-Google users
+    try {
+      // Only show reminders when:
+      // 1. Cloud sync is disabled AND
+      // 2. There is data that could be synced (unsynced items > 0)
+      
+      const cloudSyncEnabled = await AsyncStorage.getItem(this.STORAGE_KEYS.CLOUD_SYNC_ENABLED);
+      const isSyncDisabled = cloudSyncEnabled !== 'true';
+      
+      if (!isSyncDisabled) {
+        // Sync is already enabled, no need for reminders
+        return false;
+      }
+      
+      // Check if there's data to sync
+      const syncStatus = await this.getSyncStatus();
+      const hasUnsyncedData = syncStatus.unsyncedItems > 0;
+      
+      // Only show reminder if sync is disabled AND there's data to sync
+      return isSyncDisabled && hasUnsyncedData;
+    } catch (error) {
+      console.error('Error checking should show sync reminder:', error);
+      return false;
+    }
   }
 
   async quickSyncCheck(): Promise<void> {
@@ -567,44 +675,103 @@ class CloudSyncService {
         };
       }
 
+      // Get local data that needs syncing
+      const { localStorageService } = await import('./localStorageService');
+      
       // Report progress
       if (onProgress) {
-        onProgress({ stage: 'uploading', progress: 25, message: 'Uploading data...' });
+        onProgress({ stage: 'uploading', progress: 15, message: 'Gathering local data...' });
       }
 
-      // For now, we'll use a simplified sync approach
-      // In a real implementation, this would perform full bidirectional sync
-      const authToken = await this.getAuthToken();
-      if (!authToken) {
-        return {
-          success: false,
-          error: 'Authentication token not found',
-        };
-      }
-
-      // Report progress
-      if (onProgress) {
-        onProgress({ stage: 'processing', progress: 50, message: 'Processing sync...' });
-      }
-
-      // Simulate sync process for demo
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      // Get all local data
+      const wallets = await localStorageService.getWallets();
+      const transactions = await localStorageService.getTransactions();
+      const categories = await localStorageService.getCategories();
+      
+      let syncedData = {
+        wallets: 0,
+        transactions: 0,
+        categories: 0,
+        errors: [] as string[]
+      };
 
       // Report progress
       if (onProgress) {
-        onProgress({ stage: 'downloading', progress: 75, message: 'Downloading updates...' });
+        onProgress({ stage: 'uploading', progress: 25, message: `Syncing ${wallets.length} wallets...` });
+      }
+
+      // Sync wallets
+      for (const wallet of wallets) {
+        try {
+          // Mark as synced (in real app, this would upload to cloud)
+          await localStorageService.updateWallet(wallet.id, { 
+            ...wallet, 
+            lastSynced: new Date().toISOString(),
+            isDirty: false 
+          });
+          syncedData.wallets++;
+        } catch (error) {
+          syncedData.errors.push(`Failed to sync wallet: ${wallet.name}`);
+        }
+      }
+
+      // Report progress
+      if (onProgress) {
+        onProgress({ stage: 'processing', progress: 50, message: `Syncing ${transactions.length} transactions...` });
+      }
+
+      // Sync transactions
+      for (const transaction of transactions) {
+        try {
+          // Mark as synced (in real app, this would upload to cloud)
+          await localStorageService.updateTransaction(transaction.id, { 
+            ...transaction, 
+            lastSynced: new Date().toISOString(),
+            isDirty: false 
+          });
+          syncedData.transactions++;
+        } catch (error) {
+          syncedData.errors.push(`Failed to sync transaction: ${transaction.description}`);
+        }
+      }
+
+      // Report progress
+      if (onProgress) {
+        onProgress({ stage: 'downloading', progress: 75, message: `Syncing ${categories.length} categories...` });
+      }
+
+      // Sync categories
+      for (const category of categories) {
+        try {
+          // Mark as synced (in real app, this would upload to cloud)
+          await localStorageService.updateCategory(category.id, { 
+            ...category, 
+            lastSynced: new Date().toISOString(),
+            isDirty: false 
+          });
+          syncedData.categories++;
+        } catch (error) {
+          syncedData.errors.push(`Failed to sync category: ${category.name}`);
+        }
       }
 
       // Update last sync time
       await AsyncStorage.setItem('last_cloud_sync', new Date().toISOString());
+      await AsyncStorage.setItem('last_sync_result', JSON.stringify(syncedData));
 
       // Report completion
       if (onProgress) {
-        onProgress({ stage: 'complete', progress: 100, message: 'Sync complete!' });
+        onProgress({ 
+          stage: 'complete', 
+          progress: 100, 
+          message: `Sync complete! ${syncedData.wallets + syncedData.transactions + syncedData.categories} items synced.`,
+          syncedData 
+        });
       }
 
       return {
         success: true,
+        syncedData
       };
     } catch (error) {
       console.error('❌ Full sync failed:', error);

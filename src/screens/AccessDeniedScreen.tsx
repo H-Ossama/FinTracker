@@ -18,7 +18,15 @@ interface AccessDeniedScreenProps {
 
 const AccessDeniedScreen: React.FC<AccessDeniedScreenProps> = ({ onReturnToLogin }) => {
   const { theme } = useTheme();
-  const { accessDenied, clearAccessDenial } = useAuth();
+  const auth = useAuth();
+  
+  // Defensive programming: handle case where auth context might not be fully initialized
+  const accessDenied = auth?.accessDenied || { 
+    isDenied: false, 
+    reason: 'Access denied', 
+    details: 'Please try signing in again.' 
+  };
+  const clearAccessDenial = auth?.clearAccessDenial || (() => {});
 
   const handleReturnToLogin = () => {
     clearAccessDenial();

@@ -580,4 +580,4 @@ const styles = StyleSheet.create({
   },
 });
 
-export default AddExpenseModal;
+export default React.memo(AddExpenseModal);

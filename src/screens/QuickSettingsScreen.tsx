@@ -34,6 +34,7 @@ const QuickSettingsScreen = () => {
   const [showHideBalanceDropdown, setShowHideBalanceDropdown] = useState(false);
   const [showLanguageModal, setShowLanguageModal] = useState(false);
   const [showCurrencyModal, setShowCurrencyModal] = useState(false);
+  const [versionTapCount, setVersionTapCount] = useState(0);
 
   const styles = createStyles(theme);
 
@@ -181,7 +182,7 @@ const QuickSettingsScreen = () => {
           style: 'destructive',
           onPress: () => {
             signOut();
-            navigation.navigate('SignIn' as never);
+            // Navigation will automatically switch to SignIn screen when authentication state changes
           },
         },
       ]
@@ -270,6 +271,32 @@ const QuickSettingsScreen = () => {
   const setAutoLockTime = (time: string) => {
     // Save to storage
     Alert.alert('Success', `Auto-lock set to: ${time === 'immediate' ? 'Immediately' : time === 'never' ? 'Never' : time}`);
+  };
+
+  const handleVersionTap = () => {
+    const newCount = versionTapCount + 1;
+    setVersionTapCount(newCount);
+    
+    if (newCount === 5) {
+      // Reset count and navigate to development tools
+      setVersionTapCount(0);
+      Alert.alert(
+        '🛠️ Developer Mode Activated',
+        'You have unlocked the development tools! These tools are intended for developers and testers only.',
+        [
+          { text: 'Cancel', style: 'cancel' },
+          {
+            text: 'Open Dev Tools',
+            onPress: () => navigation.navigate('DevelopmentTools' as never),
+          },
+        ]
+      );
+    }
+    
+    // Reset count after 3 seconds of inactivity
+    setTimeout(() => {
+      setVersionTapCount(0);
+    }, 3000);
   };
 
   const handleDataEncryption = () => {
@@ -557,23 +584,28 @@ const QuickSettingsScreen = () => {
       color: '#9C27B0',
       onPress: handleSecureBackup,
     },
-    {
-      id: 'security-audit',
-      title: t('settings_screen_security_audit'),
-      subtitle: t('settings_screen_security_audit_desc'),
-      icon: 'shield-checkmark-outline',
-      color: '#E91E63',
-      onPress: handleSecurityAudit,
-    },
   ];
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: theme.colors.background }]} edges={['top', 'bottom']}>
+    <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
       <LinearGradient
         colors={[theme.colors.gradientStart, theme.colors.gradientEnd]}
         style={styles.gradient}
       >
-        <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
+        <ScrollView 
+          style={styles.scrollView} 
+          contentContainerStyle={styles.scrollViewContent}
+          showsVerticalScrollIndicator={true}
+          showsHorizontalScrollIndicator={false}
+          nestedScrollEnabled={true}
+          scrollEnabled={true}
+          horizontal={false}
+          directionalLockEnabled={true}
+          alwaysBounceVertical={false}
+          alwaysBounceHorizontal={false}
+          bounces={true}
+          bouncesZoom={false}
+        >
           {/* Header */}
           <View style={styles.header}>
             <TouchableOpacity onPress={handleGoBack} style={styles.backButton}>
@@ -909,9 +941,11 @@ const QuickSettingsScreen = () => {
 
           {/* App Version */}
           <View style={styles.versionContainer}>
-            <Text style={[styles.versionText, { color: theme.colors.textSecondary }]}>
-              {t('settings_screen_app_version')}
-            </Text>
+            <TouchableOpacity onPress={handleVersionTap} activeOpacity={0.8}>
+              <Text style={[styles.versionText, { color: theme.colors.textSecondary }]}>
+                {t('settings_screen_app_version')}
+              </Text>
+            </TouchableOpacity>
             <Text style={[styles.versionText, { color: theme.colors.textSecondary }]}>
               {t('settings_screen_built_with_love')}
             </Text>
@@ -1029,7 +1063,7 @@ const QuickSettingsScreen = () => {
           </View>
         </View>
       </Modal>
-    </SafeAreaView>
+    </View>
   );
 };
 
@@ -1080,14 +1114,18 @@ const createStyles = (theme: any) =>
       flex: 1,
     },
     scrollView: {
-      flex: 1,
       paddingHorizontal: 20,
+    },
+    scrollViewContent: {
+      paddingBottom: 40,
+      flexGrow: 1,
     },
     header: {
       flexDirection: 'row',
       justifyContent: 'space-between',
       alignItems: 'center',
       paddingVertical: 20,
+      paddingTop: 60,
     },
     backButton: {
       padding: 8,

@@ -40,8 +40,6 @@ const MoreScreen = () => {
   const [billsLoading, setBillsLoading] = useState(true);
   const [billsDropdownVisible, setBillsDropdownVisible] = useState(false);
   const [dataStats, setDataStats] = useState<any>(null);
-  const [isDemoMode, setIsDemoMode] = useState(false);
-  const [demoModeLoading, setDemoModeLoading] = useState(false);
 
   const styles = createStyles(theme);
 
@@ -49,8 +47,6 @@ const MoreScreen = () => {
     loadGoals();
     loadBills();
     loadDataStats();
-    checkDemoMode();
-    // Remove automatic sample data initialization - only seed when user explicitly requests it
   }, []);
 
   const loadGoals = async () => {
@@ -80,78 +76,6 @@ const MoreScreen = () => {
       await loadDataStats(); // Refresh stats after initialization
     } catch (error) {
       console.error('Error initializing sample data:', error);
-    }
-  };
-
-  const checkDemoMode = async () => {
-    try {
-      const { hybridDataService } = await import('../services/hybridDataService');
-      const demoModeEnabled = await hybridDataService.isDemoModeEnabled();
-      setIsDemoMode(demoModeEnabled);
-    } catch (error) {
-      console.error('Error checking demo mode:', error);
-    }
-  };
-
-  const handleClearTestAccounts = async () => {
-    Alert.alert(
-      'Clear All Test Accounts',
-      'This will remove all registered test accounts. This action cannot be undone.\n\nNote: This is a development feature for testing the authentication system.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Clear All',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              const AsyncStorage = await import('@react-native-async-storage/async-storage');
-              await AsyncStorage.default.removeItem('registered_users');
-              Alert.alert('Success', 'All test accounts have been cleared. You can now test user registration from scratch.');
-            } catch (error) {
-              Alert.alert('Error', 'Failed to clear test accounts');
-            }
-          }
-        }
-      ]
-    );
-  };
-
-  const handleDemoModeToggle = async () => {
-    try {
-      setDemoModeLoading(true);
-      const { hybridDataService } = await import('../services/hybridDataService');
-      
-      let result;
-      if (isDemoMode) {
-        result = await hybridDataService.disableDemoMode();
-      } else {
-        result = await hybridDataService.enableDemoMode();
-      }
-      
-      if (result.success) {
-        setIsDemoMode(!isDemoMode);
-        // Refresh all data
-        await Promise.all([
-          loadGoals(),
-          loadBills(),
-          loadDataStats()
-        ]);
-        
-        Alert.alert(
-          isDemoMode ? 'Demo Mode Disabled' : 'Demo Mode Enabled',
-          isDemoMode 
-            ? 'All demo data has been cleared. You now have a fresh start.'
-            : 'Sample data has been added to help you explore the app features.',
-          [{ text: 'OK' }]
-        );
-      } else {
-        Alert.alert('Error', result.error || 'Failed to toggle demo mode');
-      }
-    } catch (error) {
-      console.error('Error toggling demo mode:', error);
-      Alert.alert('Error', 'Failed to toggle demo mode');
-    } finally {
-      setDemoModeLoading(false);
     }
   };
 
@@ -242,29 +166,6 @@ const MoreScreen = () => {
       ],
     },
     {
-      title: 'Demo Mode',
-      items: [
-        {
-          id: 'demo_mode',
-          title: isDemoMode ? 'Disable Demo Mode' : 'Enable Demo Mode',
-          subtitle: isDemoMode 
-            ? 'Clear sample data and start fresh'
-            : 'Add sample data to explore features',
-          icon: isDemoMode ? 'close-circle' : 'play-circle',
-          color: isDemoMode ? '#FF6B6B' : '#32D74B',
-          isToggle: true,
-          toggleValue: isDemoMode,
-        },
-        ...(isDemoMode ? [{
-          id: 'clear_accounts',
-          title: 'Clear All Test Accounts',
-          subtitle: 'Remove all registered test accounts (Dev Only)',
-          icon: 'trash',
-          color: '#FF6B6B',
-        }] : []),
-      ],
-    },
-    {
       title: t('more_screen_reports_export'),
       items: [
         {
@@ -297,11 +198,7 @@ const MoreScreen = () => {
       key={item.id} 
       style={styles.menuItem}
       onPress={() => {
-        if (item.id === 'demo_mode') {
-          handleDemoModeToggle();
-        } else if (item.id === 'clear_accounts') {
-          handleClearTestAccounts();
-        } else if (item.id === 'backup') {
+        if (item.id === 'backup') {
           setShowSyncModal(true);
         } else if (item.id === 'goals') {
           navigation.navigate('SavingsGoals' as never);
@@ -312,7 +209,6 @@ const MoreScreen = () => {
         }
         // Add other navigation handlers here as needed
       }}
-      disabled={item.id === 'demo_mode' && demoModeLoading}
     >
       <View style={styles.menuItemLeft}>
         <View style={[styles.menuIcon, { backgroundColor: item.color }]}>
@@ -329,11 +225,7 @@ const MoreScreen = () => {
             <Text style={styles.badgeText}>{item.badge}</Text>
           </View>
         )}
-        {item.id === 'demo_mode' && demoModeLoading ? (
-          <ActivityIndicator size="small" color={theme.colors.primary} />
-        ) : (
-          <Ionicons name="chevron-forward" size={16} color="#C7C7CC" />
-        )}
+        <Ionicons name="chevron-forward" size={16} color="#C7C7CC" />
       </View>
     </TouchableOpacity>
   );

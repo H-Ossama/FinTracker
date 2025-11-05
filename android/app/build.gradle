@@ -87,7 +87,7 @@ android {
     buildToolsVersion rootProject.ext.buildToolsVersion
     compileSdk rootProject.ext.compileSdkVersion
 
-    namespace 'com.oussamaaaaa.finex'
+    namespace 'com.H_Oussama.financetracker'
     defaultConfig {
         applicationId 'com.H_Oussama.financetracker'
         minSdkVersion rootProject.ext.minSdkVersion
@@ -180,6 +180,3 @@ dependencies {
         implementation jscFlavor
     }
 }
-
-// Apply Google Services plugin
-apply plugin: 'com.google.gms.google-services'
