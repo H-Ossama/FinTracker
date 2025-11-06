@@ -26,11 +26,13 @@ async function main() {
 
   console.log('📂 Creating default categories...');
   for (const category of categories) {
-    await prisma.category.upsert({
-      where: { name: category.name },
-      update: {},
-      create: category,
-    });
+    try {
+      await prisma.category.create({
+        data: category,
+      });
+    } catch (e) {
+      // Category already exists, skip
+    }
   }
 
   console.log('💱 Creating currency rates...');
