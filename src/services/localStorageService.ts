@@ -287,6 +287,26 @@ class LocalStorageService {
     }
   }
 
+  async updateTransaction(id: string, updates: Partial<LocalTransaction>): Promise<void> {
+    const now = new Date().toISOString();
+    try {
+      const setClause = Object.keys(updates)
+        .filter(key => key !== 'id' && key !== 'createdAt')
+        .map(key => `${key} = ?`)
+        .join(', ');
+      
+      const values = Object.entries(updates)
+        .filter(([key]) => key !== 'id' && key !== 'createdAt')
+        .map(([_, value]) => value);
+      
+      const statement = db.prepareSync(`UPDATE transactions SET ${setClause}, updatedAt = ?, isDirty = 0 WHERE id = ?`);
+      statement.executeSync([...values, now, id]);
+    } catch (error) {
+      console.error('Error updating transaction:', error);
+      throw error;
+    }
+  }
+
   // Category Operations
   async seedDefaultCategories(): Promise<void> {
     const defaultCategories = [
@@ -341,6 +361,26 @@ class LocalStorageService {
       })) as LocalCategory[];
     } catch (error) {
       console.error('Error getting categories:', error);
+      throw error;
+    }
+  }
+
+  async updateCategory(id: string, updates: Partial<LocalCategory>): Promise<void> {
+    const now = new Date().toISOString();
+    try {
+      const setClause = Object.keys(updates)
+        .filter(key => key !== 'id' && key !== 'createdAt')
+        .map(key => `${key} = ?`)
+        .join(', ');
+      
+      const values = Object.entries(updates)
+        .filter(([key]) => key !== 'id' && key !== 'createdAt')
+        .map(([_, value]) => value);
+      
+      const statement = db.prepareSync(`UPDATE categories SET ${setClause}, updatedAt = ?, isDirty = 0 WHERE id = ?`);
+      statement.executeSync([...values, now, id]);
+    } catch (error) {
+      console.error('Error updating category:', error);
       throw error;
     }
   }

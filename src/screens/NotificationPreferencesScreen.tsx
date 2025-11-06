@@ -22,7 +22,7 @@ import { useTheme } from '../contexts/ThemeContext';
 import { useNavigation } from '@react-navigation/native';
 import { useNotification } from '../contexts/NotificationContext';
 import { useLocalization } from '../contexts/LocalizationContext';
-import { notificationService } from '../services/notificationService';
+// Notification service will be lazy loaded
 
 interface NotificationPreferences {
   enablePushNotifications: boolean;
@@ -213,6 +213,7 @@ const NotificationPreferencesScreen = () => {
   };
 
   const doSendTestNotification = async () => {
+    const { notificationService } = await import('../services/notificationService');
     await notificationService.scheduleLocalNotification(
       '🧪 ' + t('notificationPrefs.testNotificationTitle'),
       testNotificationText || t('notificationPrefs.testNotificationDefault'),

@@ -71,7 +71,19 @@ const HomeScreen = () => {
 
   // Load all data
   useEffect(() => {
-    loadAllData();
+    let isMounted = true;
+    
+    const loadData = async () => {
+      if (isMounted) {
+        await loadAllData();
+      }
+    };
+    
+    loadData();
+    
+    return () => {
+      isMounted = false;
+    };
   }, []);
 
   // Register quick actions
@@ -84,7 +96,19 @@ const HomeScreen = () => {
   // Reload data when screen comes into focus (e.g., after bill payment)
   useFocusEffect(
     useCallback(() => {
-      loadAllData();
+      let isMounted = true;
+      
+      const loadData = async () => {
+        if (isMounted) {
+          await loadAllData();
+        }
+      };
+      
+      loadData();
+      
+      return () => {
+        isMounted = false;
+      };
     }, [])
   );
 

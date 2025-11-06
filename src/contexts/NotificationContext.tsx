@@ -421,7 +421,7 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
         token,
         deviceId: 'device-id', // You might want to get actual device ID
         platform: 'mobile',
-        appVersion: '2.5.1',
+        appVersion: '2.5.5',
       });
     } catch (error) {
       console.error('Error registering push token with backend:', error);

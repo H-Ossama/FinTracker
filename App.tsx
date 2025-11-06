@@ -16,28 +16,49 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { View, Text, ActivityIndicator, StyleSheet, InteractionManager } from 'react-native';
 
 // Lazy load components to reduce initial bundle size and improve performance
-const SwipeableBottomTabNavigator = lazy(() => import('./src/components/SwipeableBottomTabNavigator'));
-const TouchActivityWrapper = lazy(() => import('./src/components/TouchActivityWrapper'));
-const AddIncomeScreen = lazy(() => import('./src/screens/AddIncomeScreen'));
-const BorrowedMoneyHistoryScreen = lazy(() => import('./src/screens/BorrowedMoneyHistoryScreen'));
-const TransactionsHistoryScreen = lazy(() => import('./src/screens/TransactionsHistoryScreen'));
-const NotificationCenterScreen = lazy(() => import('./src/screens/NotificationCenterScreen'));
-const NotificationPreferencesScreen = lazy(() => import('./src/screens/NotificationPreferencesScreen'));
-const SignUpScreen = lazy(() => import('./src/screens/SignUpScreen'));
-const SignInScreen = lazy(() => import('./src/screens/SignInScreen'));
+const loadSwipeableBottomTabNavigator = () => import('./src/components/SwipeableBottomTabNavigator');
+const SwipeableBottomTabNavigator = lazy(loadSwipeableBottomTabNavigator);
+const loadTouchActivityWrapper = () => import('./src/components/TouchActivityWrapper');
+const TouchActivityWrapper = lazy(loadTouchActivityWrapper);
+const loadAddIncomeScreen = () => import('./src/screens/AddIncomeScreen');
+const AddIncomeScreen = lazy(loadAddIncomeScreen);
+const loadBorrowedMoneyHistoryScreen = () => import('./src/screens/BorrowedMoneyHistoryScreen');
+const BorrowedMoneyHistoryScreen = lazy(loadBorrowedMoneyHistoryScreen);
+const loadTransactionsHistoryScreen = () => import('./src/screens/TransactionsHistoryScreen');
+const TransactionsHistoryScreen = lazy(loadTransactionsHistoryScreen);
+const loadNotificationCenterScreen = () => import('./src/screens/NotificationCenterScreen');
+const NotificationCenterScreen = lazy(loadNotificationCenterScreen);
+const loadNotificationPreferencesScreen = () => import('./src/screens/NotificationPreferencesScreen');
+const NotificationPreferencesScreen = lazy(loadNotificationPreferencesScreen);
+const loadSignUpScreen = () => import('./src/screens/SignUpScreen');
+const SignUpScreen = lazy(loadSignUpScreen);
+const loadSignInScreen = () => import('./src/screens/SignInScreen');
+const SignInScreen = lazy(loadSignInScreen);
 import AccessDeniedScreen from './src/screens/AccessDeniedScreen'; // Import directly instead of lazy loading
-const UserProfileScreen = lazy(() => import('./src/screens/UserProfileScreen'));
-const SavingsGoalsScreen = lazy(() => import('./src/screens/SavingsGoalsScreen'));
-const QuickSettingsScreen = lazy(() => import('./src/screens/QuickSettingsScreen'));
-const QuickActionsSettingsScreen = lazy(() => import('./src/screens/QuickActionsSettingsScreen'));
-const AppLockSettingsScreen = lazy(() => import('./src/screens/AppLockSettingsScreen'));
-const PinSetupScreen = lazy(() => import('./src/screens/PinSetupScreen'));
-const AppLockScreen = lazy(() => import('./src/screens/AppLockScreen'));
-const BillsTrackerScreen = lazy(() => import('./src/screens/BillsTrackerScreen'));
-const BudgetPlannerScreen = lazy(() => import('./src/screens/BudgetPlannerScreen'));
-const RemindersScreen = lazy(() => import('./src/screens/RemindersScreen'));
-const SyncTestScreen = lazy(() => import('./src/screens/SyncTestScreen'));
-const DevelopmentToolsScreen = lazy(() => import('./src/screens/DevelopmentToolsScreen'));
+const loadUserProfileScreen = () => import('./src/screens/UserProfileScreen');
+const UserProfileScreen = lazy(loadUserProfileScreen);
+const loadSavingsGoalsScreen = () => import('./src/screens/SavingsGoalsScreen');
+const SavingsGoalsScreen = lazy(loadSavingsGoalsScreen);
+const loadQuickSettingsScreen = () => import('./src/screens/QuickSettingsScreen');
+const QuickSettingsScreen = lazy(loadQuickSettingsScreen);
+const loadQuickActionsSettingsScreen = () => import('./src/screens/QuickActionsSettingsScreen');
+const QuickActionsSettingsScreen = lazy(loadQuickActionsSettingsScreen);
+const loadAppLockSettingsScreen = () => import('./src/screens/AppLockSettingsScreen');
+const AppLockSettingsScreen = lazy(loadAppLockSettingsScreen);
+const loadPinSetupScreen = () => import('./src/screens/PinSetupScreen');
+const PinSetupScreen = lazy(loadPinSetupScreen);
+const loadAppLockScreen = () => import('./src/screens/AppLockScreen');
+const AppLockScreen = lazy(loadAppLockScreen);
+const loadBillsTrackerScreen = () => import('./src/screens/BillsTrackerScreen');
+const BillsTrackerScreen = lazy(loadBillsTrackerScreen);
+const loadBudgetPlannerScreen = () => import('./src/screens/BudgetPlannerScreen');
+const BudgetPlannerScreen = lazy(loadBudgetPlannerScreen);
+const loadRemindersScreen = () => import('./src/screens/RemindersScreen');
+const RemindersScreen = lazy(loadRemindersScreen);
+const loadSyncTestScreen = () => import('./src/screens/SyncTestScreen');
+const SyncTestScreen = lazy(loadSyncTestScreen);
+const loadDevelopmentToolsScreen = () => import('./src/screens/DevelopmentToolsScreen');
+const DevelopmentToolsScreen = lazy(loadDevelopmentToolsScreen);
 import { ThemeProvider, useTheme } from './src/contexts/ThemeContext';
 import { LocalizationProvider } from './src/contexts/LocalizationContext';
 import { AuthProvider, useAuth } from './src/contexts/AuthContext';
@@ -47,7 +68,8 @@ import { hybridDataService, AppInitResult } from './src/services/hybridDataServi
 import AppLockService from './src/services/appLockService';
 import BatteryOptimizer from './src/utils/batteryOptimizer';
 // import { initializeAppOptimizations } from './src/utils/optimizations';
-const SyncReminderBanner = lazy(() => import('./src/components/SyncReminderBanner'));
+const loadSyncReminderBanner = () => import('./src/components/SyncReminderBanner');
+const SyncReminderBanner = lazy(loadSyncReminderBanner);
 import { navigationRef, onNavigationReady } from './src/navigation/navigationService';
 
 const Stack = createStackNavigator();
@@ -124,6 +146,9 @@ const AppNavigator = React.memo(() => {
       }
     };
   }, [isAuthenticated, initializeAppLock, appLockService]);
+
+  // Removed screen preloading to improve startup performance
+  // Screens will now load only when navigated to (true lazy loading)
 
   if (authLoading || (isAuthenticated && !appLockInitialized)) {
     return <LoadingScreen />;
@@ -365,7 +390,6 @@ export default function App() {
     return () => {
       // Cleanup battery optimizer and all optimizations on app unmount
       batteryOptimizer.cleanup();
-      cleanupOptimizations();
     };
   }, []);
 

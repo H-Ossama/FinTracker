@@ -15,8 +15,7 @@ import { useIsFocused, useNavigation, useRoute } from '@react-navigation/native'
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useTheme } from '../contexts/ThemeContext';
 import { useNotification } from '../contexts/NotificationContext';
-import { NotificationService } from '../services/notificationService';
-import { hybridDataService } from '../services/hybridDataService';
+// Services will be lazy loaded when needed
 import AddReminderModal from '../components/AddReminderModal';
 import ReminderCard from '../components/ReminderCard';
 
@@ -243,6 +242,7 @@ export default function RemindersScreen() {
 
       // Test 1: Immediate notification
       console.log('🧪 Testing immediate notification...');
+      const { NotificationService } = await import('../services/notificationService');
       await NotificationService.scheduleLocalNotification(
         'Immediate Test',
         'This should appear right now',
@@ -347,6 +347,7 @@ export default function RemindersScreen() {
       setReminders(storedReminders);
 
       try {
+        const { NotificationService } = await import('../services/notificationService');
         const scheduled = await NotificationService.getScheduledNotifications();
         const map = new Map<string, string>();
 
@@ -570,6 +571,7 @@ export default function RemindersScreen() {
       }
 
       // Create transaction using hybrid data service
+      const { hybridDataService } = await import('../services/hybridDataService');
       await hybridDataService.addTransaction({
         amount: reminder.amount,
         description: `Auto: ${reminder.title}`,

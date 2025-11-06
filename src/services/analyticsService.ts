@@ -66,6 +66,18 @@ interface RecommendationsData {
 class AnalyticsService {
   // For now, we'll use local calculations only
   // Later, we can add Firebase Functions for advanced analytics
+  private loggedMessages: Set<string> = new Set();
+
+  /**
+   * Log a message only once to avoid console spam
+   */
+  private logOnce(message: string, emoji: string = ''): void {
+    const key = `${emoji}${message}`;
+    if (!this.loggedMessages.has(key)) {
+      console.log(`${emoji} ${message}`.trim());
+      this.loggedMessages.add(key);
+    }
+  }
 
   async getSpendingByCategory(period: 'week' | 'month' | 'year'): Promise<ApiResponse<SpendingData>> {
     try {

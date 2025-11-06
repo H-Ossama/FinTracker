@@ -487,6 +487,70 @@ class HybridDataService {
     }
   }
 
+  async getUnsyncedOverview(): Promise<{
+    wallets: number;
+    transactions: number;
+    categories: number;
+    totalItems: number;
+  }> {
+    try {
+      const dirtyItems = await localStorageService.getDirtyItems();
+      
+      const walletsCount = dirtyItems.wallets.length;
+      const transactionsCount = dirtyItems.transactions.length;
+      const categoriesCount = dirtyItems.categories.length;
+      
+      return {
+        wallets: walletsCount,
+        transactions: transactionsCount,
+        categories: categoriesCount,
+        totalItems: walletsCount + transactionsCount + categoriesCount,
+      };
+    } catch (error) {
+      console.error('Error getting unsynced overview:', error);
+      return {
+        wallets: 0,
+        transactions: 0,
+        categories: 0,
+        totalItems: 0,
+      };
+    }
+  }
+
+  async saveLastSyncDetails(syncData: any): Promise<void> {
+    try {
+      const syncDetails = {
+        timestamp: new Date().toISOString(),
+        wallets: syncData.wallets || 0,
+        transactions: syncData.transactions || 0,
+        categories: syncData.categories || 0,
+        errors: syncData.errors || [],
+      };
+      await AsyncStorage.setItem('lastSyncDetails', JSON.stringify(syncDetails));
+    } catch (error) {
+      console.error('Error saving last sync details:', error);
+    }
+  }
+
+  async getLastSyncDetails(): Promise<{
+    timestamp: string;
+    wallets: number;
+    transactions: number;
+    categories: number;
+    errors: string[];
+  } | null> {
+    try {
+      const details = await AsyncStorage.getItem('lastSyncDetails');
+      if (details) {
+        return JSON.parse(details);
+      }
+      return null;
+    } catch (error) {
+      console.error('Error getting last sync details:', error);
+      return null;
+    }
+  }
+
   async shouldShowSyncReminder(): Promise<boolean> {
     try {
       // Check if sync reminders are suppressed due to auto-sync

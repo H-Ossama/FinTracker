@@ -104,6 +104,7 @@ model User {
   notificationPreferences NotificationPreferences?
   pushTokens    PushToken[]
   recurringTransactions RecurringTransaction[]
+  dataBackup    UserDataBackup?
 
   @@map("users")
 }
@@ -447,4 +448,24 @@ model PushToken {
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@map("push_tokens")
+}
+
+model UserDataBackup {
+  id           String @id @default(cuid())
+  userId       String @unique
+  backupData   String @db.Text // JSON stringified backup data
+  version      String @default("1.0.0")
+  lastBackup   DateTime @default(now()) @updatedAt
+  
+  // Metadata
+  dataSize     Int?    // Size in bytes
+  checksumMd5  String? // For integrity verification
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relationships
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("user_data_backups")
 }

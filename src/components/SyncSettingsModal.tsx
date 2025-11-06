@@ -38,6 +38,7 @@ export const SyncSettingsModal: React.FC<SyncSettingsProps> = ({
   const { theme } = useTheme();
   const { user } = useAuth();
   const { headerPadding } = useSafeAreaHelper();
+  const isMountedRef = React.useRef(true);
   const [syncStatus, setSyncStatus] = useState({
     enabled: false,
     authenticated: false,
@@ -62,20 +63,41 @@ export const SyncSettingsModal: React.FC<SyncSettingsProps> = ({
     categories: number;
     totalItems: number;
   } | null>(null);
+  const [unsyncedOverview, setUnsyncedOverview] = useState<{
+    wallets: number;
+    transactions: number;
+    categories: number;
+    totalItems: number;
+  } | null>(null);
+  const [lastSyncDetails, setLastSyncDetails] = useState<{
+    timestamp: string;
+    wallets: number;
+    transactions: number;
+    categories: number;
+    errors: string[];
+  } | null>(null);
 
   useEffect(() => {
+    isMountedRef.current = true;
+
     if (visible) {
       loadSyncStatus();
     }
+
+    return () => {
+      isMountedRef.current = false;
+    };
   }, [visible]);
 
   const loadSyncStatus = async () => {
     try {
       const status = await hybridDataService.getSyncStatus();
+      if (!isMountedRef.current) return;
       setSyncStatus(status);
       
       // Load auto-sync settings
       const autoSyncSettings = await hybridDataService.getAutoSyncSettings();
+      if (!isMountedRef.current) return;
       setAutoSyncEnabled(autoSyncSettings?.enabled || false);
       setAutoSyncPeriod(autoSyncSettings?.period || 'weekly');
       setCustomInterval(autoSyncSettings?.customInterval || 1);
@@ -84,11 +106,21 @@ export const SyncSettingsModal: React.FC<SyncSettingsProps> = ({
       // Load sync overview data
       if (user) {
         const overview = await hybridDataService.getSyncOverview();
+        if (!isMountedRef.current) return;
         setSyncOverview(overview);
+        
+        const unsynced = await hybridDataService.getUnsyncedOverview();
+        if (!isMountedRef.current) return;
+        setUnsyncedOverview(unsynced);
+        
+        const lastSync = await hybridDataService.getLastSyncDetails();
+        if (!isMountedRef.current) return;
+        setLastSyncDetails(lastSync);
       }
 
       // Load sync reminders disabled setting
       const remindersDisabled = await hybridDataService.areSyncRemindersDisabled();
+      if (!isMountedRef.current) return;
       setSyncRemindersDisabled(remindersDisabled);
     } catch (error) {
       console.error('Error loading sync status:', error);
@@ -154,24 +186,24 @@ export const SyncSettingsModal: React.FC<SyncSettingsProps> = ({
         if (syncResult.success) {
           // Show detailed sync results
           const syncData = syncResult.syncedData;
-          let message = 'Cloud sync enabled and data synced successfully!\\n\\n';
+          let message = 'Cloud sync enabled and data synced successfully!\n\n';
           
           if (syncData) {
-            message += `✅ Synced Items:\\n`;
-            if (syncData.wallets > 0) message += `• ${syncData.wallets} wallet(s)\\n`;
-            if (syncData.transactions > 0) message += `• ${syncData.transactions} transaction(s)\\n`;
-            if (syncData.categories > 0) message += `• ${syncData.categories} categor${syncData.categories === 1 ? 'y' : 'ies'}\\n`;
+            message += `✅ Synced Items:\n`;
+            if (syncData.wallets > 0) message += `• ${syncData.wallets} wallet(s)\n`;
+            if (syncData.transactions > 0) message += `• ${syncData.transactions} transaction(s)\n`;
+            if (syncData.categories > 0) message += `• ${syncData.categories} categor${syncData.categories === 1 ? 'y' : 'ies'}\n`;
             
             const totalItems = syncData.wallets + syncData.transactions + syncData.categories;
             if (totalItems === 0) {
-              message += '• All data is already up to date\\n';
+              message += '• All data is already up to date\n';
             }
             
             if (syncData.errors && syncData.errors.length > 0) {
-              message += `\\n⚠️ Warnings:\\n${syncData.errors.join('\\n')}`;
+              message += `\n⚠️ Warnings:\n${syncData.errors.join('\n')}`;
             }
             
-            message += `\\n🕒 Synced at: ${new Date().toLocaleString()}`;
+            message += `\n🕒 Synced at: ${new Date().toLocaleString()}`;
           }
           
           Alert.alert('Sync Complete', message);
@@ -209,25 +241,28 @@ export const SyncSettingsModal: React.FC<SyncSettingsProps> = ({
       if (result.success) {
         // Show detailed sync results
         const syncData = result.syncedData;
-        let message = 'Sync completed successfully!\\n\\n';
+        let message = 'Sync completed successfully!\n\n';
         
         if (syncData) {
-          message += `✅ Synced Items:\\n`;
-          if (syncData.wallets > 0) message += `• ${syncData.wallets} wallet(s)\\n`;
-          if (syncData.transactions > 0) message += `• ${syncData.transactions} transaction(s)\\n`;
-          if (syncData.categories > 0) message += `• ${syncData.categories} categor${syncData.categories === 1 ? 'y' : 'ies'}\\n`;
+          message += `✅ Synced Items:\n`;
+          if (syncData.wallets > 0) message += `• ${syncData.wallets} wallet(s)\n`;
+          if (syncData.transactions > 0) message += `• ${syncData.transactions} transaction(s)\n`;
+          if (syncData.categories > 0) message += `• ${syncData.categories} categor${syncData.categories === 1 ? 'y' : 'ies'}\n`;
           
           const totalItems = syncData.wallets + syncData.transactions + syncData.categories;
           if (totalItems === 0) {
-            message += '• All data is already up to date\\n';
+            message += '• All data is already up to date\n';
           }
           
           if (syncData.errors && syncData.errors.length > 0) {
-            message += `\\n⚠️ Warnings:\\n${syncData.errors.join('\\n')}`;
+            message += `\n⚠️ Warnings:\n${syncData.errors.join('\n')}`;
           }
           
-          message += `\\n🕒 Synced at: ${new Date().toLocaleString()}`;
+          message += `\n🕒 Synced at: ${new Date().toLocaleString()}`;
         }
+        
+        // Save sync details
+        await hybridDataService.saveLastSyncDetails(syncData);
         
         Alert.alert('Sync Complete', message);
         await loadSyncStatus();
@@ -666,14 +701,12 @@ export const SyncSettingsModal: React.FC<SyncSettingsProps> = ({
               )}
             </View>
 
-            {/* Sync Overview Section */}
-            {user && syncOverview && (
+            {/* Sync Overview Section - Items Ready to Sync */}
+            {user && unsyncedOverview && (
               <View style={[styles.section, { backgroundColor: theme.colors.surface }]}>
-                <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>What Will Be Synced</Text>
+                <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>📊 Items Ready to Sync</Text>
                 <Text style={[styles.sectionDescription, { color: theme.colors.textSecondary }]}>
-                  {syncStatus.enabled 
-                    ? "Overview of your data that will be synced to the cloud" 
-                    : "Preview of data that would be synced when you enable cloud sync"}
+                  Changes waiting to be synced to the cloud
                 </Text>
 
                 <View style={styles.syncOverviewGrid}>
@@ -681,9 +714,9 @@ export const SyncSettingsModal: React.FC<SyncSettingsProps> = ({
                     <View style={[styles.syncOverviewIcon, { backgroundColor: theme.isDark ? 'rgba(76, 175, 80, 0.2)' : '#e8f5e8' }]}>
                       <Ionicons name="wallet" size={20} color="#4CAF50" />
                     </View>
-                    <Text style={[styles.syncOverviewCount, { color: theme.colors.text }]}>{syncOverview.wallets}</Text>
+                    <Text style={[styles.syncOverviewCount, { color: theme.colors.text }]}>{unsyncedOverview.wallets}</Text>
                     <Text style={[styles.syncOverviewLabel, { color: theme.colors.textSecondary }]}>
-                      Wallet{syncOverview.wallets !== 1 ? 's' : ''}
+                      Wallet{unsyncedOverview.wallets !== 1 ? 's' : ''}
                     </Text>
                   </View>
 
@@ -691,9 +724,9 @@ export const SyncSettingsModal: React.FC<SyncSettingsProps> = ({
                     <View style={[styles.syncOverviewIcon, { backgroundColor: theme.isDark ? 'rgba(33, 150, 243, 0.2)' : '#e3f2fd' }]}>
                       <Ionicons name="receipt" size={20} color="#2196F3" />
                     </View>
-                    <Text style={[styles.syncOverviewCount, { color: theme.colors.text }]}>{syncOverview.transactions}</Text>
+                    <Text style={[styles.syncOverviewCount, { color: theme.colors.text }]}>{unsyncedOverview.transactions}</Text>
                     <Text style={[styles.syncOverviewLabel, { color: theme.colors.textSecondary }]}>
-                      Transaction{syncOverview.transactions !== 1 ? 's' : ''}
+                      Transaction{unsyncedOverview.transactions !== 1 ? 's' : ''}
                     </Text>
                   </View>
 
@@ -701,9 +734,9 @@ export const SyncSettingsModal: React.FC<SyncSettingsProps> = ({
                     <View style={[styles.syncOverviewIcon, { backgroundColor: theme.isDark ? 'rgba(255, 152, 0, 0.2)' : '#fff3e0' }]}>
                       <Ionicons name="pricetag" size={20} color="#FF9800" />
                     </View>
-                    <Text style={[styles.syncOverviewCount, { color: theme.colors.text }]}>{syncOverview.categories}</Text>
+                    <Text style={[styles.syncOverviewCount, { color: theme.colors.text }]}>{unsyncedOverview.categories}</Text>
                     <Text style={[styles.syncOverviewLabel, { color: theme.colors.textSecondary }]}>
-                      Categor{syncOverview.categories !== 1 ? 'ies' : 'y'}
+                      Categor{unsyncedOverview.categories !== 1 ? 'ies' : 'y'}
                     </Text>
                   </View>
                 </View>
@@ -711,11 +744,58 @@ export const SyncSettingsModal: React.FC<SyncSettingsProps> = ({
                 <View style={[styles.syncOverviewSummary, { backgroundColor: theme.isDark ? 'rgba(103, 58, 183, 0.1)' : '#f3e5f5' }]}>
                   <Ionicons name="cloud-upload" size={20} color="#673AB7" />
                   <Text style={[styles.syncOverviewSummaryText, { color: theme.colors.text }]}>
-                    Total: {syncOverview.totalItems} item{syncOverview.totalItems !== 1 ? 's' : ''} {syncStatus.enabled ? 'ready to sync' : 'available for sync'}
+                    Total: {unsyncedOverview.totalItems} item{unsyncedOverview.totalItems !== 1 ? 's' : ''} ready to sync
                   </Text>
                 </View>
+              </View>
+            )}
 
-                {/* Last sync info - only show if sync is enabled */}
+            {/* Last Sync Details Section */}
+            {lastSyncDetails && (
+              <View style={[styles.section, { backgroundColor: theme.colors.surface }]}>
+                <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>✅ Last Sync Details</Text>
+                
+                <View style={[styles.syncDetailsGrid, { backgroundColor: theme.colors.background, borderColor: theme.colors.border }]}>
+                  <View style={styles.syncDetailItem}>
+                    <Ionicons name="checkmark-circle" size={24} color="#4CAF50" />
+                    <Text style={[styles.syncDetailValue, { color: theme.colors.text }]}>{lastSyncDetails.wallets}</Text>
+                    <Text style={[styles.syncDetailLabel, { color: theme.colors.textSecondary }]}>Wallet{lastSyncDetails.wallets !== 1 ? 's' : ''}</Text>
+                  </View>
+                  
+                  <View style={styles.syncDetailItem}>
+                    <Ionicons name="checkmark-circle" size={24} color="#4CAF50" />
+                    <Text style={[styles.syncDetailValue, { color: theme.colors.text }]}>{lastSyncDetails.transactions}</Text>
+                    <Text style={[styles.syncDetailLabel, { color: theme.colors.textSecondary }]}>Transaction{lastSyncDetails.transactions !== 1 ? 's' : ''}</Text>
+                  </View>
+                  
+                  <View style={styles.syncDetailItem}>
+                    <Ionicons name="checkmark-circle" size={24} color="#4CAF50" />
+                    <Text style={[styles.syncDetailValue, { color: theme.colors.text }]}>{lastSyncDetails.categories}</Text>
+                    <Text style={[styles.syncDetailLabel, { color: theme.colors.textSecondary }]}>Categor{lastSyncDetails.categories !== 1 ? 'ies' : 'y'}</Text>
+                  </View>
+                </View>
+                
+                <View style={[styles.lastSyncInfo, { backgroundColor: theme.colors.background, borderColor: theme.colors.border }]}>
+                  <View style={styles.lastSyncRow}>
+                    <Text style={[styles.lastSyncLabel, { color: theme.colors.textSecondary }]}>🕒 Synced at:</Text>
+                    <Text style={[styles.lastSyncValue, { color: theme.colors.text }]}>
+                      {new Date(lastSyncDetails.timestamp).toLocaleString()}
+                    </Text>
+                  </View>
+                  
+                  {lastSyncDetails.errors.length > 0 && (
+                    <View style={styles.lastSyncRow}>
+                      <Text style={[styles.lastSyncLabel, { color: '#FF6B6B' }]}>⚠️ Issues:</Text>
+                      <Text style={[styles.lastSyncValue, { color: '#FF6B6B' }]}>{lastSyncDetails.errors.length}</Text>
+                    </View>
+                  )}
+                </View>
+              </View>
+            )}
+
+            {/* Sync Button & Last Sync Info */}
+            {user && (
+              <View style={[styles.section, { backgroundColor: theme.colors.surface }]}>
                 {syncStatus.enabled && (
                   <View style={[styles.lastSyncInfo, { backgroundColor: theme.colors.background, borderColor: theme.colors.border }]}>
                     <View style={styles.lastSyncRow}>
@@ -1209,6 +1289,28 @@ const styles = StyleSheet.create({
   lastSyncValue: {
     fontSize: 14,
     fontWeight: '600',
+  },
+  syncDetailsGrid: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    padding: 16,
+    borderRadius: 8,
+    borderWidth: 1,
+    marginBottom: 12,
+  },
+  syncDetailItem: {
+    alignItems: 'center',
+    flex: 1,
+  },
+  syncDetailValue: {
+    fontSize: 18,
+    fontWeight: '700',
+    marginTop: 8,
+    marginBottom: 4,
+  },
+  syncDetailLabel: {
+    fontSize: 12,
+    textAlign: 'center',
   },
 });
 

@@ -731,7 +731,9 @@ class CloudSyncService {
           });
           syncedData.transactions++;
         } catch (error) {
-          syncedData.errors.push(`Failed to sync transaction: ${transaction.description}`);
+          const errorMessage = error instanceof Error ? error.message : String(error);
+          console.error(`❌ Failed to sync transaction ${transaction.id}:`, errorMessage);
+          syncedData.errors.push(`Failed to sync transaction: ${transaction.description || transaction.id}`);
         }
       }
 
@@ -751,6 +753,8 @@ class CloudSyncService {
           });
           syncedData.categories++;
         } catch (error) {
+          const errorMessage = error instanceof Error ? error.message : String(error);
+          console.error(`❌ Failed to sync category ${category.name}:`, errorMessage);
           syncedData.errors.push(`Failed to sync category: ${category.name}`);
         }
       }

@@ -1,15 +1,18 @@
-import React, { useState, useMemo, useCallback, lazy, Suspense } from 'react';
+import React, { useState, useMemo, useCallback, lazy, Suspense, useEffect } from 'react';
 import { View, StyleSheet, Pressable, Dimensions, Text, ActivityIndicator, InteractionManager } from 'react-native';
-import { TabView, SceneMap } from 'react-native-tab-view';
+import { TabView } from 'react-native-tab-view';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useNavigation } from '@react-navigation/native';
 
 // Lazy load screens for better performance
-const HomeScreen = lazy(() => import('../screens/HomeScreen'));
-const InsightsScreen = lazy(() => import('../screens/InsightsScreen'));
-const WalletScreen = lazy(() => import('../screens/WalletScreen'));
-const MoreScreen = lazy(() => import('../screens/MoreScreen'));
+const loadHomeScreen = () => import('../screens/HomeScreen');
+const HomeScreen = lazy(loadHomeScreen);
+const loadInsightsScreen = () => import('../screens/InsightsScreen');
+const InsightsScreen = lazy(loadInsightsScreen);
+const loadWalletScreen = () => import('../screens/WalletScreen');
+const WalletScreen = lazy(loadWalletScreen);
+const loadMoreScreen = () => import('../screens/MoreScreen');
+const MoreScreen = lazy(loadMoreScreen);
 
 import { useTheme } from '../contexts/ThemeContext';
 import { useLocalization } from '../contexts/LocalizationContext';
@@ -30,9 +33,20 @@ const ScreenLoadingFallback = () => {
 const SwipeableBottomTabNavigator = React.memo(() => {
   const { isDark, theme } = useTheme();
   const { t } = useLocalization();
-  const navigation = useNavigation();
   const insets = useSafeAreaInsets();
   const [index, setIndex] = useState(0);
+
+  useEffect(() => {
+    const handle = InteractionManager.runAfterInteractions(() => {
+      Promise.allSettled([
+        loadInsightsScreen(),
+        loadWalletScreen(),
+        loadMoreScreen(),
+      ]).catch(() => {});
+    });
+
+    return () => handle.cancel();
+  }, []);
   
   // Memoize routes to prevent unnecessary re-renders
   const routes = useMemo(() => [
@@ -44,38 +58,34 @@ const SwipeableBottomTabNavigator = React.memo(() => {
 
   // Memoized scene renderer with lazy loading
   const renderScene = useCallback(({ route }: { route: any }) => {
-    const SceneComponent = () => {
-      switch (route.key) {
-        case 'home':
-          return (
-            <Suspense fallback={<ScreenLoadingFallback />}>
-              <HomeScreen />
-            </Suspense>
-          );
-        case 'insights':
-          return (
-            <Suspense fallback={<ScreenLoadingFallback />}>
-              <InsightsScreen />
-            </Suspense>
-          );
-        case 'wallet':
-          return (
-            <Suspense fallback={<ScreenLoadingFallback />}>
-              <WalletScreen />
-            </Suspense>
-          );
-        case 'more':
-          return (
-            <Suspense fallback={<ScreenLoadingFallback />}>
-              <MoreScreen />
-            </Suspense>
-          );
-        default:
-          return null;
-      }
-    };
-    
-    return <SceneComponent />;
+    switch (route.key) {
+      case 'home':
+        return (
+          <Suspense fallback={<ScreenLoadingFallback />}>
+            <HomeScreen />
+          </Suspense>
+        );
+      case 'insights':
+        return (
+          <Suspense fallback={<ScreenLoadingFallback />}>
+            <InsightsScreen />
+          </Suspense>
+        );
+      case 'wallet':
+        return (
+          <Suspense fallback={<ScreenLoadingFallback />}>
+            <WalletScreen />
+          </Suspense>
+        );
+      case 'more':
+        return (
+          <Suspense fallback={<ScreenLoadingFallback />}>
+            <MoreScreen />
+          </Suspense>
+        );
+      default:
+        return null;
+    }
   }, []);
 
   // Memoized icon function
@@ -113,9 +123,8 @@ const SwipeableBottomTabNavigator = React.memo(() => {
               key={route.key}
               style={styles.tabItem}
               onPress={() => {
-                InteractionManager.runAfterInteractions(() => {
-                  setIndex(i);
-                });
+                setIndex(i);
+                props.jumpTo(route.key);
               }}
               android_ripple={{ color: theme.colors.primary + '20', borderless: true }}
             >
@@ -151,9 +160,8 @@ const SwipeableBottomTabNavigator = React.memo(() => {
               key={route.key}
               style={styles.tabItem}
               onPress={() => {
-                InteractionManager.runAfterInteractions(() => {
-                  setIndex(actualIndex);
-                });
+                setIndex(actualIndex);
+                props.jumpTo(route.key);
               }}
               android_ripple={{ color: theme.colors.primary + '20', borderless: true }}
             >
@@ -175,7 +183,7 @@ const SwipeableBottomTabNavigator = React.memo(() => {
         })}
       </View>
     </View>
-  ), [index, routes, theme, insets.bottom, getIconName]);
+  ), [index, theme, insets.bottom, getIconName]);
 
   return (
     <View style={[styles.container, { backgroundColor: theme.colors.background }]}>

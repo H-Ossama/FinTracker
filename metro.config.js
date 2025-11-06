@@ -113,11 +113,13 @@ config.serializer = {
   },
 };
 
-// Aggressive exclusion patterns for smaller bundles
+// Aggressive exclusion patterns for smaller bundles.
+// Avoid filtering out "spec" folders because some dependencies (e.g. Google Sign-In)
+// ship production code from those directories.
 config.resolver.blockList = [
   /.*\/__tests__\/.*/,
-  /.*\/node_modules\/.*\/(test|spec)\/.*/,
-  /.*\/\..*/, 
+  /.*\/node_modules\/.*\/test\/.*/,
+  /.*\/\.\*/, 
   /.*\/\.(test|spec)\.(js|ts|tsx)$/,
   /.*\/coverage\/.*/,
   /.*\/docs\/.*/,

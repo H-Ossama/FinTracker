@@ -1,4 +1,4 @@
-package com.H_Oussama.financetracker
+package com.oussamaaaaa.finex
 
 import android.app.Application
 import android.content.res.Configuration

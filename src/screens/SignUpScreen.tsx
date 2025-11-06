@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -7,9 +7,14 @@ import {
   StyleSheet,
   ScrollView,
   ActivityIndicator,
-  Linking,
+  Dimensions,
+  KeyboardAvoidingView,
+  Platform,
+  Animated,
+  Image,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useForm, Controller } from 'react-hook-form';
 import { yupResolver } from '@hookform/resolvers/yup';
 import * as yup from 'yup';
@@ -19,13 +24,18 @@ import { useTheme } from '../contexts/ThemeContext';
 import { useCustomAlert } from '../hooks/useCustomAlert';
 import CustomAlert from '../components/CustomAlert';
 
+const { width, height } = Dimensions.get('window');
+
 // Validation schema
 const signUpSchema = yup.object().shape({
-  name: yup
+  firstName: yup
     .string()
-    .required('Full name is required')
-    .min(2, 'Name must be at least 2 characters')
-    .max(50, 'Name must be less than 50 characters'),
+    .required('First name is required')
+    .min(2, 'First name must be at least 2 characters'),
+  lastName: yup
+    .string()
+    .required('Last name is required')
+    .min(2, 'Last name must be at least 2 characters'),
   email: yup
     .string()
     .required('Email is required')
@@ -34,27 +44,27 @@ const signUpSchema = yup.object().shape({
   password: yup
     .string()
     .required('Password is required')
-    .min(6, 'Password must be at least 6 characters'),
+    .min(8, 'Password must be at least 8 characters')
+    .matches(
+      /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)/,
+      'Password must contain at least one uppercase letter, one lowercase letter, and one number'
+    ),
   confirmPassword: yup
     .string()
     .required('Please confirm your password')
     .oneOf([yup.ref('password')], 'Passwords must match'),
-  agreeToTerms: yup
-    .boolean()
-    .required('You must agree to the Terms of Service and Privacy Policy')
-    .test('agree-terms', 'You must agree to the Terms of Service and Privacy Policy', (value) => value === true),
 });
 
 interface SignUpFormData {
-  name: string;
+  firstName: string;
+  lastName: string;
   email: string;
   password: string;
   confirmPassword: string;
-  agreeToTerms: boolean;
 }
 
 interface SignUpScreenProps {
-  navigation: any; // Replace with proper navigation type
+  navigation: any;
 }
 
 const SignUpScreen: React.FC<SignUpScreenProps> = ({ navigation }) => {
@@ -62,9 +72,12 @@ const SignUpScreen: React.FC<SignUpScreenProps> = ({ navigation }) => {
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [isGoogleLoading, setIsGoogleLoading] = useState(false);
+  const [acceptTerms, setAcceptTerms] = useState(false);
+  const [fadeAnim] = useState(new Animated.Value(0));
+  const [slideAnim] = useState(new Animated.Value(50));
   
-  const { signUp, signUpWithGoogle } = useAuth();
-  const { theme } = useTheme();
+  const { signUp, signInWithGoogle } = useAuth();
+  const { theme, isDark } = useTheme();
   const { alertState, hideAlert, showSuccess, showError } = useCustomAlert();
 
   const {
@@ -72,365 +85,478 @@ const SignUpScreen: React.FC<SignUpScreenProps> = ({ navigation }) => {
     handleSubmit,
     formState: { errors, isValid },
     watch,
-    setValue,
   } = useForm<SignUpFormData>({
     resolver: yupResolver(signUpSchema),
     mode: 'onChange',
     defaultValues: {
-      name: '',
+      firstName: '',
+      lastName: '',
       email: '',
       password: '',
       confirmPassword: '',
-      agreeToTerms: false,
     },
   });
 
   const password = watch('password');
-  const agreeToTerms = watch('agreeToTerms');
 
-  // Password strength indicator
-  const getPasswordStrength = (password: string) => {
-    let strength = 0;
-    if (password.length >= 8) strength++;
-    if (/[a-z]/.test(password)) strength++;
-    if (/[A-Z]/.test(password)) strength++;
-    if (/\d/.test(password)) strength++;
-    if (/[@$!%*?&]/.test(password)) strength++;
-    
-    return strength;
-  };
-
-  const getPasswordStrengthColor = (strength: number) => {
-    if (strength <= 2) return '#FF6B6B';
-    if (strength <= 3) return '#FFB443';
-    if (strength <= 4) return '#51CF66';
-    return '#40C057';
-  };
-
-  const getPasswordStrengthText = (strength: number) => {
-    if (strength <= 2) return 'Weak';
-    if (strength <= 3) return 'Fair';
-    if (strength <= 4) return 'Good';
-    return 'Strong';
-  };
+  useEffect(() => {
+    // Start entrance animations
+    Animated.parallel([
+      Animated.timing(fadeAnim, {
+        toValue: 1,
+        duration: 1000,
+        useNativeDriver: true,
+      }),
+      Animated.timing(slideAnim, {
+        toValue: 0,
+        duration: 800,
+        useNativeDriver: true,
+      }),
+    ]).start();
+  }, []);
 
   const onSubmit = async (data: SignUpFormData) => {
+    if (!acceptTerms) {
+      showError('Please accept the Terms of Service and Privacy Policy');
+      return;
+    }
+
+    setIsLoading(true);
     try {
-      setIsLoading(true);
-      
-      const result = await signUp(data.email, data.password, data.name);
-      
+      const result = await signUp(
+        data.email,
+        data.password,
+        `${data.firstName} ${data.lastName}`
+      );
+
       if (result.success) {
-        // Show welcome message with delay to ensure proper rendering
-        setTimeout(() => {
-          showSuccess(
-            '🎉 Welcome to FINEX!',
-            'Your account has been created successfully and you are now signed in.',
-          );
-        }, 100);
+        showSuccess('Account created successfully! Welcome to FINEX!');
       } else {
-        showError('Registration Failed', result.error || 'Please try again');
+        showError(result.error || 'Failed to create account');
       }
     } catch (error) {
-      showError('Error', 'An unexpected error occurred. Please try again.');
+      showError('An unexpected error occurred');
     } finally {
       setIsLoading(false);
     }
   };
 
   const handleGoogleSignUp = async () => {
+    setIsGoogleLoading(true);
     try {
-      setIsGoogleLoading(true);
-      
-      const result = await signUpWithGoogle();
-      
+      const result = await signInWithGoogle();
       if (result.success) {
-        setTimeout(() => {
-          showSuccess(
-            '🎉 Welcome to FINEX!',
-            'Your account has been created successfully with Google and your data is now synced securely in the cloud.',
-          );
-        }, 100);
+        showSuccess('Account created successfully with Google!');
       } else {
-        showError('Google Sign Up Failed', result.error || 'Please try again');
+        showError(result.error || 'Google sign up failed');
       }
     } catch (error) {
-      showError('Error', 'An unexpected error occurred during Google Sign Up.');
+      showError('Google sign up failed');
     } finally {
       setIsGoogleLoading(false);
     }
   };
 
-  const openTermsOfService = () => {
-    Linking.openURL('https://finex.app/terms-of-service');
+  const getPasswordStrength = (password: string) => {
+    let score = 0;
+    if (password.length >= 8) score++;
+    if (/[a-z]/.test(password)) score++;
+    if (/[A-Z]/.test(password)) score++;
+    if (/\d/.test(password)) score++;
+    if (/[^A-Za-z\d]/.test(password)) score++;
+    
+    if (score <= 2) return { strength: 'Weak', color: '#EF4444', width: '33%' };
+    if (score <= 3) return { strength: 'Medium', color: '#F59E0B', width: '66%' };
+    return { strength: 'Strong', color: '#10B981', width: '100%' };
   };
 
-  const openPrivacyPolicy = () => {
-    Linking.openURL('https://finex.app/privacy-policy');
-  };
+  const passwordStrength = password ? getPasswordStrength(password) : null;
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: theme.colors.background }]}>
-      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-        {/* Compact Header */}
-        <View style={styles.compactHeader}>
-          <View style={styles.logoContainer}>
-            <Ionicons name="wallet" size={28} color="#3B82F6" />
-            <Text style={[styles.appName, { color: theme.colors.text }]}>FINEX</Text>
-          </View>
-          <Text style={[styles.welcomeText, { color: theme.colors.text }]}>Create Account</Text>
-        </View>
-
-        {/* Registration Form Card */}
-        <View style={[styles.formCard, { backgroundColor: theme.colors.surface }]}>
-          <Text style={[styles.formTitle, { color: theme.colors.text }]}>Create Account</Text>
-          {/* Name Input */}
-          <View style={styles.inputGroup}>
-            <Text style={[styles.inputLabel, { color: theme.colors.text }]}>Full Name</Text>
-            <Controller
-              control={control}
-              name="name"
-              render={({ field: { onChange, onBlur, value } }) => (
-                <View style={[styles.modernInputWrapper, { 
-                  backgroundColor: theme.colors.background, 
-                  borderColor: errors.name ? '#EF4444' : theme.colors.border 
-                }]}>
-                  <Ionicons name="person" size={20} color={theme.colors.textSecondary} />
-                  <TextInput
-                    style={[styles.modernInput, { color: theme.colors.text }]}
-                    placeholder="Enter your full name"
-                    placeholderTextColor={theme.colors.textSecondary}
-                    value={value}
-                    onChangeText={onChange}
-                    onBlur={onBlur}
-                    autoCapitalize="words"
-                    autoCorrect={false}
+    <View style={styles.container}>
+      <LinearGradient
+        colors={isDark 
+          ? ['#0D1117', '#1C2128', '#0D1117'] 
+          : ['#F5F7FA', '#FFFFFF', '#F0F4F8']
+        }
+        style={styles.gradient}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 0, y: 1 }}
+      >
+        <KeyboardAvoidingView 
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={styles.keyboardView}
+        >
+          <SafeAreaView style={styles.safeArea}>
+            <ScrollView 
+              contentContainerStyle={styles.scrollContent} 
+              showsVerticalScrollIndicator={false}
+              keyboardShouldPersistTaps="handled"
+            >
+              {/* Hero Section */}
+              <Animated.View 
+                style={[
+                  styles.heroSection,
+                  {
+                    opacity: fadeAnim,
+                    transform: [{ translateY: slideAnim }],
+                  }
+                ]}
+              >
+                <View style={styles.brandContainer}>
+                  <Image
+                    source={require('../../assets/icon.png')}
+                    style={styles.appIcon}
                   />
+                  <View style={styles.brandText}>
+                    <Text style={[styles.brandName, { color: theme.colors.text }]}>FinTracker</Text>
+                    <Text style={[styles.brandTagline, { color: theme.colors.textSecondary }]}>
+                      Smart Finance Management
+                    </Text>
+                  </View>
                 </View>
-              )}
-            />
-            {errors.name && <Text style={styles.errorText}>{errors.name.message}</Text>}
-          </View>
-
-          {/* Email Input */}
-          <View style={styles.inputGroup}>
-            <Text style={[styles.inputLabel, { color: theme.colors.text }]}>Email Address</Text>
-            <Controller
-              control={control}
-              name="email"
-              render={({ field: { onChange, onBlur, value } }) => (
-                <View style={[styles.modernInputWrapper, { 
-                  backgroundColor: theme.colors.background, 
-                  borderColor: errors.email ? '#EF4444' : theme.colors.border 
-                }]}>
-                  <Ionicons name="mail" size={20} color={theme.colors.textSecondary} />
-                  <TextInput
-                    style={[styles.modernInput, { color: theme.colors.text }]}
-                    placeholder="Enter your email address"
-                    placeholderTextColor={theme.colors.textSecondary}
-                    value={value}
-                    onChangeText={onChange}
-                    onBlur={onBlur}
-                    keyboardType="email-address"
-                    autoCapitalize="none"
-                    autoCorrect={false}
-                  />
-                </View>
-              )}
-            />
-            {errors.email && <Text style={styles.errorText}>{errors.email.message}</Text>}
-          </View>
-
-          {/* Password Input */}
-          <View style={styles.inputGroup}>
-            <Text style={[styles.inputLabel, { color: theme.colors.text }]}>Password</Text>
-            <Controller
-              control={control}
-              name="password"
-              render={({ field: { onChange, onBlur, value } }) => (
-                <View style={[styles.modernInputWrapper, { 
-                  backgroundColor: theme.colors.background, 
-                  borderColor: errors.password ? '#EF4444' : theme.colors.border 
-                }]}>
-                  <Ionicons name="lock-closed" size={20} color={theme.colors.textSecondary} />
-                  <TextInput
-                    style={[styles.modernInput, { color: theme.colors.text }]}
-                    placeholder="Create a strong password"
-                    placeholderTextColor={theme.colors.textSecondary}
-                    value={value}
-                    onChangeText={onChange}
-                    onBlur={onBlur}
-                    secureTextEntry={!showPassword}
-                    autoCapitalize="none"
-                  />
-                  <TouchableOpacity onPress={() => setShowPassword(!showPassword)}>
-                    <Ionicons
-                      name={showPassword ? 'eye' : 'eye-off'}
-                      size={20}
-                      color={theme.colors.textSecondary}
-                    />
-                  </TouchableOpacity>
-                </View>
-              )}
-            />
-            {errors.password && <Text style={styles.errorText}>{errors.password.message}</Text>}
-            
-            {/* Password Strength Indicator */}
-            {password && (
-              <View style={styles.passwordStrengthContainer}>
-                <Text style={[styles.passwordStrengthText, { color: theme.colors.textSecondary }]}>
-                  Password Strength:
-                </Text>
-                <View style={styles.strengthBarContainer}>
-                  <View 
-                    style={[
-                      styles.strengthBar, 
-                      { backgroundColor: getPasswordStrengthColor(getPasswordStrength(password)) }
-                    ]} 
-                  />
-                  <Text 
-                    style={[
-                      styles.strengthLabel, 
-                      { color: getPasswordStrengthColor(getPasswordStrength(password)) }
-                    ]}
-                  >
-                    {getPasswordStrengthText(getPasswordStrength(password))}
+                
+                <View style={styles.welcomeBox}>
+                  <Text style={[styles.welcomeTitle, { color: theme.colors.text }]}>
+                    Create Account
+                  </Text>
+                  <Text style={[styles.welcomeSubtitle, { color: theme.colors.textSecondary }]}>
+                    Start managing your finances today
                   </Text>
                 </View>
-              </View>
-            )}
-          </View>
+              </Animated.View>
 
-          {/* Confirm Password Input */}
-          <View style={styles.inputGroup}>
-            <Text style={[styles.inputLabel, { color: theme.colors.text }]}>Confirm Password</Text>
-            <Controller
-              control={control}
-              name="confirmPassword"
-              render={({ field: { onChange, onBlur, value } }) => (
-                <View style={[styles.modernInputWrapper, { 
-                  backgroundColor: theme.colors.background, 
-                  borderColor: errors.confirmPassword ? '#EF4444' : theme.colors.border 
-                }]}>
-                  <Ionicons name="lock-closed" size={20} color={theme.colors.textSecondary} />
-                  <TextInput
-                    style={[styles.modernInput, { color: theme.colors.text }]}
-                    placeholder="Confirm your password"
-                    placeholderTextColor={theme.colors.textSecondary}
-                    value={value}
-                    onChangeText={onChange}
-                    onBlur={onBlur}
-                    secureTextEntry={!showConfirmPassword}
-                    autoCapitalize="none"
-                  />
-                  <TouchableOpacity onPress={() => setShowConfirmPassword(!showConfirmPassword)}>
-                    <Ionicons
-                      name={showConfirmPassword ? 'eye' : 'eye-off'}
-                      size={20}
-                      color={theme.colors.textSecondary}
+              {/* Form Card */}
+              <Animated.View
+                style={[
+                  {
+                    opacity: fadeAnim,
+                    transform: [{ translateY: slideAnim }],
+                  }
+                ]}
+              >
+                <View style={[styles.formCard, { backgroundColor: theme.colors.surface }]}>
+                  {/* Name Fields */}
+                  <View style={styles.nameRow}>
+                    <View style={[styles.inputGroup, styles.nameInput]}>
+                      <Text style={[styles.inputLabel, { color: theme.colors.text }]}>First Name</Text>
+                      <Controller
+                        control={control}
+                        name="firstName"
+                        render={({ field: { onChange, onBlur, value } }) => (
+                          <View style={[
+                            styles.inputWrapper, 
+                            { 
+                              backgroundColor: theme.colors.background,
+                              borderColor: errors.firstName ? '#EF4444' : theme.colors.border,
+                              borderWidth: errors.firstName ? 2 : 1,
+                            }
+                          ]}>
+                            <Ionicons name="person-outline" size={20} color={theme.colors.textSecondary} />
+                            <TextInput
+                              style={[styles.textInput, { color: theme.colors.text }]}
+                              placeholder="John"
+                              placeholderTextColor={theme.colors.textSecondary}
+                              value={value}
+                              onChangeText={onChange}
+                              onBlur={onBlur}
+                              autoCapitalize="words"
+                              editable={!isLoading}
+                            />
+                          </View>
+                        )}
+                      />
+                      {errors.firstName && (
+                        <Text style={styles.errorText}>{errors.firstName.message}</Text>
+                      )}
+                    </View>
+
+                    <View style={[styles.inputGroup, styles.nameInput]}>
+                      <Text style={[styles.inputLabel, { color: theme.colors.text }]}>Last Name</Text>
+                      <Controller
+                        control={control}
+                        name="lastName"
+                        render={({ field: { onChange, onBlur, value } }) => (
+                          <View style={[
+                            styles.inputWrapper, 
+                            { 
+                              backgroundColor: theme.colors.background,
+                              borderColor: errors.lastName ? '#EF4444' : theme.colors.border,
+                              borderWidth: errors.lastName ? 2 : 1,
+                            }
+                          ]}>
+                            <Ionicons name="person-outline" size={20} color={theme.colors.textSecondary} />
+                            <TextInput
+                              style={[styles.textInput, { color: theme.colors.text }]}
+                              placeholder="Doe"
+                              placeholderTextColor={theme.colors.textSecondary}
+                              value={value}
+                              onChangeText={onChange}
+                              onBlur={onBlur}
+                              autoCapitalize="words"
+                              editable={!isLoading}
+                            />
+                          </View>
+                        )}
+                      />
+                      {errors.lastName && (
+                        <Text style={styles.errorText}>{errors.lastName.message}</Text>
+                      )}
+                    </View>
+                  </View>
+
+                  {/* Email Input */}
+                  <View style={styles.inputGroup}>
+                    <Text style={[styles.inputLabel, { color: theme.colors.text }]}>Email Address</Text>
+                    <Controller
+                      control={control}
+                      name="email"
+                      render={({ field: { onChange, onBlur, value } }) => (
+                        <View style={[
+                          styles.inputWrapper, 
+                          { 
+                            backgroundColor: theme.colors.background,
+                            borderColor: errors.email ? '#EF4444' : theme.colors.border,
+                            borderWidth: errors.email ? 2 : 1,
+                          }
+                        ]}>
+                          <Ionicons name="mail-outline" size={20} color={theme.colors.textSecondary} />
+                          <TextInput
+                            style={[styles.textInput, { color: theme.colors.text }]}
+                            placeholder="john.doe@example.com"
+                            placeholderTextColor={theme.colors.textSecondary}
+                            value={value}
+                            onChangeText={onChange}
+                            onBlur={onBlur}
+                            keyboardType="email-address"
+                            autoCapitalize="none"
+                            autoComplete="email"
+                            editable={!isLoading}
+                          />
+                        </View>
+                      )}
                     />
+                    {errors.email && (
+                      <Text style={styles.errorText}>{errors.email.message}</Text>
+                    )}
+                  </View>
+
+                  {/* Password Input */}
+                  <View style={styles.inputGroup}>
+                    <Text style={[styles.inputLabel, { color: theme.colors.text }]}>Password</Text>
+                    <Controller
+                      control={control}
+                      name="password"
+                      render={({ field: { onChange, onBlur, value } }) => (
+                        <View style={[
+                          styles.inputWrapper, 
+                          { 
+                            backgroundColor: theme.colors.background,
+                            borderColor: errors.password ? '#EF4444' : theme.colors.border,
+                            borderWidth: errors.password ? 2 : 1,
+                          }
+                        ]}>
+                          <Ionicons name="lock-closed-outline" size={20} color={theme.colors.textSecondary} />
+                          <TextInput
+                            style={[styles.textInput, { color: theme.colors.text }]}
+                            placeholder="Create a strong password"
+                            placeholderTextColor={theme.colors.textSecondary}
+                            value={value}
+                            onChangeText={onChange}
+                            onBlur={onBlur}
+                            secureTextEntry={!showPassword}
+                            autoCapitalize="none"
+                            autoComplete="password-new"
+                            editable={!isLoading}
+                          />
+                          <TouchableOpacity 
+                            onPress={() => setShowPassword(!showPassword)}
+                            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                          >
+                            <Ionicons 
+                              name={showPassword ? 'eye-off-outline' : 'eye-outline'} 
+                              size={20} 
+                              color={theme.colors.textSecondary} 
+                            />
+                          </TouchableOpacity>
+                        </View>
+                      )}
+                    />
+                    
+                    {/* Password Strength */}
+                    {password && passwordStrength && (
+                      <View style={styles.strengthContainer}>
+                        <View style={styles.strengthBar}>
+                          <View 
+                            style={[
+                              styles.strengthFill,
+                              { 
+                                backgroundColor: passwordStrength.color,
+                                width: passwordStrength.width === '33%' ? '33%' : passwordStrength.width === '66%' ? '66%' : '100%',
+                              }
+                            ]} 
+                          />
+                        </View>
+                        <Text style={[styles.strengthText, { color: passwordStrength.color }]}>
+                          {passwordStrength.strength}
+                        </Text>
+                      </View>
+                    )}
+
+                    {errors.password && (
+                      <Text style={styles.errorText}>{errors.password.message}</Text>
+                    )}
+                  </View>
+
+                  {/* Confirm Password Input */}
+                  <View style={styles.inputGroup}>
+                    <Text style={[styles.inputLabel, { color: theme.colors.text }]}>Confirm Password</Text>
+                    <Controller
+                      control={control}
+                      name="confirmPassword"
+                      render={({ field: { onChange, onBlur, value } }) => (
+                        <View style={[
+                          styles.inputWrapper, 
+                          { 
+                            backgroundColor: theme.colors.background,
+                            borderColor: errors.confirmPassword ? '#EF4444' : theme.colors.border,
+                            borderWidth: errors.confirmPassword ? 2 : 1,
+                          }
+                        ]}>
+                          <Ionicons name="shield-checkmark-outline" size={20} color={theme.colors.textSecondary} />
+                          <TextInput
+                            style={[styles.textInput, { color: theme.colors.text }]}
+                            placeholder="Confirm your password"
+                            placeholderTextColor={theme.colors.textSecondary}
+                            value={value}
+                            onChangeText={onChange}
+                            onBlur={onBlur}
+                            secureTextEntry={!showConfirmPassword}
+                            autoCapitalize="none"
+                            editable={!isLoading}
+                          />
+                          <TouchableOpacity 
+                            onPress={() => setShowConfirmPassword(!showConfirmPassword)}
+                            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                          >
+                            <Ionicons 
+                              name={showConfirmPassword ? 'eye-off-outline' : 'eye-outline'} 
+                              size={20} 
+                              color={theme.colors.textSecondary} 
+                            />
+                          </TouchableOpacity>
+                        </View>
+                      )}
+                    />
+                    {errors.confirmPassword && (
+                      <Text style={styles.errorText}>{errors.confirmPassword.message}</Text>
+                    )}
+                  </View>
+
+                  {/* Terms & Privacy */}
+                  <TouchableOpacity 
+                    style={styles.termsContainer} 
+                    onPress={() => setAcceptTerms(!acceptTerms)}
+                    activeOpacity={0.7}
+                  >
+                    <View style={[
+                      styles.checkbox, 
+                      { borderColor: theme.colors.border },
+                      acceptTerms && { backgroundColor: theme.colors.primary, borderColor: theme.colors.primary }
+                    ]}>
+                      {acceptTerms && <Ionicons name="checkmark" size={13} color="#FFFFFF" />}
+                    </View>
+                    <View style={styles.termsTextContainer}>
+                      <Text style={[styles.termsText, { color: theme.colors.textSecondary }]}>
+                        I agree to{' '}
+                        <Text style={[styles.termsLink, { color: theme.colors.primary }]}>
+                          Terms of Service
+                        </Text>
+                        {' '}and{' '}
+                        <Text style={[styles.termsLink, { color: theme.colors.primary }]}>
+                          Privacy Policy
+                        </Text>
+                      </Text>
+                    </View>
+                  </TouchableOpacity>
+
+                  {/* Sign Up Button */}
+                  <LinearGradient
+                    colors={['#4A90E2', '#357ABD']}
+                    style={[styles.signUpButton, (!isValid || !acceptTerms || isLoading) && styles.buttonDisabled]}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 0 }}
+                  >
+                    <TouchableOpacity
+                      onPress={handleSubmit(onSubmit)}
+                      disabled={!isValid || !acceptTerms || isLoading}
+                      style={styles.buttonContent}
+                    >
+                      {isLoading ? (
+                        <ActivityIndicator size="small" color="#FFFFFF" />
+                      ) : (
+                        <>
+                          <Text style={styles.signUpButtonText}>Create Account</Text>
+                          <Ionicons name="arrow-forward" size={18} color="#FFFFFF" />
+                        </>
+                      )}
+                    </TouchableOpacity>
+                  </LinearGradient>
+
+                  {/* Divider */}
+                  <View style={styles.dividerContainer}>
+                    <View style={[styles.divider, { backgroundColor: theme.colors.border }]} />
+                    <Text style={[styles.dividerText, { color: theme.colors.textSecondary }]}>OR</Text>
+                    <View style={[styles.divider, { backgroundColor: theme.colors.border }]} />
+                  </View>
+
+                  {/* Google Sign Up */}
+                  <TouchableOpacity
+                    style={[styles.googleButton, { 
+                      backgroundColor: theme.colors.background,
+                      borderColor: theme.colors.border
+                    }]}
+                    onPress={handleGoogleSignUp}
+                    disabled={isGoogleLoading || isLoading}
+                    activeOpacity={0.7}
+                  >
+                    {isGoogleLoading ? (
+                      <ActivityIndicator size="small" color="#EA4335" />
+                    ) : (
+                      <>
+                        <Ionicons name="logo-google" size={20} color="#EA4335" />
+                        <Text style={[styles.googleButtonText, { color: theme.colors.text }]}>
+                          Continue with Google
+                        </Text>
+                      </>
+                    )}
                   </TouchableOpacity>
                 </View>
-              )}
-            />
-            {errors.confirmPassword && <Text style={styles.errorText}>{errors.confirmPassword.message}</Text>}
-          </View>
+              </Animated.View>
 
-          {/* Terms and Privacy */}
-          <View style={styles.termsContainer}>
-            <Controller
-              control={control}
-              name="agreeToTerms"
-              render={({ field: { onChange, value } }) => (
-                <TouchableOpacity
-                  style={styles.termsCheckboxContainer}
-                  onPress={() => onChange(!value)}
-                >
-                  <View style={[styles.modernCheckbox, value && styles.checkboxChecked]}>
-                    {value && <Ionicons name="checkmark" size={14} color="#FFF" />}
-                  </View>
-                  <Text style={[styles.termsText, { color: theme.colors.textSecondary }]}>
-                    I agree to the{' '}
-                    <Text style={styles.linkText} onPress={openTermsOfService}>Terms of Service</Text>
-                    {' '}and{' '}
-                    <Text style={styles.linkText} onPress={openPrivacyPolicy}>Privacy Policy</Text>
+              {/* Sign In Link */}
+              <View style={styles.signInSection}>
+                <Text style={[styles.signInPrompt, { color: theme.colors.textSecondary }]}>
+                  Already have an account?{' '}
+                </Text>
+                <TouchableOpacity onPress={() => navigation.navigate('SignIn')} activeOpacity={0.7}>
+                  <Text style={[styles.signInLink, { color: theme.colors.primary }]}>
+                    Sign In
                   </Text>
                 </TouchableOpacity>
-              )}
-            />
-            {errors.agreeToTerms && <Text style={styles.errorText}>{errors.agreeToTerms.message}</Text>}
-          </View>
+              </View>
+            </ScrollView>
+          </SafeAreaView>
+        </KeyboardAvoidingView>
+      </LinearGradient>
 
-          {/* Sign Up Button */}
-          <TouchableOpacity
-            style={[styles.modernSignUpButton, (!isValid || isLoading) && styles.buttonDisabled]}
-            onPress={handleSubmit(onSubmit)}
-            disabled={!isValid || isLoading}
-          >
-            {isLoading ? (
-              <ActivityIndicator color="#FFF" size="small" />
-            ) : (
-              <>
-                <Text style={styles.signUpButtonText}>Create Account</Text>
-                <Ionicons name="arrow-forward" size={20} color="#FFF" />
-              </>
-            )}
-          </TouchableOpacity>
-
-          {/* Social Sign Up Options */}
-          <View style={styles.dividerContainer}>
-            <View style={[styles.dividerLine, { backgroundColor: theme.colors.border }]} />
-            <Text style={[styles.dividerText, { color: theme.colors.textSecondary }]}>OR</Text>
-            <View style={[styles.dividerLine, { backgroundColor: theme.colors.border }]} />
-          </View>
-
-          <View style={styles.socialButtonsContainer}>
-            <TouchableOpacity 
-              style={[styles.socialButton, { backgroundColor: theme.colors.background, borderColor: theme.colors.border }]}
-              onPress={handleGoogleSignUp}
-              disabled={isLoading || isGoogleLoading}
-            >
-              {isGoogleLoading ? (
-                <ActivityIndicator size="small" color="#EA4335" />
-              ) : (
-                <>
-                  <Ionicons name="logo-google" size={20} color="#EA4335" />
-                  <Text style={[styles.socialButtonText, { color: theme.colors.text }]}>Google</Text>
-                </>
-              )}
-            </TouchableOpacity>
-            
-            <TouchableOpacity 
-              style={[styles.socialButton, { backgroundColor: theme.colors.background, borderColor: theme.colors.border }]}
-              disabled={isLoading || isGoogleLoading}
-            >
-              <Ionicons name="logo-apple" size={20} color={theme.colors.text} />
-              <Text style={[styles.socialButtonText, { color: theme.colors.text }]}>Apple</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-
-        {/* Sign In Link */}
-        <View style={styles.signInSection}>
-          <Text style={[styles.signInPrompt, { color: theme.colors.textSecondary }]}>
-            Already have an account?
-          </Text>
-          <TouchableOpacity onPress={() => navigation.goBack()}>
-            <Text style={styles.signInLink}>Sign In</Text>
-          </TouchableOpacity>
-        </View>
-      </ScrollView>
-      
       <CustomAlert
         visible={alertState.visible}
         title={alertState.title}
         message={alertState.message}
-        buttons={alertState.buttons}
-        icon={alertState.icon as any}
-        iconColor={alertState.iconColor}
-        onDismiss={hideAlert}
+        onClose={hideAlert}
       />
-    </SafeAreaView>
+    </View>
   );
 };
 
@@ -438,50 +564,93 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
+  gradient: {
+    flex: 1,
+  },
+  keyboardView: {
+    flex: 1,
+  },
+  safeArea: {
+    flex: 1,
+  },
   scrollContent: {
     flexGrow: 1,
-    paddingBottom: 30,
-  },
-  
-  // Compact Header Styles
-  compactHeader: {
-    paddingTop: 60,
-    paddingBottom: 20,
-    paddingHorizontal: 24,
-    alignItems: 'center',
-  },
-  logoContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 16,
-  },
-  appName: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    marginLeft: 12,
-  },
-  welcomeText: {
-    fontSize: 18,
-    fontWeight: '600',
-    opacity: 0.8,
+    paddingBottom: 40,
   },
 
-  // Form Card Styles
+  // Hero Section
+  heroSection: {
+    paddingTop: 30,
+    paddingBottom: 40,
+    paddingHorizontal: 24,
+  },
+  brandContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 40,
+  },
+  appIcon: {
+    width: 56,
+    height: 56,
+    borderRadius: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 12,
+    elevation: 6,
+  },
+  brandText: {
+    marginLeft: 16,
+  },
+  brandName: {
+    fontSize: 28,
+    fontWeight: '800',
+    letterSpacing: -0.5,
+    marginBottom: 4,
+  },
+  brandTagline: {
+    fontSize: 14,
+    fontWeight: '500',
+  },
+
+  welcomeBox: {
+    paddingHorizontal: 4,
+  },
+  welcomeTitle: {
+    fontSize: 32,
+    fontWeight: '800',
+    letterSpacing: -0.5,
+    marginBottom: 8,
+  },
+  welcomeSubtitle: {
+    fontSize: 16,
+    fontWeight: '400',
+    lineHeight: 22,
+  },
+
+  // Form Card
   formCard: {
-    margin: 24,
-    padding: 28,
+    marginHorizontal: 16,
+    marginBottom: 20,
+    paddingHorizontal: 24,
+    paddingVertical: 28,
     borderRadius: 24,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.1,
-    shadowRadius: 20,
-    elevation: 10,
+    shadowOffset: { width: 0, height: 12 },
+    shadowOpacity: 0.08,
+    shadowRadius: 24,
+    elevation: 12,
   },
-  formTitle: {
-    fontSize: 28,
-    fontWeight: 'bold',
-    marginBottom: 24,
-    textAlign: 'center',
+
+  // Name Fields
+  nameRow: {
+    flexDirection: 'row',
+    gap: 12,
+    marginBottom: 4,
+  },
+  nameInput: {
+    flex: 1,
+    marginBottom: 16,
   },
 
   // Input Styles
@@ -490,163 +659,161 @@ const styles = StyleSheet.create({
   },
   inputLabel: {
     fontSize: 14,
-    fontWeight: '600',
+    fontWeight: '700',
+    letterSpacing: -0.2,
     marginBottom: 8,
+    marginLeft: 4,
   },
-  modernInputWrapper: {
+  inputWrapper: {
     flexDirection: 'row',
     alignItems: 'center',
-    borderWidth: 1.5,
-    borderRadius: 16,
+    borderWidth: 1,
+    borderRadius: 14,
     paddingHorizontal: 16,
-    paddingVertical: 4,
-    height: 56,
+    paddingVertical: 14,
+    height: 54,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
+    shadowOpacity: 0.04,
     shadowRadius: 8,
-    elevation: 3,
+    elevation: 2,
   },
-  modernInput: {
+  textInput: {
     flex: 1,
     fontSize: 16,
-    paddingVertical: 12,
-    paddingHorizontal: 12,
+    fontWeight: '500',
+    marginLeft: 12,
+    marginRight: 8,
+    backgroundColor: 'transparent',
+    paddingVertical: 0,
+    paddingHorizontal: 0,
   },
   errorText: {
     color: '#EF4444',
     fontSize: 12,
     marginTop: 6,
-    fontWeight: '500',
+    marginLeft: 4,
+    fontWeight: '600',
   },
 
   // Password Strength
-  passwordStrengthContainer: {
-    marginTop: 12,
-  },
-  passwordStrengthText: {
-    fontSize: 12,
-    fontWeight: '600',
-    marginBottom: 8,
-  },
-  strengthBarContainer: {
+  strengthContainer: {
     flexDirection: 'row',
     alignItems: 'center',
+    marginTop: 8,
+    marginLeft: 4,
   },
   strengthBar: {
-    height: 6,
     flex: 1,
-    borderRadius: 3,
+    height: 4,
+    backgroundColor: '#E5E7EB',
+    borderRadius: 2,
     marginRight: 12,
+    overflow: 'hidden',
   },
-  strengthLabel: {
+  strengthFill: {
+    height: '100%',
+    borderRadius: 2,
+  },
+  strengthText: {
     fontSize: 12,
     fontWeight: '600',
     minWidth: 60,
   },
 
-  // Terms and Privacy
+  // Terms
   termsContainer: {
-    marginBottom: 24,
-    marginTop: 8,
-  },
-  termsCheckboxContainer: {
     flexDirection: 'row',
     alignItems: 'flex-start',
+    marginBottom: 24,
   },
-  modernCheckbox: {
+  checkbox: {
     width: 20,
     height: 20,
     borderWidth: 2,
-    borderColor: '#D1D5DB',
     borderRadius: 6,
     marginRight: 12,
-    justifyContent: 'center',
-    alignItems: 'center',
     marginTop: 2,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  checkboxChecked: {
-    backgroundColor: '#3B82F6',
-    borderColor: '#3B82F6',
+  termsTextContainer: {
+    flex: 1,
   },
   termsText: {
     fontSize: 14,
+    fontWeight: '500',
     lineHeight: 20,
-    flex: 1,
   },
-  linkText: {
-    color: '#3B82F6',
-    fontWeight: '600',
+  termsLink: {
+    fontWeight: '700',
+    textDecorationLine: 'underline',
   },
 
   // Buttons
-  modernSignUpButton: {
-    backgroundColor: '#3B82F6',
-    borderRadius: 16,
-    paddingVertical: 18,
+  signUpButton: {
+    borderRadius: 14,
+    marginBottom: 16,
+    overflow: 'hidden',
+    shadowColor: '#4A90E2',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.3,
+    shadowRadius: 16,
+    elevation: 10,
+  },
+  buttonContent: {
+    paddingVertical: 16,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 20,
-    shadowColor: '#3B82F6',
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.4,
-    shadowRadius: 12,
-    elevation: 8,
   },
   buttonDisabled: {
-    backgroundColor: '#9CA3AF',
-    shadowOpacity: 0,
-    elevation: 0,
+    opacity: 0.6,
   },
   signUpButtonText: {
-    color: '#FFF',
-    fontSize: 18,
+    color: '#FFFFFF',
+    fontSize: 17,
     fontWeight: '700',
     marginRight: 8,
+    letterSpacing: -0.2,
   },
 
   // Divider
   dividerContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginVertical: 24,
+    marginVertical: 20,
   },
-  dividerLine: {
+  divider: {
     flex: 1,
     height: 1,
   },
   dividerText: {
     marginHorizontal: 16,
-    fontSize: 14,
-    fontWeight: '600',
+    fontSize: 13,
+    fontWeight: '700',
+    letterSpacing: 0.5,
   },
 
-  // Social Buttons
-  socialButtonsContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 20,
-  },
-  socialButton: {
-    flex: 1,
+  // Google Button
+  googleButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1.5,
-    borderRadius: 16,
-    paddingVertical: 16,
-    marginHorizontal: 6,
+    borderRadius: 14,
+    paddingVertical: 14,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.05,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.04,
     shadowRadius: 8,
-    elevation: 3,
+    elevation: 2,
   },
-  socialButtonText: {
-    fontSize: 16,
-    fontWeight: '600',
-    marginLeft: 8,
+  googleButtonText: {
+    fontSize: 15,
+    fontWeight: '700',
+    marginLeft: 12,
+    letterSpacing: -0.2,
   },
 
   // Sign In Section
@@ -655,16 +822,17 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     paddingHorizontal: 24,
-    paddingTop: 20,
+    paddingVertical: 20,
   },
   signInPrompt: {
     fontSize: 16,
+    fontWeight: '500',
     marginRight: 4,
   },
   signInLink: {
     fontSize: 16,
-    color: '#3B82F6',
-    fontWeight: '700',
+    fontWeight: '800',
+    letterSpacing: -0.2,
   },
 });
 

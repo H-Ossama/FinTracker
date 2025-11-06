@@ -15,7 +15,58 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import Svg, { Circle, Path, Text as SvgText, Defs, RadialGradient, Stop } from 'react-native-svg';
 import { Ionicons } from '@expo/vector-icons';
-import { analyticsService, SpendingCategory, SpendingData, Recommendation, TrendData, TrendPoint } from '../services/analyticsService';
+// Lazy import for analytics service to reduce initial bundle
+type SpendingCategory = {
+  id: string;
+  name: string;
+  icon: string;
+  color: string;
+  amount: number;
+  percentage: number;
+  transactions: number;
+};
+
+type SpendingData = {
+  period: {
+    type: 'week' | 'month' | 'year';
+    startDate: string;
+    endDate: string;
+    days: number;
+  };
+  totalSpent: number;
+  categories: SpendingCategory[];
+  statistics: {
+    transactionCount: number;
+    averagePerDay: number;
+    highestCategory: string;
+  };
+};
+
+type Recommendation = {
+  type: 'warning' | 'achievement' | 'tip';
+  title: string;
+  description: string;
+  category?: string;
+  emoji: string;
+  percentageChange?: number;
+};
+
+type TrendPoint = {
+  date: string;
+  income: number;
+  expense: number;
+  net: number;
+};
+
+type TrendData = {
+  trend: TrendPoint[];
+  period: {
+    type: 'week' | 'month' | 'year';
+    startDate: string;
+    endDate: string;
+    groupBy: 'day' | 'week' | 'month';
+  };
+};
 import { useTheme } from '../contexts/ThemeContext';
 import { useLocalization } from '../contexts/LocalizationContext';
 import { useFocusEffect } from '@react-navigation/native';
@@ -202,7 +253,8 @@ const InsightsScreen = () => {
       const groupBy = apiPeriod === 'week' ? 'day' : 
                       apiPeriod === 'month' ? 'day' : 'month';
       
-      // Fetch spending data, trend data, and recommendations in parallel
+      // Lazy load analytics service and fetch data in parallel
+      const { analyticsService } = await import('../services/analyticsService');
       const [spendingResponse, trendResponse, recommendationsResponse] = await Promise.all([
         analyticsService.getSpendingByCategory(apiPeriod),
         analyticsService.getTrendData(apiPeriod, groupBy as 'day' | 'week' | 'month'),

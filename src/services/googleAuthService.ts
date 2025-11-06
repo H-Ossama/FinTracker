@@ -1,7 +1,20 @@
-import { GoogleSignin, GoogleSigninButton, statusCodes } from '@react-native-google-signin/google-signin';
 import * as SecureStore from 'expo-secure-store';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { firebaseAuthService } from './firebaseAuthService';
+
+// Conditionally import Google Sign-In to prevent bundling issues
+let GoogleSignin: any = null;
+let GoogleSigninButton: any = null;
+let statusCodes: any = null;
+
+try {
+  const googleSignInModule = require('@react-native-google-signin/google-signin');
+  GoogleSignin = googleSignInModule.GoogleSignin;
+  GoogleSigninButton = googleSignInModule.GoogleSigninButton;
+  statusCodes = googleSignInModule.statusCodes;
+} catch (error) {
+  console.warn('Google Sign-In module not available:', error.message);
+}
 
 export interface GoogleUser {
   id: string;
@@ -31,6 +44,13 @@ class GoogleAuthService {
     if (this.isConfigured) return;
 
     try {
+      // Check if Google Sign-In is available
+      if (!GoogleSignin) {
+        console.warn('⚠️ Google Sign-In module not available - running without Google authentication');
+        this.isConfigured = false;
+        return;
+      }
+
       const webClientId = process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID || '123456789-abcdefg.apps.googleusercontent.com';
       const iosClientId = process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID;
       
@@ -81,6 +101,14 @@ class GoogleAuthService {
   async signIn(): Promise<GoogleAuthResult> {
     try {
       await this.configure();
+
+      // Check if Google Sign-In is available
+      if (!GoogleSignin) {
+        return { 
+          success: false, 
+          error: 'Google Sign-In is not available in this build. Please use email/password authentication.' 
+        };
+      }
 
       // Check if configuration was successful
       if (!this.isConfigured) {
@@ -167,6 +195,11 @@ class GoogleAuthService {
 
   async signOut(): Promise<boolean> {
     try {
+      if (!GoogleSignin) {
+        console.warn('Google Sign-In not available for sign out');
+        return true;
+      }
+
       await this.configure();
       await GoogleSignin.signOut();
       await this.clearStoredTokens();
@@ -180,6 +213,11 @@ class GoogleAuthService {
 
   async revokeAccess(): Promise<boolean> {
     try {
+      if (!GoogleSignin) {
+        console.warn('Google Sign-In not available for revoke access');
+        return true;
+      }
+
       await this.configure();
       await GoogleSignin.revokeAccess();
       await this.clearStoredTokens();
@@ -193,6 +231,11 @@ class GoogleAuthService {
 
   async getCurrentUser(): Promise<GoogleUser | null> {
     try {
+      if (!GoogleSignin) {
+        console.warn('Google Sign-In not available for getCurrentUser');
+        return null;
+      }
+
       await this.configure();
       const user = await GoogleSignin.getCurrentUser();
       
@@ -218,6 +261,10 @@ class GoogleAuthService {
 
   async isSignedIn(): Promise<boolean> {
     try {
+      if (!GoogleSignin) {
+        return false;
+      }
+
       await this.configure();
       const currentUser = await GoogleSignin.getCurrentUser();
       return currentUser !== null;
@@ -229,6 +276,10 @@ class GoogleAuthService {
 
   async refreshToken(): Promise<string | null> {
     try {
+      if (!GoogleSignin) {
+        return null;
+      }
+
       await this.configure();
       const tokens = await GoogleSignin.getTokens();
       return tokens.accessToken;
@@ -301,4 +352,5 @@ class GoogleAuthService {
 }
 
 export const googleAuthService = new GoogleAuthService();
+export { GoogleSigninButton };
 export default googleAuthService;
