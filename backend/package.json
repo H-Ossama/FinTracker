@@ -4,7 +4,8 @@
   "description": "Backend API for FinTracker mobile app",
   "main": "dist/server.js",
   "scripts": {
-    "start": "node dist/server.js",
+    "start": "npx prisma db push --accept-data-loss && node dist/server.js",
+    "start:dev": "node dist/server.js",
     "dev": "nodemon src/server.ts",
     "build": "tsc",
     "build:watch": "tsc --watch",
@@ -14,7 +15,10 @@
     "db:push": "npx prisma db push",
     "db:seed": "npx prisma db seed",
     "db:studio": "npx prisma studio",
-    "generate": "npx prisma generate"
+    "generate": "npx prisma generate",
+    "postbuild": "npx prisma generate",
+    "deploy": "npx prisma generate && npx prisma db push --accept-data-loss && node dist/server.js",
+    "setup:db": "npx prisma generate && npx prisma db push --accept-data-loss"
   },
   "keywords": [
     "fintech",
