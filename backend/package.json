@@ -18,6 +18,7 @@
     "generate": "npx prisma generate",
     "postbuild": "npx prisma generate",
     "deploy": "npx prisma generate && npx prisma db push --accept-data-loss && node dist/server.js",
+    "production-start": "bash scripts/production-start.sh",
     "setup:db": "npx prisma generate && npx prisma db push --accept-data-loss"
   },
   "keywords": [

@@ -5,7 +5,7 @@
     "buildCommand": "cd backend && npm ci && npm run build"
   },
   "deploy": {
-    "startCommand": "cd backend && node dist/server.js",
+    "startCommand": "cd backend && npm run deploy",
     "restartPolicyMaxRetries": 3,
     "healthcheckPath": "/health",
     "healthcheckTimeout": 60
