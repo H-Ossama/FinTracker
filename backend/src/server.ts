@@ -129,12 +129,12 @@ app.get('/api', (_req, res) => {
       '/api/sync',
     ],
     timestamp: new Date().toISOString(),
+  });
+});
+
 // Root endpoint - serve index.html
 app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
-}); timestamp: new Date().toISOString(),
-    port: PORT,
-  });
 });
 
 // Simple test endpoint
