@@ -120,10 +120,14 @@ const server = app.listen(PORT, () => {
   console.log(`📊 Environment: ${process.env.NODE_ENV}`);
   console.log(`🔗 Health check: http://localhost:${PORT}/health`);
   
-  // Start reminder scheduler
-  const reminderScheduler = ReminderSchedulerService.getInstance();
-  reminderScheduler.start(15); // Check every 15 minutes
-  console.log(`⏰ Reminder scheduler started`);
+  // Start reminder scheduler only if database is available
+  try {
+    const reminderScheduler = ReminderSchedulerService.getInstance();
+    reminderScheduler.start(15); // Check every 15 minutes
+    console.log(`⏰ Reminder scheduler started`);
+  } catch (error) {
+    console.log(`⏰ Reminder scheduler skipped - database not ready`);
+  }
 });
 
 export default app;
