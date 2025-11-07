@@ -177,10 +177,12 @@ server.on('error', (error: any) => {
   }
 });
 
-// Test database connection on startup
+// Initialize database when server starts
 async function initializeDatabase() {
   try {
     console.log('🔄 Connecting to database...');
+    console.log('🔗 Database URL present:', !!process.env.DATABASE_URL);
+    
     await prisma.$connect();
     console.log('✅ Database connected successfully');
     
@@ -191,12 +193,14 @@ async function initializeDatabase() {
     return true;
   } catch (error) {
     console.error('❌ Database connection failed:', error);
+    if (error instanceof Error) {
+      console.error('❌ Error details:', error.message);
+    }
     console.error('❌ Server will start but database features will be unavailable');
     return false;
   }
 }
 
-// Initialize database when server starts
 initializeDatabase();
 
 export default app;
