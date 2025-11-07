@@ -5,7 +5,7 @@
     "buildCommand": "cd backend && npm ci --include=dev && npm run build"
   },
   "deploy": {
-    "startCommand": "cd backend && npm start",
+    "startCommand": "cd backend && npx prisma migrate deploy && npx prisma generate && npm start",
     "restartPolicyMaxRetries": 5
   }
 }
