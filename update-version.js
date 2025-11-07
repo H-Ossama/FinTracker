@@ -69,6 +69,24 @@ const FILES_TO_UPDATE = [
         replace: `'settings_screen_app_version': 'FinTracker v${NEW_VERSION}'`
       }
     ]
+  },
+  {
+    file: 'android/app/build.gradle',
+    updates: [
+      {
+        type: 'string',
+        search: /versionName "[^"]*"/g,
+        replace: `versionName "${NEW_VERSION}"`
+      },
+      {
+        type: 'string',
+        search: /versionCode \d+/g,
+        replace: (match) => {
+          const currentCode = parseInt(match.split(' ')[1]);
+          return `versionCode ${currentCode + 1}`;
+        }
+      }
+    ]
   }
 ];
 
@@ -160,6 +178,7 @@ function main() {
   console.log('   2. Test your app');
   console.log('   3. Commit the changes');
   console.log('   4. Build and deploy if ready');
+  console.log('\n⚠️  Important: After updating versions, you need to rebuild your app for changes to take effect!');
 }
 
 if (require.main === module) {

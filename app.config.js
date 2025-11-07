@@ -2,7 +2,7 @@ export default {
   expo: {
     name: "FINEX",
     slug: "finex", 
-    version: "2.5.5",
+    version: "2.5.7",
     orientation: "portrait",
     sdkVersion: "54.0.0",
     icon: "./assets/icon.png",
@@ -35,7 +35,7 @@ export default {
         foregroundImage: "./assets/adaptive-icon.png",
         backgroundColor: "#20C6F7"
       },
-      versionCode: 5,
+      versionCode: 9,
       compileSdkVersion: 34,
       targetSdkVersion: 34,
       minSdkVersion: 21,
