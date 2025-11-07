@@ -8,6 +8,6 @@
     "startCommand": "cd backend && npm run deploy",
     "restartPolicyMaxRetries": 3,
     "healthcheckPath": "/health",
-    "healthcheckTimeout": 60
+    "healthcheckTimeout": 120
   }
 }
