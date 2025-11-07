@@ -10,6 +10,7 @@ import path from 'path';
 import { errorHandler } from './middleware/errorHandler';
 import { notFound } from './middleware/notFound';
 import authRoutes from './routes/auth';
+import landingRoutes from './routes/landing';
 import userRoutes from './routes/users';
 import walletRoutes from './routes/wallets';
 import transactionRoutes from './routes/transactions';
@@ -65,9 +66,6 @@ if (process.env.NODE_ENV === 'development') {
   app.use(morgan('combined'));
 }
 
-// Serve static files from public directory
-app.use(express.static(path.join(__dirname, 'public')));
-
 // Health check endpoint
 app.get('/health', async (req, res) => {
   try {
@@ -109,33 +107,8 @@ app.use('/api/recurring-transactions', recurringTransactionRoutes);
 app.use('/api/smart-alerts', smartAlertRoutes);
 app.use('/api/sync', syncRoutes);
 
-// API root overview
-app.get('/api', (_req, res) => {
-  res.json({
-    success: true,
-    message: 'FinTracker API',
-    endpoints: [
-      '/api/auth',
-      '/api/users',
-      '/api/wallets',
-      '/api/transactions',
-      '/api/categories',
-      '/api/reminders',
-      '/api/goals',
-      '/api/analytics',
-      '/api/notifications',
-      '/api/recurring-transactions',
-      '/api/smart-alerts',
-      '/api/sync',
-    ],
-    timestamp: new Date().toISOString(),
-  });
-});
-
-// Root endpoint - serve index.html
-app.get('/', (req, res) => {
-  res.sendFile(path.join(__dirname, 'public', 'index.html'));
-});
+// Root endpoint - served by landing route
+app.use('/', landingRoutes);
 
 // Simple test endpoint
 app.get('/test', (req, res) => {

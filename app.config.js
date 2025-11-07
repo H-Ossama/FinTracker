@@ -29,7 +29,7 @@ export default {
       icon: "./assets/icon.png"
     },
     android: {
-      package: "com.H_Oussama.financetracker",
+      package: "com.oussamaaaaa.finex",
       icon: "./assets/icon.png",
       adaptiveIcon: {
         foregroundImage: "./assets/adaptive-icon.png",
