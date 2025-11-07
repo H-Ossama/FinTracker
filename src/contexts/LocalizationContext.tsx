@@ -999,6 +999,19 @@ const translations = {
     'securityAudit.weeklyAudit': 'Weekly',
     'securityAudit.monthlyAudit': 'Monthly',
     'securityAudit.quarterlyAudit': 'Quarterly',
+
+    // Tutorial
+    'tutorial.tap_to_continue': 'Tap the highlighted element or press Next',
+    'tutorial.welcome': 'Welcome to FinTracker!',
+    'tutorial.language_currency': 'Change Language & Currency',
+    'tutorial.quick_actions': 'Quick Actions',
+    'tutorial.wallets': 'Manage Wallets',
+    'tutorial.insights': 'View Insights',
+    'tutorial.settings': 'More Features',
+    'tutorial.skip': 'Skip',
+    'tutorial.quit': 'Quit',
+    'tutorial.next': 'Next',
+    'tutorial.finish': 'Finish',
   },
   de: {
     // Navigation
@@ -1959,6 +1972,19 @@ const translations = {
     'securityAudit.weeklyAudit': 'Wöchentlich',
     'securityAudit.monthlyAudit': 'Monatlich',
     'securityAudit.quarterlyAudit': 'Vierteljährlich',
+
+    // Tutorial
+    'tutorial.tap_to_continue': 'Tippen Sie auf das hervorgehobene Element oder drücken Sie Weiter',
+    'tutorial.welcome': 'Willkommen bei FinTracker!',
+    'tutorial.language_currency': 'Sprache & Währung ändern',
+    'tutorial.quick_actions': 'Schnellaktionen',
+    'tutorial.wallets': 'Geldbörsen verwalten',
+    'tutorial.insights': 'Einblicke anzeigen',
+    'tutorial.settings': 'Weitere Funktionen',
+    'tutorial.skip': 'Überspringen',
+    'tutorial.quit': 'Beenden',
+    'tutorial.next': 'Weiter',
+    'tutorial.finish': 'Beenden',
   },
   ar: {
     // Navigation
@@ -2919,6 +2945,19 @@ const translations = {
     'securityAudit.weeklyAudit': 'أسبوعياً',
     'securityAudit.monthlyAudit': 'شهرياً',
     'securityAudit.quarterlyAudit': 'ربع سنوياً',
+
+    // Tutorial
+    'tutorial.tap_to_continue': 'اضغط على العنصر المبرز أو اضغط على التالي',
+    'tutorial.welcome': 'أهلا بك في FinTracker!',
+    'tutorial.language_currency': 'تغيير اللغة والعملة',
+    'tutorial.quick_actions': 'الإجراءات السريعة',
+    'tutorial.wallets': 'إدارة المحافظ',
+    'tutorial.insights': 'عرض الإحصائيات',
+    'tutorial.settings': 'ميزات إضافية',
+    'tutorial.skip': 'تخطي',
+    'tutorial.quit': 'إنهاء',
+    'tutorial.next': 'التالي',
+    'tutorial.finish': 'إنهاء',
   },
 };
 
