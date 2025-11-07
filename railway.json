@@ -5,9 +5,9 @@
     "buildCommand": "cd backend && npm ci && npm run build"
   },
   "deploy": {
-    "startCommand": "cd backend && npm run deploy",
-    "restartPolicyMaxRetries": 3,
+    "startCommand": "cd backend && npm run start:railway",
+    "restartPolicyMaxRetries": 5,
     "healthcheckPath": "/health",
-    "healthcheckTimeout": 120
+    "healthcheckTimeout": 180
   }
 }
