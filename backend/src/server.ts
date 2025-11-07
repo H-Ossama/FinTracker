@@ -109,6 +109,17 @@ app.get('/', (req, res) => {
     version: '1.0.0',
     documentation: '/api/docs',
     health: '/health',
+    timestamp: new Date().toISOString(),
+    port: PORT,
+  });
+});
+
+// Simple test endpoint
+app.get('/test', (req, res) => {
+  res.json({
+    status: 'success',
+    message: 'Server is working!',
+    timestamp: new Date().toISOString(),
   });
 });
 
@@ -167,16 +178,25 @@ server.on('error', (error: any) => {
 });
 
 // Test database connection on startup
-async function testDatabaseConnection() {
+async function initializeDatabase() {
   try {
+    console.log('🔄 Connecting to database...');
     await prisma.$connect();
     console.log('✅ Database connected successfully');
+    
+    // Test with a simple query
+    await prisma.$queryRaw`SELECT 1`;
+    console.log('✅ Database query test successful');
+    
+    return true;
   } catch (error) {
     console.error('❌ Database connection failed:', error);
-    // Don't exit, let the app start anyway for health checks
+    console.error('❌ Server will start but database features will be unavailable');
+    return false;
   }
 }
 
-testDatabaseConnection();
+// Initialize database when server starts
+initializeDatabase();
 
 export default app;
