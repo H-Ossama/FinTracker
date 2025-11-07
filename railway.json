@@ -5,7 +5,9 @@
     "buildCommand": "cd backend && npm ci --include=dev && npm run build"
   },
   "deploy": {
-    "startCommand": "cd backend && npx prisma db push && npx prisma generate && npm start",
-    "restartPolicyMaxRetries": 5
+    "startCommand": "cd backend && npx prisma generate && npx prisma db push --accept-data-loss && npm start",
+    "restartPolicyMaxRetries": 10,
+    "healthcheckPath": "/health",
+    "healthcheckTimeout": 30
   }
 }

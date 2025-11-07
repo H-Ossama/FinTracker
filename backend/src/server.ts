@@ -62,13 +62,30 @@ if (process.env.NODE_ENV === 'development') {
 }
 
 // Health check endpoint
-app.get('/health', (req, res) => {
-  res.status(200).json({
-    status: 'OK',
-    timestamp: new Date().toISOString(),
-    environment: process.env.NODE_ENV,
-    version: process.env.npm_package_version || '1.0.0',
-  });
+app.get('/health', async (req, res) => {
+  try {
+    // Test database connection
+    await prisma.$queryRaw`SELECT 1`;
+    
+    res.status(200).json({
+      status: 'OK',
+      timestamp: new Date().toISOString(),
+      environment: process.env.NODE_ENV,
+      version: process.env.npm_package_version || '1.0.0',
+      database: 'connected',
+      uptime: process.uptime(),
+    });
+  } catch (error) {
+    res.status(503).json({
+      status: 'ERROR',
+      timestamp: new Date().toISOString(),
+      environment: process.env.NODE_ENV,
+      version: process.env.npm_package_version || '1.0.0',
+      database: 'disconnected',
+      uptime: process.uptime(),
+      error: error instanceof Error ? error.message : 'Unknown error',
+    });
+  }
 });
 
 // API Routes
@@ -99,7 +116,7 @@ app.get('/', (req, res) => {
 app.use(notFound);
 app.use(errorHandler);
 
-const PORT = process.env.PORT || 3001;
+const PORT = parseInt(process.env.PORT || '3001', 10);
 
 // Graceful shutdown
 process.on('SIGTERM', async () => {
@@ -115,10 +132,10 @@ process.on('SIGINT', async () => {
 });
 
 // Start server
-const server = app.listen(PORT, () => {
+const server = app.listen(PORT, '0.0.0.0', () => {
   console.log(`🚀 FinTracker Backend Server running on port ${PORT}`);
   console.log(`📊 Environment: ${process.env.NODE_ENV}`);
-  console.log(`🔗 Health check: http://localhost:${PORT}/health`);
+  console.log(`🔗 Health check: http://0.0.0.0:${PORT}/health`);
   
   // Start reminder scheduler only if database is available
   try {
@@ -129,5 +146,37 @@ const server = app.listen(PORT, () => {
     console.log(`⏰ Reminder scheduler skipped - database not ready`);
   }
 });
+
+server.on('error', (error: any) => {
+  if (error.syscall !== 'listen') {
+    throw error;
+  }
+
+  const bind = typeof PORT === 'string' ? 'Pipe ' + PORT : 'Port ' + PORT;
+
+  switch (error.code) {
+    case 'EACCES':
+      console.error(bind + ' requires elevated privileges');
+      process.exit(1);
+    case 'EADDRINUSE':
+      console.error(bind + ' is already in use');
+      process.exit(1);
+    default:
+      throw error;
+  }
+});
+
+// Test database connection on startup
+async function testDatabaseConnection() {
+  try {
+    await prisma.$connect();
+    console.log('✅ Database connected successfully');
+  } catch (error) {
+    console.error('❌ Database connection failed:', error);
+    // Don't exit, let the app start anyway for health checks
+  }
+}
+
+testDatabaseConnection();
 
 export default app;
