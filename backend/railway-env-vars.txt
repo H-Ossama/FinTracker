@@ -5,7 +5,7 @@
 NODE_ENV=production
 PORT=8080
 
-# Database - Simplified connection string (remove channel_binding)
+# Database - Production connection string (Neon pooler, TLS required)
 DATABASE_URL=postgresql://neondb_owner:npg_T9aMErmswlG5@ep-divine-field-agawkom9-pooler.c-2.eu-central-1.aws.neon.tech/neondb?sslmode=require
 
 # Security & Authentication
