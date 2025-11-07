@@ -5,6 +5,7 @@ import compression from 'compression';
 import morgan from 'morgan';
 import rateLimit from 'express-rate-limit';
 import dotenv from 'dotenv';
+import path from 'path';
 
 import { errorHandler } from './middleware/errorHandler';
 import { notFound } from './middleware/notFound';
@@ -63,6 +64,9 @@ if (process.env.NODE_ENV === 'development') {
 } else {
   app.use(morgan('combined'));
 }
+
+// Serve static files from public directory
+app.use(express.static(path.join(__dirname, 'public')));
 
 // Health check endpoint
 app.get('/health', async (req, res) => {
@@ -125,17 +129,10 @@ app.get('/api', (_req, res) => {
       '/api/sync',
     ],
     timestamp: new Date().toISOString(),
-  });
-});
-
-// Root endpoint
+// Root endpoint - serve index.html
 app.get('/', (req, res) => {
-  res.json({
-    message: 'FinTracker API Server',
-    version: '1.0.0',
-    documentation: '/api/docs',
-    health: '/health',
-    timestamp: new Date().toISOString(),
+  res.sendFile(path.join(__dirname, 'public', 'index.html'));
+}); timestamp: new Date().toISOString(),
     port: PORT,
   });
 });
