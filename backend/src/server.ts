@@ -32,6 +32,9 @@ export const prisma = new PrismaClient();
 // Create Express app
 const app = express();
 
+// Trust the first proxy so rate limiting sees client IPs correctly
+app.set('trust proxy', 1);
+
 // Security middleware
 app.use(helmet());
 app.use(cors({
@@ -101,6 +104,29 @@ app.use('/api/notifications', notificationRoutes);
 app.use('/api/recurring-transactions', recurringTransactionRoutes);
 app.use('/api/smart-alerts', smartAlertRoutes);
 app.use('/api/sync', syncRoutes);
+
+// API root overview
+app.get('/api', (_req, res) => {
+  res.json({
+    success: true,
+    message: 'FinTracker API',
+    endpoints: [
+      '/api/auth',
+      '/api/users',
+      '/api/wallets',
+      '/api/transactions',
+      '/api/categories',
+      '/api/reminders',
+      '/api/goals',
+      '/api/analytics',
+      '/api/notifications',
+      '/api/recurring-transactions',
+      '/api/smart-alerts',
+      '/api/sync',
+    ],
+    timestamp: new Date().toISOString(),
+  });
+});
 
 // Root endpoint
 app.get('/', (req, res) => {
