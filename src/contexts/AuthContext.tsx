@@ -2,8 +2,10 @@ import React, { createContext, useContext, useState, useEffect, ReactNode } from
 import * as SecureStore from 'expo-secure-store';
 import * as LocalAuthentication from 'expo-local-authentication';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Buffer } from 'buffer';
 import { googleAuthService, GoogleUser } from '../services/googleAuthService';
 import { cloudSyncService } from '../services/cloudSyncService';
+import { backendAuthService, BackendUser } from '../services/backendAuthService';
 
 // Types
 export interface User {
@@ -15,6 +17,12 @@ export interface User {
   lastLogin: string;
   googleId?: string;
   isGoogleUser?: boolean;
+  firstName?: string;
+  lastName?: string;
+  language?: string;
+  currency?: string;
+  emailVerified?: boolean;
+  isBackendUser?: boolean;
 }
 
 export interface AuthState {
@@ -78,7 +86,7 @@ export const useAuth = (): AuthContextType => {
 };
 
 // Mock API functions with proper user management
-const API = {
+const mockAuthAPI = {
   signUp: async (email: string, password: string, name: string) => {
     // Simulate API delay
     await new Promise(resolve => setTimeout(resolve, 1500));
@@ -131,6 +139,7 @@ const API = {
         name: name.trim(),
         createdAt: new Date().toISOString(),
         lastLogin: new Date().toISOString(),
+        isBackendUser: false,
       };
       
       // Store user in registered users list
@@ -176,6 +185,7 @@ const API = {
           name: 'Demo User',
           createdAt: new Date().toISOString(),
           lastLogin: new Date().toISOString(),
+          isBackendUser: false,
         };
         
         return {
@@ -214,10 +224,14 @@ const API = {
       
       // Return user data (without password)
       const { password: _, ...userWithoutPassword } = updatedUser;
+      const sanitizedUser = {
+        ...userWithoutPassword,
+        isBackendUser: false,
+      };
       
       return {
-        user: userWithoutPassword,
-        token: 'jwt_token_' + userWithoutPassword.id,
+        user: sanitizedUser,
+        token: 'jwt_token_' + sanitizedUser.id,
       };
     } catch (error) {
       if (error instanceof Error) {
@@ -320,6 +334,14 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
           const sessionValidation = await validateUserSession(user, token);
           
           if (sessionValidation.valid) {
+            const looksLikeJwt = token.includes('.') && token.split('.').length === 3;
+            if (user.isBackendUser || looksLikeJwt) {
+              try {
+                await cloudSyncService.setAuthToken(token);
+              } catch (syncError) {
+                console.warn('⚠️ Unable to sync auth token with cloud service during init:', syncError);
+              }
+            }
             setState(prev => ({
               ...prev,
               user,
@@ -370,93 +392,307 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     }
   };
 
+  const splitName = (fullName: string): { firstName: string; lastName: string } => {
+    const trimmed = fullName.trim();
+    if (!trimmed) {
+      return { firstName: '', lastName: '' };
+    }
+
+    const parts = trimmed.split(/\s+/).filter(Boolean);
+    const firstName = parts.shift() || '';
+    const lastName = parts.length > 0 ? parts.join(' ') : firstName;
+
+    return { firstName, lastName };
+  };
+
+  const isDemoEmail = (value: string): boolean => value.trim().toLowerCase() === 'demo@fintracker.app';
+
+  const isMockAccountEmail = (value: string): boolean => {
+    const email = value.trim().toLowerCase();
+    return (
+      isDemoEmail(email) ||
+      email.endsWith('@example.com') ||
+      email.endsWith('@test.com') ||
+      email.endsWith('@mock.com')
+    );
+  };
+
+  const normalizeBackendUser = (backendUser: BackendUser, fallback?: { email: string; name?: string }): User => {
+    const fallbackName = fallback?.name;
+    const derivedFromFallback = fallbackName ? fallbackName.split(' ') : [];
+    const firstName = backendUser.firstName || derivedFromFallback[0] || '';
+    const lastName = backendUser.lastName || (derivedFromFallback.slice(1).join(' ') || '');
+    const resolvedEmail = (
+      backendUser.email ||
+      fallback?.email ||
+      `user-${backendUser.id || Date.now()}@fintracker.app`
+    ).toLowerCase();
+    const fullName = `${firstName} ${lastName}`.trim() || fallbackName || resolvedEmail;
+
+    return {
+      id: backendUser.id,
+      email: resolvedEmail,
+      name: fullName,
+      firstName: firstName || undefined,
+      lastName: lastName || undefined,
+      createdAt: backendUser.createdAt || new Date().toISOString(),
+      lastLogin: backendUser.lastLogin || new Date().toISOString(),
+      language: backendUser.language,
+      currency: backendUser.currency,
+      emailVerified: backendUser.emailVerified,
+      isBackendUser: true,
+    };
+  };
+
+  const persistAuthSession = async (
+    user: User,
+    token: string,
+    remember: boolean,
+    options: { isGoogleUser?: boolean } = {}
+  ): Promise<void> => {
+    await SecureStore.setItemAsync(STORAGE_KEYS.USER_TOKEN, token);
+    await AsyncStorage.setItem(STORAGE_KEYS.USER_DATA, JSON.stringify(user));
+    await AsyncStorage.setItem(STORAGE_KEYS.REMEMBER_ME, remember.toString());
+    await AsyncStorage.setItem(STORAGE_KEYS.HAS_LOGGED_IN_BEFORE, 'true');
+
+    if (options.isGoogleUser) {
+      await AsyncStorage.setItem(STORAGE_KEYS.GOOGLE_USER, 'true');
+    } else {
+      await AsyncStorage.removeItem(STORAGE_KEYS.GOOGLE_USER);
+    }
+
+    if (user.isBackendUser) {
+      try {
+        await cloudSyncService.setAuthToken(token);
+      } catch (error) {
+        console.warn('⚠️ Unable to sync auth token with cloud service:', error);
+      }
+    }
+  };
+
+  const hasLocalRegisteredUser = async (email: string): Promise<boolean> => {
+    try {
+      const existingUsers = await AsyncStorage.getItem('registered_users');
+      if (!existingUsers) {
+        return false;
+      }
+      const users = JSON.parse(existingUsers);
+      return Array.isArray(users)
+        ? users.some((u: any) => typeof u?.email === 'string' && u.email.toLowerCase() === email.toLowerCase())
+        : false;
+    } catch (error) {
+      console.log('Error checking local registered users:', error);
+      return false;
+    }
+  };
+
+  const decodeJwtPayload = (token: string): { exp?: number } | null => {
+    try {
+      const parts = token.split('.');
+      if (parts.length !== 3) {
+        return null;
+      }
+
+      const payload = parts[1].replace(/-/g, '+').replace(/_/g, '/');
+      const decoded = Buffer.from(payload, 'base64').toString('utf8');
+      return JSON.parse(decoded);
+    } catch (error) {
+      console.log('Failed to decode JWT payload:', error);
+      return null;
+    }
+  };
+
+  const isJwtToken = (token: string): boolean => token.includes('.') && token.split('.').length === 3;
+
   const signUp = async (email: string, password: string, name: string) => {
+    const normalizedEmail = email.trim().toLowerCase();
+    const trimmedName = name.trim();
+    const { firstName, lastName } = splitName(trimmedName || normalizedEmail.split('@')[0]);
+    const isMockAccount = isMockAccountEmail(normalizedEmail);
+
     try {
       setState(prev => ({ ...prev, isLoading: true }));
-      
-      const { user, token } = await API.signUp(email, password, name);
-      
-      // Clear demo data for new accounts
+
+      let user: User | null = null;
+      let token: string | null = null;
+
+      if (!isMockAccount) {
+        const backendResult = await backendAuthService.register({
+          email: normalizedEmail,
+          password,
+          firstName: firstName || 'Finex',
+          lastName: lastName || firstName || 'User',
+          language: 'EN',
+          currency: 'USD',
+        });
+
+        if (backendResult.success) {
+          user = normalizeBackendUser(backendResult.user, {
+            email: normalizedEmail,
+            name: trimmedName,
+          });
+          if (trimmedName.length > 0) {
+            user.name = trimmedName;
+          }
+          if (firstName) {
+            user.firstName = firstName;
+          }
+          if (lastName) {
+            user.lastName = lastName;
+          }
+          user.lastLogin = new Date().toISOString();
+          token = backendResult.token;
+        } else if (!backendResult.networkError) {
+          throw new Error(backendResult.error || 'Registration failed');
+        } else {
+          if (__DEV__) {
+            console.warn('⚠️ Backend registration unavailable, using local mock registration');
+          } else {
+            throw new Error('Unable to reach the server. Please try again.');
+          }
+        }
+      }
+
+      if (!user || !token) {
+        const fallbackName = trimmedName || `${firstName} ${lastName}`.trim() || normalizedEmail;
+        const mockResult = await mockAuthAPI.signUp(normalizedEmail, password, fallbackName);
+        const derivedNames = splitName(fallbackName);
+
+        user = {
+          ...mockResult.user,
+          name: fallbackName,
+          firstName: derivedNames.firstName || mockResult.user.firstName || undefined,
+          lastName: derivedNames.lastName || mockResult.user.lastName || undefined,
+          isBackendUser: false,
+        };
+        token = mockResult.token;
+        if (!isMockAccount) {
+          console.warn('⚠️ Falling back to mock registration for non-backend account');
+        }
+      }
+
       await AsyncStorage.removeItem('is_demo_account');
       await AsyncStorage.removeItem('seed_demo_data');
-      
-      // Store token and user data
-      await SecureStore.setItemAsync(STORAGE_KEYS.USER_TOKEN, token);
-      await AsyncStorage.setItem(STORAGE_KEYS.USER_DATA, JSON.stringify(user));
-      await AsyncStorage.setItem(STORAGE_KEYS.REMEMBER_ME, 'true');
-      // Mark that user has logged in before (for biometric checks)
-      await AsyncStorage.setItem(STORAGE_KEYS.HAS_LOGGED_IN_BEFORE, 'true');
-      
+      try {
+        const { hybridDataService } = await import('../services/hybridDataService');
+        await hybridDataService.clearAllData();
+      } catch (clearError) {
+        console.log('No existing data to clear');
+      }
+
+      await persistAuthSession(user, token, true);
+
       setState(prev => ({
         ...prev,
         user,
         isAuthenticated: true,
         isLoading: false,
         rememberMe: true,
+        isGoogleAuthenticated: false,
       }));
-      
+
       return { success: true };
     } catch (error) {
+      console.error('Sign up failed:', error);
       setState(prev => ({ ...prev, isLoading: false }));
-      return { 
-        success: false, 
-        error: error instanceof Error ? error.message : 'Registration failed' 
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Registration failed',
       };
     }
   };
 
   const signIn = async (email: string, password: string, remember = false) => {
+    const normalizedEmail = email.trim().toLowerCase();
+    const usingMockAccount = isMockAccountEmail(normalizedEmail);
+    const demoAccountRequested = isDemoEmail(normalizedEmail);
+
     try {
       setState(prev => ({ ...prev, isLoading: true }));
-      
-      const { user, token } = await API.signIn(email, password);
-      
-      // Check if this is a demo account
-      const isDemoAccount = user.email === 'demo@fintracker.app';
-      
-      // Demo accounts are always remembered to maintain session
+
+      let user: User | null = null;
+      let token: string | null = null;
+      let fallbackToMock = usingMockAccount;
+
+      if (!usingMockAccount) {
+        const backendResult = await backendAuthService.login({
+          email: normalizedEmail,
+          password,
+        });
+
+        if (backendResult.success) {
+          user = normalizeBackendUser(backendResult.user, { email: normalizedEmail });
+          user.lastLogin = new Date().toISOString();
+          token = backendResult.token;
+        } else {
+          const localUserExists = await hasLocalRegisteredUser(normalizedEmail);
+
+          if (backendResult.networkError) {
+            if (localUserExists) {
+              console.warn('⚠️ Backend login unavailable, attempting local mock login');
+              fallbackToMock = true;
+            } else {
+              throw new Error('Unable to reach the server. Please try again.');
+            }
+          } else if ((backendResult.status === 401 || backendResult.status === 404) && localUserExists) {
+            console.warn('⚠️ Backend credentials rejected, using local mock login');
+            fallbackToMock = true;
+          } else {
+            throw new Error(backendResult.error || 'Login failed');
+          }
+        }
+      }
+
+      if ((!user || !token) && fallbackToMock) {
+        const mockResult = await mockAuthAPI.signIn(normalizedEmail, password);
+        user = { ...mockResult.user, isBackendUser: false };
+        token = mockResult.token;
+      }
+
+      if (!user || !token) {
+        throw new Error('Login failed. Please check your credentials and try again.');
+      }
+
+      const isDemoAccount = demoAccountRequested || user.email === 'demo@fintracker.app';
       const shouldRemember = isDemoAccount ? true : remember;
-      
+
       if (isDemoAccount) {
-        // Set demo account flags
         await AsyncStorage.setItem('is_demo_account', 'true');
         await AsyncStorage.setItem('seed_demo_data', 'true');
         console.log('✅ Demo account login - session will persist');
       } else {
-        // Clear demo data for regular accounts
         await AsyncStorage.removeItem('is_demo_account');
         await AsyncStorage.removeItem('seed_demo_data');
-        
-        // Clear any existing demo data from the database
         try {
           const { hybridDataService } = await import('../services/hybridDataService');
           await hybridDataService.clearAllData();
-        } catch (error) {
+        } catch (clearError) {
           console.log('No demo data to clear');
         }
       }
-      
-      // Store token and user data
-      await SecureStore.setItemAsync(STORAGE_KEYS.USER_TOKEN, token);
-      await AsyncStorage.setItem(STORAGE_KEYS.USER_DATA, JSON.stringify(user));
-      await AsyncStorage.setItem(STORAGE_KEYS.REMEMBER_ME, shouldRemember.toString());
-      // Mark that user has logged in before (for biometric checks)
-      await AsyncStorage.setItem(STORAGE_KEYS.HAS_LOGGED_IN_BEFORE, 'true');
-      
+
+      if (!user.lastLogin) {
+        user.lastLogin = new Date().toISOString();
+      }
+
+      await persistAuthSession(user, token, shouldRemember);
+
       setState(prev => ({
         ...prev,
         user,
         isAuthenticated: true,
         isLoading: false,
         rememberMe: shouldRemember,
+        isGoogleAuthenticated: false,
       }));
-      
+
       return { success: true };
     } catch (error) {
+      console.error('Sign in failed:', error);
       setState(prev => ({ ...prev, isLoading: false }));
-      return { 
-        success: false, 
-        error: error instanceof Error ? error.message : 'Login failed' 
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Login failed',
       };
     }
   };
@@ -467,6 +703,8 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       if (state.isGoogleAuthenticated) {
         await googleAuthService.signOut();
       }
+
+      await cloudSyncService.logout();
 
       // Clear stored data
       await SecureStore.deleteItemAsync(STORAGE_KEYS.USER_TOKEN);
@@ -501,7 +739,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         return { success: false, error: 'Not authenticated' };
       }
 
-      const updatedData = await API.updateProfile(token, updates);
+      const updatedData = await mockAuthAPI.updateProfile(token, updates);
       const updatedUser = { ...state.user, ...updatedData };
       
       await AsyncStorage.setItem(STORAGE_KEYS.USER_DATA, JSON.stringify(updatedUser));
@@ -527,7 +765,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         return { success: false, error: 'Not authenticated' };
       }
 
-      await API.changePassword(token, currentPassword, newPassword);
+      await mockAuthAPI.changePassword(token, currentPassword, newPassword);
       return { success: true };
     } catch (error) {
       return { 
@@ -591,7 +829,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         return { success: false, error: 'Not authenticated' };
       }
 
-      await API.deleteAccount(token);
+      await mockAuthAPI.deleteAccount(token);
       
       // Clear ALL user data from local storage
       await clearAllUserData();
@@ -694,56 +932,72 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
   const validateUserSession = async (user: User, token: string): Promise<{ valid: boolean; reason?: string }> => {
     try {
-      // Check if this is a demo account (always valid for demo)
       if (user.email === 'demo@fintracker.app' && token.startsWith('demo_token_')) {
         console.log('✅ Demo account session validated');
         return { valid: true };
       }
-      
-      // Check token format for regular accounts
-      if (!token.startsWith('jwt_token_') && !token.startsWith('demo_token_') && !token.startsWith('google_token_')) {
-        console.log('❌ Invalid token format:', token.substring(0, 20));
-        return { valid: false, reason: 'Invalid session format' };
-      }
-      
-      // For regular accounts (not demo or Google), check if user exists in registered users
-      if (user.email !== 'demo@fintracker.app' && !token.startsWith('google_token_')) {
-        const existingUsers = await AsyncStorage.getItem('registered_users');
-        const users = existingUsers ? JSON.parse(existingUsers) : [];
-        const userExists = users.find((u: any) => u.email.toLowerCase() === user.email.toLowerCase());
-        
-        if (!userExists) {
-          console.log('❌ User account not found:', user.email);
-          return { valid: false, reason: 'Account no longer exists' };
-        }
-        
-        // Check if account is still active
-        if (userExists.disabled) {
-          console.log('❌ User account disabled:', user.email);
-          return { valid: false, reason: 'Account has been disabled' };
-        }
-      }
-      
-      // For Google users, we trust Google's authentication
-      if (token.startsWith('google_token_')) {
+
+      if (user.isGoogleUser || token.startsWith('google_token_')) {
         console.log('✅ Google user session validated:', user.email);
         return { valid: true };
       }
-      
-      // Check session age (skip for demo and Google accounts)
-      if (user.email !== 'demo@fintracker.app' && !token.startsWith('google_token_')) {
+
+      const isBackendSession = user.isBackendUser || isJwtToken(token);
+
+      if (isBackendSession) {
+        const payload = decodeJwtPayload(token);
+        if (payload?.exp && payload.exp * 1000 < Date.now()) {
+          console.log('❌ Backend session expired based on JWT exp:', user.email);
+          return { valid: false, reason: 'Session expired' };
+        }
+
+        const validation = await backendAuthService.validateSession(token);
+        if (validation.valid) {
+          return { valid: true };
+        }
+
+        if (validation.networkError) {
+          console.warn('⚠️ Backend session validation unavailable, allowing cached session');
+          return { valid: true };
+        }
+
+        console.log('❌ Backend session invalid:', validation.error || 'Unknown reason');
+        return { valid: false, reason: validation.error || 'Invalid session' };
+      }
+
+      if (token.startsWith('jwt_token_') || token.startsWith('auth_token_')) {
+        const existingUsers = await AsyncStorage.getItem('registered_users');
+        const users = existingUsers ? JSON.parse(existingUsers) : [];
+        const userExists = users.find((u: any) => u.email?.toLowerCase() === user.email.toLowerCase());
+
+        if (!userExists) {
+          console.log('❌ Local user account not found:', user.email);
+          return { valid: false, reason: 'Account no longer exists' };
+        }
+
+        if (userExists.disabled) {
+          console.log('❌ Local user account disabled:', user.email);
+          return { valid: false, reason: 'Account has been disabled' };
+        }
+
         const lastLogin = new Date(user.lastLogin);
+        if (Number.isNaN(lastLogin.getTime())) {
+          return { valid: true };
+        }
+
         const now = new Date();
         const daysSinceLogin = Math.floor((now.getTime() - lastLogin.getTime()) / (1000 * 60 * 60 * 24));
-        
-        if (daysSinceLogin > 30) { // Expire after 30 days
-          console.log('❌ Session expired after', daysSinceLogin, 'days');
+        if (daysSinceLogin > 30) {
+          console.log('❌ Local session expired after', daysSinceLogin, 'days');
           return { valid: false, reason: 'Session expired due to inactivity' };
         }
+
+        console.log('✅ Local mock session validated:', user.email);
+        return { valid: true };
       }
-      
-      console.log('✅ Regular account session validated:', user.email);
-      return { valid: true };
+
+      console.log('❌ Unrecognized session token format:', token.substring(0, 12));
+      return { valid: false, reason: 'Invalid session format' };
     } catch (error) {
       console.error('❌ Error validating session:', error);
       return { valid: false, reason: 'Session validation failed' };
@@ -755,6 +1009,8 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       await SecureStore.deleteItemAsync(STORAGE_KEYS.USER_TOKEN);
       await AsyncStorage.removeItem(STORAGE_KEYS.USER_DATA);
       await AsyncStorage.removeItem(STORAGE_KEYS.REMEMBER_ME);
+      await AsyncStorage.removeItem(STORAGE_KEYS.GOOGLE_USER);
+      await cloudSyncService.clearAuthToken();
     } catch (error) {
       console.error('Error clearing stored session:', error);
     }
@@ -823,6 +1079,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         lastLogin: new Date().toISOString(),
         googleId: googleUser.id,
         isGoogleUser: true,
+        isBackendUser: false,
       };
 
       // Store user data
@@ -892,6 +1149,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         lastLogin: new Date().toISOString(),
         googleId: googleUser.id,
         isGoogleUser: true,
+        isBackendUser: false,
       };
 
       // Clear any existing demo data for new Google accounts

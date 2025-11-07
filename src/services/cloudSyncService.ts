@@ -2,8 +2,8 @@ import * as SecureStore from 'expo-secure-store';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { GoogleUser } from './googleAuthService';
 import { hybridDataService } from './hybridDataService';
-import { firebaseDataService, FirebaseUserData } from './firebaseDataService';
-import { firebaseAuthService } from './firebaseAuthService';
+import { getBackendApiBaseUrl, getBackendApiRoot } from '../config/apiConfig';
+import { backendAuthService } from './backendAuthService';
 
 export interface UserDataBackup {
   user: {
@@ -60,10 +60,16 @@ interface SyncProgress {
 }
 
 class CloudSyncService {
-  private readonly STORAGE_ENDPOINT = 'https://fintracker-secure-storage.vercel.app'; // Mock endpoint for demonstration
-  private readonly ENCRYPTION_KEY = 'fintracker_user_data_encryption';
   private readonly SYNC_CONFIG_KEY = 'sync_config';
   private readonly AUTH_TOKEN_KEY = 'auth_token';
+  private readonly apiBaseUrl: string;
+  private readonly syncEndpoint: string;
+
+  constructor() {
+    this.apiBaseUrl = getBackendApiBaseUrl();
+    const apiRoot = getBackendApiRoot();
+    this.syncEndpoint = `${apiRoot}/sync`;
+  }
 
   // Storage keys for compatibility
   private readonly STORAGE_KEYS = {
@@ -72,7 +78,7 @@ class CloudSyncService {
 
   // Helper methods for analytics service
   getApiBaseUrl(): string {
-    return this.STORAGE_ENDPOINT;
+    return this.apiBaseUrl;
   }
   
   async isAuthenticated(): Promise<boolean> {
@@ -86,41 +92,39 @@ class CloudSyncService {
   async uploadUserData(googleUser: GoogleUser): Promise<SyncResult> {
     try {
       const userData = await this.collectUserData();
-      const encryptedData = await this.encryptData(userData);
-      
-      // Check if data is too large for SecureStore
-      const dataSize = encryptedData.length;
-      console.log(`📦 Data size: ${dataSize} bytes`);
-      
-      if (dataSize > 1800) { // Leave some buffer below 2048 limit
-        // Use AsyncStorage for large data instead of SecureStore
-        console.log('📦 Large data detected, using AsyncStorage with encryption');
-        const cloudKey = `cloud_backup_${googleUser.id}`;
-        await AsyncStorage.setItem(cloudKey, JSON.stringify({
-          data: encryptedData,
-          userEmail: googleUser.email,
-          lastSync: new Date().toISOString(),
-          storageType: 'asyncstorage', // Flag to indicate storage type
-        }));
-      } else {
-        // Use SecureStore for smaller data
-        const cloudKey = `cloud_backup_${googleUser.id}`;
-        await SecureStore.setItemAsync(cloudKey, JSON.stringify({
-          data: encryptedData,
-          userEmail: googleUser.email,
-          lastSync: new Date().toISOString(),
-          storageType: 'securestore',
-        }));
-      }
 
-      // Store sync metadata
-      await AsyncStorage.setItem('last_cloud_sync', new Date().toISOString());
-      await AsyncStorage.setItem('cloud_sync_user_id', googleUser.id);
+      const payload = {
+        wallets: userData.appData.wallets || [],
+        transactions: userData.appData.transactions || [],
+        categories: userData.appData.categories || [],
+        budgets: userData.appData.budgets || [],
+        bills: userData.appData.bills || [],
+        reminders: userData.appData.reminders || [],
+        goals: userData.appData.goals || [],
+        timestamp: new Date().toISOString(),
+        version: userData.metadata.version,
+      };
+
+      const responseData = await this.requestWithAuth('/backup', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(payload),
+      });
+
+      const lastSync = responseData?.backup?.timestamp || new Date().toISOString();
+
+      await AsyncStorage.setItem('last_cloud_sync', lastSync);
+      const syncUserId = googleUser?.id || userData.user.id;
+      if (syncUserId) {
+        await AsyncStorage.setItem('cloud_sync_user_id', syncUserId);
+      }
 
       console.log('✅ User data uploaded to cloud successfully');
       return {
         success: true,
-        lastSync: new Date().toISOString(),
+        lastSync,
       };
     } catch (error) {
       console.error('❌ Error uploading user data to cloud:', error);
@@ -136,22 +140,9 @@ class CloudSyncService {
    */
   async downloadUserData(googleUser: GoogleUser): Promise<SyncResult> {
     try {
-      const cloudKey = `cloud_backup_${googleUser.id}`;
-      let cloudDataStr: string | null = null;
+      const responseData = await this.requestWithAuth('/restore');
 
-      // Try SecureStore first
-      try {
-        cloudDataStr = await SecureStore.getItemAsync(cloudKey);
-      } catch (error) {
-        console.log('SecureStore access failed, trying AsyncStorage');
-      }
-
-      // If not found in SecureStore, try AsyncStorage
-      if (!cloudDataStr) {
-        cloudDataStr = await AsyncStorage.getItem(cloudKey);
-      }
-
-      if (!cloudDataStr) {
+      if (!responseData?.data) {
         console.log('ℹ️ No cloud backup found for user');
         return {
           success: true,
@@ -159,19 +150,54 @@ class CloudSyncService {
         };
       }
 
-      const cloudData = JSON.parse(cloudDataStr);
-      const decryptedData = await this.decryptData(cloudData.data);
-      
-      await this.restoreUserData(decryptedData);
+      const serverData = responseData.data;
+      const lastSync = responseData.timestamp || new Date().toISOString();
 
-      // Update sync metadata
-      await AsyncStorage.setItem('last_cloud_sync', cloudData.lastSync || new Date().toISOString());
-      await AsyncStorage.setItem('cloud_sync_user_id', googleUser.id);
+      const backupData: UserDataBackup = {
+        user: {
+          id: googleUser?.id || serverData.user?.id || '',
+          email: googleUser?.email || serverData.user?.email || '',
+          name: googleUser?.name || serverData.user?.name || '',
+          avatar: googleUser?.photo || serverData.user?.avatar,
+          createdAt: serverData.user?.createdAt || new Date().toISOString(),
+          lastLogin: new Date().toISOString(),
+          preferences: {
+            settings: serverData.preferences?.settings || {},
+            sync: serverData.preferences?.sync || {},
+            notifications: serverData.preferences?.notifications || {},
+          },
+        },
+        appData: {
+          wallets: serverData.wallets || [],
+          transactions: serverData.transactions || [],
+          budgets: serverData.budgets || [],
+          goals: serverData.goals || [],
+          bills: serverData.bills || [],
+          reminders: serverData.reminders || [],
+          categories: serverData.categories || [],
+          settings: serverData.settings || {},
+          insights: serverData.insights || {},
+        },
+        metadata: {
+          version: responseData.version || '1.0.0',
+          lastSync,
+          platform: 'backend',
+          appVersion: '2.5.1',
+        },
+      };
+
+      await this.restoreUserData(backupData);
+
+      await AsyncStorage.setItem('last_cloud_sync', lastSync);
+      const syncUserId = googleUser?.id || backupData.user.id;
+      if (syncUserId) {
+        await AsyncStorage.setItem('cloud_sync_user_id', syncUserId);
+      }
 
       console.log('✅ User data downloaded from cloud successfully');
       return {
         success: true,
-        lastSync: cloudData.lastSync,
+        lastSync,
       };
     } catch (error) {
       console.error('❌ Error downloading user data from cloud:', error);
@@ -187,35 +213,17 @@ class CloudSyncService {
    */
   async syncUserData(googleUser: GoogleUser): Promise<SyncResult> {
     try {
-      const localLastSync = await AsyncStorage.getItem('last_cloud_sync');
-      const cloudKey = `cloud_backup_${googleUser.id}`;
-      const cloudDataStr = await SecureStore.getItemAsync(cloudKey);
+      const downloadResult = await this.downloadUserData(googleUser);
 
-      let shouldUpload = true;
-      let shouldDownload = false;
-
-      if (cloudDataStr) {
-        const cloudData = JSON.parse(cloudDataStr);
-        const cloudLastSync = new Date(cloudData.lastSync || 0).getTime();
-        const localLastSyncTime = new Date(localLastSync || 0).getTime();
-
-        if (cloudLastSync > localLastSyncTime) {
-          // Cloud data is newer, download it
-          shouldDownload = true;
-          shouldUpload = false;
-        }
+      if (downloadResult.success && !downloadResult.error) {
+        return downloadResult;
       }
 
-      if (shouldDownload) {
-        return await this.downloadUserData(googleUser);
-      } else if (shouldUpload) {
+      if (downloadResult.error === 'No cloud backup found') {
         return await this.uploadUserData(googleUser);
       }
 
-      return {
-        success: true,
-        lastSync: localLastSync || new Date().toISOString(),
-      };
+      return downloadResult;
     } catch (error) {
       console.error('❌ Error syncing user data:', error);
       return {
@@ -228,24 +236,10 @@ class CloudSyncService {
   /**
    * Delete user data from cloud storage
    */
-  async deleteCloudData(googleUser: GoogleUser): Promise<SyncResult> {
+  async deleteCloudData(_googleUser: GoogleUser): Promise<SyncResult> {
     try {
-      const cloudKey = `cloud_backup_${googleUser.id}`;
-      
-      // Try to delete from both storage types
-      try {
-        await SecureStore.deleteItemAsync(cloudKey);
-      } catch (error) {
-        // SecureStore deletion failed, that's okay
-      }
-      
-      try {
-        await AsyncStorage.removeItem(cloudKey);
-      } catch (error) {
-        // AsyncStorage deletion failed, that's okay
-      }
-      
-      // Clear sync metadata
+      await this.requestWithAuth('/backup', { method: 'DELETE' });
+
       await AsyncStorage.removeItem('last_cloud_sync');
       await AsyncStorage.removeItem('cloud_sync_user_id');
 
@@ -263,17 +257,10 @@ class CloudSyncService {
   /**
    * Check if cloud backup exists for user
    */
-  async hasCloudBackup(googleUser: GoogleUser): Promise<boolean> {
+  async hasCloudBackup(_googleUser: GoogleUser): Promise<boolean> {
     try {
-      const cloudKey = `cloud_backup_${googleUser.id}`;
-      
-      // Check SecureStore first
-      let cloudData = await SecureStore.getItemAsync(cloudKey);
-      if (cloudData) return true;
-      
-      // Check AsyncStorage
-      cloudData = await AsyncStorage.getItem(cloudKey);
-      return cloudData !== null;
+      const responseData = await this.requestWithAuth('/restore');
+      return !!responseData?.data;
     } catch (error) {
       console.error('❌ Error checking cloud backup:', error);
       return false;
@@ -290,6 +277,55 @@ class CloudSyncService {
       console.error('❌ Error getting last sync time:', error);
       return null;
     }
+  }
+
+  private async getAuthTokenOrThrow(): Promise<string> {
+    const token = await this.getAuthToken();
+    if (!token) {
+      throw new Error('Cloud sync requires authentication. Please sign in again.');
+    }
+    return token;
+  }
+
+  private async requestWithAuth(path: string, options: RequestInit = {}): Promise<any> {
+    const token = await this.getAuthTokenOrThrow();
+
+    const headers: Record<string, string> = {
+      ...(options.headers ? (options.headers as Record<string, string>) : {}),
+      Authorization: `Bearer ${token}`,
+    };
+
+    if (options.body && !headers['Content-Type']) {
+      headers['Content-Type'] = 'application/json';
+    }
+
+    const response = await fetch(`${this.syncEndpoint}${path}`, {
+      ...options,
+      headers,
+    });
+
+    let data: any = null;
+    try {
+      data = await response.json();
+    } catch (_error) {
+      data = null;
+    }
+
+    if (!response.ok) {
+      const message =
+        data?.error?.message ||
+        data?.error ||
+        data?.message ||
+        response.statusText;
+      throw new Error(message || 'Request failed');
+    }
+
+    if (data && typeof data === 'object' && 'success' in data && data.success === false) {
+      const message = data.error || data.message || 'Request failed';
+      throw new Error(message);
+    }
+
+    return data;
   }
 
   private async collectUserData(): Promise<UserDataBackup> {
@@ -318,11 +354,12 @@ class CloudSyncService {
       // Get data from the hybrid data service
       let hybridData = {};
       try {
-        const [wallets, transactions] = await Promise.all([
+        const [wallets, transactions, categories] = await Promise.all([
           hybridDataService.getWallets(),
           hybridDataService.getTransactions(),
+          hybridDataService.getCategories(),
         ]);
-        hybridData = { wallets, transactions };
+        hybridData = { wallets, transactions, categories };
         console.log(`📊 Collected ${wallets.length} wallets and ${transactions.length} transactions`);
       } catch (error) {
         console.error('❌ Could not load hybrid data service:', error);
@@ -351,7 +388,7 @@ class CloudSyncService {
           goals: goalsData ? JSON.parse(goalsData) : [],
           bills: billsData ? JSON.parse(billsData) : [],
           reminders: remindersData ? JSON.parse(remindersData) : [],
-          categories: [], // Add category data if available
+          categories: (hybridData as any).categories || [],
           settings: appSettings ? JSON.parse(appSettings) : {},
           insights: {}, // Add insights data if available
         },
@@ -432,46 +469,6 @@ class CloudSyncService {
     }
   }
 
-  private async encryptData(data: UserDataBackup): Promise<string> {
-    try {
-      // In a real implementation, use proper encryption
-      // For now, we'll just base64 encode the JSON string using React Native's built-in functionality
-      const jsonString = JSON.stringify(data);
-      
-      // Use React Native compatible base64 encoding
-      if (typeof btoa !== 'undefined') {
-        // Use btoa if available (React Native)
-        return btoa(unescape(encodeURIComponent(jsonString)));
-      } else {
-        // Fallback to Buffer for Node.js compatibility
-        return Buffer.from(jsonString).toString('base64');
-      }
-    } catch (error) {
-      console.error('❌ Error encrypting data:', error);
-      throw error;
-    }
-  }
-
-  private async decryptData(encryptedData: string): Promise<UserDataBackup> {
-    try {
-      // In a real implementation, use proper decryption
-      // For now, we'll just base64 decode the string using React Native's built-in functionality
-      let jsonString: string;
-      
-      if (typeof atob !== 'undefined') {
-        // Use atob if available (React Native)
-        jsonString = decodeURIComponent(escape(atob(encryptedData)));
-      } else {
-        // Fallback to Buffer for Node.js compatibility
-        jsonString = Buffer.from(encryptedData, 'base64').toString('utf-8');
-      }
-      
-      return JSON.parse(jsonString);
-    } catch (error) {
-      console.error('❌ Error decrypting data:', error);
-      throw error;
-    }
-  }
   // Legacy sync configuration methods (maintained for compatibility)
   async getSyncConfig(): Promise<SyncConfig> {
     try {
@@ -527,7 +524,27 @@ class CloudSyncService {
   // Authentication
   async getAuthToken(): Promise<string | null> {
     try {
-      return await AsyncStorage.getItem(this.AUTH_TOKEN_KEY);
+      const storedToken = await AsyncStorage.getItem(this.AUTH_TOKEN_KEY);
+      if (storedToken) {
+        return storedToken;
+      }
+
+      const secureToken = await SecureStore.getItemAsync('user_token');
+      if (secureToken) {
+        return secureToken;
+      }
+
+      const googleIdToken = await SecureStore.getItemAsync('google_id_token');
+      if (googleIdToken) {
+        return googleIdToken;
+      }
+
+      const googleAccessToken = await SecureStore.getItemAsync('google_access_token');
+      if (googleAccessToken) {
+        return googleAccessToken;
+      }
+
+      return null;
     } catch (error) {
       console.error('Error getting auth token:', error);
       return null;
@@ -537,6 +554,7 @@ class CloudSyncService {
   async setAuthToken(token: string): Promise<void> {
     try {
       await AsyncStorage.setItem(this.AUTH_TOKEN_KEY, token);
+      await SecureStore.setItemAsync('user_token', token);
     } catch (error) {
       console.error('Error setting auth token:', error);
       throw error;
@@ -546,6 +564,7 @@ class CloudSyncService {
   async clearAuthToken(): Promise<void> {
     try {
       await AsyncStorage.removeItem(this.AUTH_TOKEN_KEY);
+      await SecureStore.deleteItemAsync('user_token');
     } catch (error) {
       console.error('Error clearing auth token:', error);
     }
@@ -788,18 +807,33 @@ class CloudSyncService {
 
   async register(email: string, password: string, firstName: string, lastName: string): Promise<{ success: boolean; error?: string }> {
     try {
-      // For demo purposes, we'll simulate a registration
-      console.log('📝 Registering user:', email);
-      
-      // In a real implementation, this would call your backend API
-      // For now, we'll just store a mock auth token
-      const mockToken = `auth_token_${Date.now()}`;
-      await this.setAuthToken(mockToken);
-      
-      // Store user data
-      await AsyncStorage.setItem('user_email', email);
-      await AsyncStorage.setItem('user_name', `${firstName} ${lastName}`);
-      
+      const normalizedEmail = email.trim().toLowerCase();
+      const name = `${firstName} ${lastName}`.trim();
+      const backendResult = await backendAuthService.register({
+        email: normalizedEmail,
+        password,
+        firstName,
+        lastName,
+      });
+
+      if (backendResult.success) {
+        await this.setAuthToken(backendResult.token);
+        await AsyncStorage.setItem('user_email', normalizedEmail);
+        if (name.length > 0) {
+          await AsyncStorage.setItem('user_name', name);
+        }
+        return { success: true };
+      }
+
+      if (!backendResult.networkError) {
+        return {
+          success: false,
+          error: backendResult.error,
+        };
+      }
+
+      console.warn('⚠️ Backend registration unavailable, falling back to local mock registration');
+      await this.createMockSession(normalizedEmail, name);
       return { success: true };
     } catch (error) {
       console.error('❌ Registration failed:', error);
@@ -812,17 +846,31 @@ class CloudSyncService {
 
   async login(email: string, password: string): Promise<{ success: boolean; error?: string }> {
     try {
-      // For demo purposes, we'll simulate a login
-      console.log('🔑 Logging in user:', email);
-      
-      // In a real implementation, this would call your backend API
-      // For now, we'll just store a mock auth token
-      const mockToken = `auth_token_${Date.now()}`;
-      await this.setAuthToken(mockToken);
-      
-      // Store user data
-      await AsyncStorage.setItem('user_email', email);
-      
+      const normalizedEmail = email.trim().toLowerCase();
+      const backendResult = await backendAuthService.login({ email: normalizedEmail, password });
+
+      if (backendResult.success) {
+        const backendUser = backendResult.user;
+        const name = `${backendUser.firstName ?? ''} ${backendUser.lastName ?? ''}`.trim();
+
+        await this.setAuthToken(backendResult.token);
+        await AsyncStorage.setItem('user_email', normalizedEmail);
+        if (name.length > 0) {
+          await AsyncStorage.setItem('user_name', name);
+        }
+
+        return { success: true };
+      }
+
+      if (!backendResult.networkError) {
+        return {
+          success: false,
+          error: backendResult.error,
+        };
+      }
+
+      console.warn('⚠️ Backend login unavailable, falling back to local mock login');
+      await this.createMockSession(normalizedEmail);
       return { success: true };
     } catch (error) {
       console.error('❌ Login failed:', error);
@@ -835,12 +883,34 @@ class CloudSyncService {
 
   async logout(): Promise<void> {
     try {
-      await this.clearAuthToken();
-      await AsyncStorage.removeItem('user_email');
-      await AsyncStorage.removeItem('user_name');
-      console.log('👋 User logged out successfully');
+      const token = await this.getAuthToken();
+      const looksLikeJwt = typeof token === 'string' && token.includes('.') && token.split('.').length === 3;
+      if (token && looksLikeJwt) {
+        const result = await backendAuthService.logout(token);
+        if (!result.success && !result.networkError) {
+          console.warn('⚠️ Backend logout failed:', result.error);
+        }
+      }
     } catch (error) {
-      console.error('❌ Logout failed:', error);
+      console.error('❌ Logout request failed:', error);
+    } finally {
+      try {
+        await this.clearAuthToken();
+        await AsyncStorage.removeItem('user_email');
+        await AsyncStorage.removeItem('user_name');
+        console.log('👋 User logged out successfully');
+      } catch (cleanupError) {
+        console.error('❌ Logout cleanup failed:', cleanupError);
+      }
+    }
+  }
+
+  private async createMockSession(email: string, name?: string): Promise<void> {
+    const mockToken = `auth_token_${Date.now()}`;
+    await this.setAuthToken(mockToken);
+    await AsyncStorage.setItem('user_email', email);
+    if (name && name.length > 0) {
+      await AsyncStorage.setItem('user_name', name);
     }
   }
 

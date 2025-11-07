@@ -12,8 +12,6 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../contexts/ThemeContext';
 import { syncTester, SyncTestReport, TestResult } from '../utils/syncTester';
-import { firebaseAuthService } from '../services/firebaseAuthService';
-import { firebaseDataService } from '../services/firebaseDataService';
 import { cloudSyncService } from '../services/cloudSyncService';
 
 const SyncTestScreen: React.FC = () => {
@@ -26,35 +24,21 @@ const SyncTestScreen: React.FC = () => {
     setTestReport(null);
 
     try {
-      console.log('🚀 Starting Firebase sync test from UI...');
+      console.log('🚀 Starting cloud sync test from UI...');
 
-      // Check Firebase authentication first
-      if (!firebaseAuthService.isAuthenticated()) {
+      const isAuthenticated = await cloudSyncService.isAuthenticated();
+      if (!isAuthenticated) {
         Alert.alert(
-          'Authentication Required', 
-          'Please sign in with Google to test Firebase sync functionality.',
+          'Authentication Required',
+          'Please sign in and ensure cloud sync is enabled before running this test.',
           [{ text: 'OK' }]
         );
         return;
       }
 
-      console.log('✅ User is authenticated with Firebase');
-      console.log('📱 Firebase User:', firebaseAuthService.getUserEmail());
+      console.log('✅ Cloud sync authentication detected');
 
-      // Check Firebase connectivity
-      const isConnected = await firebaseDataService.isConnected();
-      if (!isConnected) {
-        Alert.alert(
-          'Firebase Connection Failed', 
-          'Cannot connect to Firebase. Please check your internet connection and Firebase configuration.',
-          [{ text: 'OK' }]
-        );
-        return;
-      }
-
-      console.log('✅ Firebase connection verified');
-
-      // Run the original sync test (now with Firebase backend)
+      // Run the sync test against cloud backend
       const report = await syncTester.runCompleteSyncTest();
       setTestReport(report);
       
@@ -63,16 +47,16 @@ const SyncTestScreen: React.FC = () => {
       
       // Show user-friendly alert
       Alert.alert(
-        report.overall ? 'Firebase Sync Test Passed! 🔥✅' : 'Firebase Sync Test Failed ❌',
+        report.overall ? 'Cloud Sync Test Passed! 🔥✅' : 'Cloud Sync Test Failed ❌',
         report.overall 
-          ? 'All Firebase sync operations completed successfully. Your data is safely stored in the cloud!'
-          : 'Some Firebase sync operations failed. Check the details below.',
+          ? 'All cloud sync operations completed successfully. Your data is safely stored on the server!'
+          : 'Some cloud sync operations failed. Check the details below.',
         [{ text: 'OK' }]
       );
       
     } catch (error) {
-      console.error('❌ Firebase sync test error:', error);
-      Alert.alert('Test Error', 'Failed to run Firebase sync test: ' + error);
+      console.error('❌ Cloud sync test error:', error);
+      Alert.alert('Test Error', 'Failed to run cloud sync test: ' + error);
     } finally {
       setIsRunning(false);
     }

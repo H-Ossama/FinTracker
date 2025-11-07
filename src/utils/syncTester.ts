@@ -63,6 +63,17 @@ export class SyncTester {
     console.log('================================');
 
     try {
+      const isAuthenticated = await cloudSyncService.isAuthenticated();
+      if (!isAuthenticated) {
+        const authError = 'Cloud sync requires authentication. Please sign in before running the test.';
+        results.push({
+          step: 'Verify Cloud Authentication',
+          success: false,
+          error: authError,
+        });
+        throw new Error(authError);
+      }
+
       // Step 1: Create test data
       console.log('\n[1/7] Creating test data...');
       const createDataResult = await this.createTestData();
