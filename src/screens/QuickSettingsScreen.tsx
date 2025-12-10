@@ -10,7 +10,9 @@ import {
   Share,
   Linking,
   Modal,
+  StatusBar,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -21,12 +23,14 @@ import { useAuth } from '../contexts/AuthContext';
 import { useNavigation } from '@react-navigation/native';
 import { notificationService } from '../services/notificationService';
 import { hybridDataService } from '../services/hybridDataService';
+import { Buffer } from 'buffer';
 
 const QuickSettingsScreen = () => {
   const { theme, isDark, toggleTheme } = useTheme();
   const { language, currency, setLanguage, setCurrency, t, formatCurrency } = useLocalization();
-  const { user, isAuthenticated, signOut, biometricEnabled, enableBiometric, disableBiometric } = useAuth();
+  const { user, isAuthenticated, signOut } = useAuth();
   const navigation = useNavigation();
+  const insets = useSafeAreaInsets();
   const [notificationsEnabled, setNotificationsEnabled] = useState(true);
   const [isBalanceMasked, setIsBalanceMasked] = useState(false);
   const [hiddenWallets, setHiddenWallets] = useState<string[]>([]);
@@ -147,11 +151,11 @@ const QuickSettingsScreen = () => {
   };
 
   const handlePrivacyPolicy = () => {
-    Linking.openURL('https://fintracker.app/privacy');
+    navigation.navigate('PrivacyPolicy' as never);
   };
 
   const handleTermsOfService = () => {
-    Linking.openURL('https://fintracker.app/terms');
+    navigation.navigate('TermsOfUse' as never);
   };
 
   const handleRateApp = () => {
@@ -189,18 +193,185 @@ const QuickSettingsScreen = () => {
     );
   };
 
-  const handleToggleBiometric = async () => {
+  const handleExportData = async () => {
     try {
-      if (biometricEnabled) {
-        await disableBiometric();
-      } else {
-        const result = await enableBiometric();
-        if (!result.success) {
-          Alert.alert('Error', result.error || 'Failed to enable biometric authentication');
-        }
-      }
+      Alert.alert(
+        t('settings_screen_export_data'),
+        'Choose export format:',
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'JSON (Full Backup)', onPress: () => exportAsJSON() },
+          { text: 'CSV (Transactions)', onPress: () => exportAsCSV() },
+          { text: 'Restore from Backup', onPress: () => restoreFromBackup() },
+        ]
+      );
     } catch (error) {
-      Alert.alert('Error', 'Failed to toggle biometric authentication');
+      Alert.alert('Error', 'Failed to export data');
+    }
+  };
+
+  const exportAsJSON = async () => {
+    try {
+      // Get all app data
+      const wallets = await hybridDataService.getWallets();
+      const transactions = await hybridDataService.getTransactions();
+      const categories = await hybridDataService.getCategories();
+      
+      // Get additional data from AsyncStorage
+      const goalsJson = await AsyncStorage.getItem('goals_data');
+      const billsJson = await AsyncStorage.getItem('bills_data');
+      const budgetsJson = await AsyncStorage.getItem('budgets_data');
+      const remindersJson = await AsyncStorage.getItem('reminders_data');
+      const borrowedMoneyJson = await AsyncStorage.getItem('borrowed_money_data');
+      const monthlyLimit = await AsyncStorage.getItem('monthlySpendingLimit');
+      const hiddenWallets = await AsyncStorage.getItem('hiddenWallets');
+      const settings = {
+        language: await AsyncStorage.getItem('language_preference'),
+        currency: await AsyncStorage.getItem('currency_preference'),
+        isDark: await AsyncStorage.getItem('theme_preference'),
+        notificationsEnabled: await AsyncStorage.getItem('notifications_enabled'),
+      };
+
+      const exportData = {
+        exportDate: new Date().toISOString(),
+        version: '2.0',
+        appVersion: '2.5.7',
+        user: {
+          id: user?.id,
+          email: user?.email,
+          name: user?.name,
+        },
+        wallets,
+        transactions,
+        categories,
+        goals: goalsJson ? JSON.parse(goalsJson) : [],
+        bills: billsJson ? JSON.parse(billsJson) : [],
+        budgets: budgetsJson ? JSON.parse(budgetsJson) : [],
+        reminders: remindersJson ? JSON.parse(remindersJson) : [],
+        borrowedMoney: borrowedMoneyJson ? JSON.parse(borrowedMoneyJson) : [],
+        monthlyLimit: monthlyLimit || '12000',
+        hiddenWallets: hiddenWallets ? JSON.parse(hiddenWallets) : [],
+        settings,
+      };
+
+      const jsonString = JSON.stringify(exportData, null, 2);
+      const fileName = `FinTracker_Backup_${new Date().toISOString().split('T')[0]}.json`;
+
+      // Save backup to AsyncStorage as well
+      await AsyncStorage.setItem('lastBackup', jsonString);
+      await AsyncStorage.setItem('lastBackupDate', new Date().toISOString());
+
+      // Share the file
+      await Share.share({
+        message: jsonString,
+        title: fileName,
+        url: `data:text/plain;base64,${Buffer.from(jsonString).toString('base64')}`,
+      });
+
+      Alert.alert('Success', 'Data exported successfully. Backup also saved to device.');
+    } catch (error) {
+      Alert.alert('Error', 'Failed to export data');
+      console.error('Export error:', error);
+    }
+  };
+
+  const exportAsCSV = async () => {
+    try {
+      const transactions = await hybridDataService.getTransactions();
+      const wallets = await hybridDataService.getWallets();
+
+      let csvContent = 'Date,Wallet,Category,Amount,Type,Description\n';
+
+      transactions.forEach((tx: any) => {
+        const wallet = wallets.find(w => w.id === tx.walletId);
+        const date = new Date(tx.date).toLocaleDateString();
+        const amount = tx.amount || 0;
+        const type = tx.type || 'Unknown';
+        const description = (tx.description || '').replace(/,/g, '');
+        csvContent += `${date},"${wallet?.name || 'Unknown'}","${tx.category || ''}",${amount},${type},"${description}"\n`;
+      });
+
+      const fileName = `FinTracker_Transactions_${new Date().toISOString().split('T')[0]}.csv`;
+
+      await Share.share({
+        message: csvContent,
+        title: fileName,
+        url: `data:text/csv;base64,${Buffer.from(csvContent).toString('base64')}`,
+      });
+
+      Alert.alert('Success', 'Transactions exported as CSV');
+    } catch (error) {
+      Alert.alert('Error', 'Failed to export CSV');
+      console.error('Export error:', error);
+    }
+  };
+
+  const restoreFromBackup = async () => {
+    try {
+      const lastBackup = await AsyncStorage.getItem('lastBackup');
+      if (!lastBackup) {
+        Alert.alert('No Backup Found', 'There is no backup saved on this device. Export data first to create a backup.');
+        return;
+      }
+
+      const backupData = JSON.parse(lastBackup);
+
+      Alert.alert(
+        'Restore Backup',
+        `This will restore data from ${new Date(backupData.exportDate).toLocaleDateString()}. Continue?`,
+        [
+          { text: 'Cancel', style: 'cancel' },
+          {
+            text: 'Restore',
+            style: 'destructive',
+            onPress: async () => {
+              try {
+                // Restore all data to AsyncStorage
+                if (backupData.goals) {
+                  await AsyncStorage.setItem('goals_data', JSON.stringify(backupData.goals));
+                }
+                if (backupData.bills) {
+                  await AsyncStorage.setItem('bills_data', JSON.stringify(backupData.bills));
+                }
+                if (backupData.budgets) {
+                  await AsyncStorage.setItem('budgets_data', JSON.stringify(backupData.budgets));
+                }
+                if (backupData.reminders) {
+                  await AsyncStorage.setItem('reminders_data', JSON.stringify(backupData.reminders));
+                }
+                if (backupData.borrowedMoney) {
+                  await AsyncStorage.setItem('borrowed_money_data', JSON.stringify(backupData.borrowedMoney));
+                }
+                if (backupData.monthlyLimit) {
+                  await AsyncStorage.setItem('monthlySpendingLimit', backupData.monthlyLimit);
+                }
+                if (backupData.hiddenWallets) {
+                  await AsyncStorage.setItem('hiddenWallets', JSON.stringify(backupData.hiddenWallets));
+                }
+                if (backupData.settings) {
+                  if (backupData.settings.language) {
+                    await AsyncStorage.setItem('language_preference', backupData.settings.language);
+                  }
+                  if (backupData.settings.currency) {
+                    await AsyncStorage.setItem('currency_preference', backupData.settings.currency);
+                  }
+                  if (backupData.settings.isDark) {
+                    await AsyncStorage.setItem('theme_preference', backupData.settings.isDark);
+                  }
+                }
+
+                Alert.alert('Success', 'Backup restored successfully. Please restart the app for all changes to take effect.');
+              } catch (restoreError) {
+                Alert.alert('Error', 'Failed to restore backup');
+                console.error('Restore error:', restoreError);
+              }
+            },
+          },
+        ]
+      );
+    } catch (error) {
+      Alert.alert('Error', 'Failed to restore from backup');
+      console.error('Restore error:', error);
     }
   };
 
@@ -574,24 +745,31 @@ const QuickSettingsScreen = () => {
       subtitle: t('settings_screen_export_data_desc'),
       icon: 'download-outline',
       color: '#FF9800',
-      onPress: () => Alert.alert(t('settings_screen_export_data'), 'Data export feature coming soon!'),
-    },
-    {
-      id: 'backup-restore',
-      title: t('settings_screen_backup_restore'),
-      subtitle: t('settings_screen_backup_restore_desc'),
-      icon: 'cloud-upload-outline',
-      color: '#9C27B0',
-      onPress: handleSecureBackup,
+      onPress: handleExportData,
     },
   ];
 
   return (
-    <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
-      <LinearGradient
-        colors={[theme.colors.gradientStart, theme.colors.gradientEnd]}
-        style={styles.gradient}
-      >
+    <View style={{ flex: 1, backgroundColor: '#1C1C1E' }}>
+      <StatusBar barStyle="light-content" backgroundColor="#1C1C1E" />
+      
+      {/* Dark Header */}
+      <View style={[styles.darkHeader, { paddingTop: insets.top }]}>
+        <View style={styles.headerRow}>
+          <TouchableOpacity onPress={handleGoBack} style={styles.backButtonHeader}>
+            <Ionicons name="arrow-back" size={24} color="#FFFFFF" />
+          </TouchableOpacity>
+          <Text style={styles.headerTitle}>{t('settings_screen_title')}</Text>
+          <View style={styles.placeholder} />
+        </View>
+      </View>
+
+      {/* Content Container with rounded top */}
+      <View style={[styles.contentContainer, { backgroundColor: theme.colors.background }]}>
+        <LinearGradient
+          colors={[theme.colors.gradientStart, theme.colors.gradientEnd]}
+          style={styles.gradient}
+        >
         <ScrollView 
           style={styles.scrollView} 
           contentContainerStyle={styles.scrollViewContent}
@@ -606,15 +784,6 @@ const QuickSettingsScreen = () => {
           bounces={true}
           bouncesZoom={false}
         >
-          {/* Header */}
-          <View style={styles.header}>
-            <TouchableOpacity onPress={handleGoBack} style={styles.backButton}>
-              <Ionicons name="arrow-back" size={24} color={theme.colors.text} />
-            </TouchableOpacity>
-            <Text style={[styles.title, { color: theme.colors.text }]}>{t('settings_screen_title')}</Text>
-            <View style={styles.placeholder} />
-          </View>
-
           {/* Ultra-Security Notice */}
           <View style={[styles.securityNotice, { backgroundColor: isDark ? '#1a4d3a' : '#e8f5e8' }]}>
             <View style={styles.securityIcon}>
@@ -700,22 +869,6 @@ const QuickSettingsScreen = () => {
                 />
               </View>
 
-              {biometricEnabled !== undefined && (
-                <View style={styles.settingItem}>
-                  <View style={styles.settingContent}>
-                    <Ionicons name="finger-print-outline" size={20} color={theme.colors.text} />
-                    <Text style={[styles.settingTitle, { color: theme.colors.text }]}>
-                      {t('profile_screen_biometric_auth')}
-                    </Text>
-                  </View>
-                  <Switch
-                    value={biometricEnabled}
-                    onValueChange={handleToggleBiometric}
-                    trackColor={{ false: theme.colors.border, true: theme.colors.primary }}
-                    thumbColor={biometricEnabled ? '#fff' : '#f4f3f4'}
-                  />
-                </View>
-              )}
             </View>
           </View>
 
@@ -1063,12 +1216,46 @@ const QuickSettingsScreen = () => {
           </View>
         </View>
       </Modal>
+      </View>
     </View>
   );
 };
 
 const createStyles = (theme: any) =>
   StyleSheet.create({
+    darkHeader: {
+      backgroundColor: '#1C1C1E',
+      paddingHorizontal: 20,
+      paddingBottom: 20,
+    },
+    headerRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      marginTop: 10,
+    },
+    backButtonHeader: {
+      width: 40,
+      height: 40,
+      borderRadius: 20,
+      backgroundColor: 'rgba(255,255,255,0.1)',
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    headerTitle: {
+      fontSize: 20,
+      fontWeight: '700',
+      color: '#FFFFFF',
+      flex: 1,
+      textAlign: 'center',
+    },
+    contentContainer: {
+      flex: 1,
+      borderTopLeftRadius: 28,
+      borderTopRightRadius: 28,
+      marginTop: -1,
+      overflow: 'hidden',
+    },
     securityNotice: {
     marginHorizontal: 20,
     marginTop: 10,

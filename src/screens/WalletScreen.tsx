@@ -8,10 +8,13 @@ import {
   Alert,
   RefreshControl,
   ActivityIndicator,
+  StatusBar,
+  Image,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
+import { useNavigation } from '@react-navigation/native';
 import AddWalletModal from '../components/AddWalletModal';
 import { useWalletVisibility } from '../hooks/useWalletVisibility';
 import AddMoneyModal from '../components/AddMoneyModal';
@@ -19,6 +22,7 @@ import TransferModal from '../components/TransferModal';
 import { useTheme } from '../contexts/ThemeContext';
 import { useLocalization } from '../contexts/LocalizationContext';
 import { useQuickActions } from '../contexts/QuickActionsContext';
+import { useAuth } from '../contexts/AuthContext';
 import { hybridDataService } from '../services/hybridDataService';
 import { useOptimizedCallback, useOptimizedMemo, createOptimizedListItem } from '../utils/componentOptimization';
 
@@ -27,6 +31,9 @@ const WalletScreen = () => {
   const { formatCurrency, t } = useLocalization();
   const { formatWalletBalance, shouldShowBalance, getTotalVisibleBalance } = useWalletVisibility();
   const quickActions = useQuickActions();
+  const navigation = useNavigation();
+  const { user } = useAuth();
+  const insets = useSafeAreaInsets();
   
   const [wallets, setWallets] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -301,11 +308,70 @@ const WalletScreen = () => {
   };
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: theme.colors.background }]}>
-      <LinearGradient
-        colors={[theme.colors.gradientStart, theme.colors.gradientEnd]}
-        style={styles.gradient}
-      >
+    <View style={[styles.container, { backgroundColor: theme.colors.headerBackground }]}>
+      <StatusBar barStyle="light-content" backgroundColor={theme.colors.headerBackground} />
+      
+      {/* Dark Header Section */}
+      <View style={[styles.darkHeader, { backgroundColor: theme.colors.headerBackground, paddingTop: insets.top }]}>
+        {/* Top Header Row */}
+        <View style={styles.headerRow}>
+          <TouchableOpacity 
+            style={styles.userInfo}
+            onPress={() => (navigation as any).navigate('UserProfile')}
+            activeOpacity={0.7}
+          >
+            <View style={styles.avatarContainer}>
+              {user?.avatar ? (
+                <Image source={{ uri: user.avatar }} style={styles.avatar} />
+              ) : (
+                <View style={[styles.avatarPlaceholder, { backgroundColor: theme.colors.headerSurface }]}>
+                  <Text style={[styles.avatarInitial, { color: theme.colors.headerText }]}>
+                    {user?.name?.charAt(0)?.toUpperCase() || 'U'}
+                  </Text>
+                </View>
+              )}
+            </View>
+            <Text style={[styles.userName, { color: theme.colors.headerText }]}>{user?.name || 'User'}</Text>
+            <Ionicons name="chevron-forward" size={16} color={theme.colors.headerTextSecondary} style={{ marginLeft: 4 }} />
+          </TouchableOpacity>
+          <View style={styles.headerActions}>
+            <TouchableOpacity 
+              style={[styles.headerIconButton, { backgroundColor: theme.colors.headerSurface }]}
+              onPress={() => (navigation as any).navigate('QuickSettings')}
+            >
+              <Ionicons name="settings-outline" size={22} color={theme.colors.headerText} />
+            </TouchableOpacity>
+          </View>
+        </View>
+
+        {/* Balance Overview in Header */}
+        <View style={styles.balanceSection}>
+          <Text style={[styles.balanceLabel, { color: theme.colors.headerTextSecondary }]}>{t('wallet_screen_total_balance')}</Text>
+          <TouchableOpacity onPress={() => setIsBalanceVisible(!isBalanceVisible)} style={styles.balanceRow}>
+            <Text style={[styles.balanceAmount, { color: theme.colors.headerText }]}>
+              {isBalanceVisible 
+                ? formatCurrency(getTotalVisibleBalance(wallets))
+                : '••••••'
+              }
+            </Text>
+          </TouchableOpacity>
+          
+          <View style={styles.walletStatsRow}>
+            <View style={styles.walletStatItem}>
+              <Text style={[styles.walletStatValue, { color: theme.colors.headerText }]}>{wallets.length}</Text>
+              <Text style={[styles.walletStatLabel, { color: theme.colors.headerTextSecondary }]}>{t('wallet_screen_active_wallets')}</Text>
+            </View>
+            <View style={[styles.walletStatDivider, { backgroundColor: theme.colors.headerBorder }]} />
+            <View style={styles.walletStatItem}>
+              <Text style={[styles.walletStatValue, { color: theme.colors.headerText }]}>{formatCurrency(monthlySpending)}</Text>
+              <Text style={[styles.walletStatLabel, { color: theme.colors.headerTextSecondary }]}>{t('wallet_screen_this_month')}</Text>
+            </View>
+          </View>
+        </View>
+      </View>
+
+      {/* White Content Section */}
+      <View style={[styles.contentContainer, { backgroundColor: theme.colors.background }]}>
         <ScrollView 
           style={styles.scrollView} 
           showsVerticalScrollIndicator={false}
@@ -313,34 +379,7 @@ const WalletScreen = () => {
             <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />
           }
         >
-          {/* Header */}
-          <View style={styles.header}>
-            <Text style={[styles.title, { color: theme.colors.text }]}>{t('wallet_screen_title')}</Text>
-          </View>
-
-          {/* Total Balance Overview */}
-          <View style={[styles.overviewCard, { backgroundColor: theme.colors.surface }]}>
-            <Text style={[styles.overviewLabel, { color: theme.colors.textSecondary }]}>{t('wallet_screen_total_balance')}</Text>
-            <Text style={[styles.overviewAmount, { color: theme.colors.text }]}>
-              {isBalanceVisible 
-                ? formatCurrency(getTotalVisibleBalance(wallets))
-                : '••••••'
-              }
-            </Text>
-            <View style={styles.overviewStats}>
-              <View style={styles.statItem}>
-                <Text style={[styles.statValue, { color: theme.colors.text }]}>{formatCurrency(monthlySpending)}</Text>
-                <Text style={[styles.statLabel, { color: theme.colors.textSecondary }]}>{t('wallet_screen_this_month')}</Text>
-              </View>
-              <View style={[styles.statDivider, { backgroundColor: theme.colors.border }]} />
-              <View style={styles.statItem}>
-                <Text style={[styles.statValue, { color: theme.colors.text }]}>{wallets.length}</Text>
-                <Text style={[styles.statLabel, { color: theme.colors.textSecondary }]}>{t('wallet_screen_active_wallets')}</Text>
-              </View>
-            </View>
-          </View>
-
-          {/* Quick Transfer */}
+          {/* Quick Actions */}
           <View style={styles.section}>
             <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>{t('wallet_screen_quick_actions')}</Text>
             <View style={styles.quickActions}>
@@ -348,8 +387,8 @@ const WalletScreen = () => {
                 style={styles.quickActionButton}
                 onPress={() => setIsTransferModalVisible(true)}
               >
-                <View style={[styles.quickActionIcon, { backgroundColor: '#4A90E2' }]}>
-                  <Ionicons name="swap-horizontal" size={20} color="white" />
+                <View style={[styles.quickActionIcon, { backgroundColor: '#E8F4FF' }]}>
+                  <Ionicons name="swap-horizontal" size={20} color="#007AFF" />
                 </View>
                 <Text style={[styles.quickActionText, { color: theme.colors.text }]}>{t('transfer')}</Text>
               </TouchableOpacity>
@@ -359,14 +398,13 @@ const WalletScreen = () => {
                   if (wallets.length === 0) {
                     Alert.alert(t('wallet_screen_no_wallets'), t('wallet_screen_no_wallets_add_money'));
                   } else {
-                    // Always allow wallet selection for quick action
-                    setSelectedWalletForMoney(null); // No pre-selection
+                    setSelectedWalletForMoney(null);
                     setShowAddMoneyModal(true);
                   }
                 }}
               >
-                <View style={[styles.quickActionIcon, { backgroundColor: '#7ED321' }]}>
-                  <Ionicons name="add" size={20} color="white" />
+                <View style={[styles.quickActionIcon, { backgroundColor: '#E8FFE8' }]}>
+                  <Ionicons name="add" size={20} color="#34C759" />
                 </View>
                 <Text style={[styles.quickActionText, { color: theme.colors.text }]}>{t('wallet_screen_add_money')}</Text>
               </TouchableOpacity>
@@ -374,8 +412,8 @@ const WalletScreen = () => {
                 style={styles.quickActionButton}
                 onPress={() => setShowAddWalletModal(true)}
               >
-                <View style={[styles.quickActionIcon, { backgroundColor: '#FF9500' }]}>
-                  <Ionicons name="card" size={20} color="white" />
+                <View style={[styles.quickActionIcon, { backgroundColor: '#FFF5E8' }]}>
+                  <Ionicons name="card" size={20} color="#FF9500" />
                 </View>
                 <Text style={[styles.quickActionText, { color: theme.colors.text }]}>{t('wallet_screen_new_wallet')}</Text>
               </TouchableOpacity>
@@ -400,119 +438,140 @@ const WalletScreen = () => {
               </View>
             )}
           </View>
+          
+          <View style={{ height: 100 }} />
         </ScrollView>
+      </View>
         
-        <TransferModal
-          visible={isTransferModalVisible}
-          onClose={() => setIsTransferModalVisible(false)}
-          onTransfer={handleTransfer}
-        />
-        
-        {/* Add Wallet Modal */}
-        <AddWalletModal
-          visible={showAddWalletModal}
-          onClose={() => setShowAddWalletModal(false)}
-          onAddWallet={handleAddWallet}
-        />
+      <TransferModal
+        visible={isTransferModalVisible}
+        onClose={() => setIsTransferModalVisible(false)}
+        onTransfer={handleTransfer}
+      />
+      
+      {/* Add Wallet Modal */}
+      <AddWalletModal
+        visible={showAddWalletModal}
+        onClose={() => setShowAddWalletModal(false)}
+        onAddWallet={handleAddWallet}
+      />
 
-        {/* Add Money Modal */}
-        <AddMoneyModal
-          visible={showAddMoneyModal}
-          onClose={() => {
-            setShowAddMoneyModal(false);
-            setSelectedWalletForMoney(null);
-          }}
-          onAddMoney={handleAddMoney}
-          selectedWallet={selectedWalletForMoney}
-          availableWallets={wallets}
-          allowWalletSelection={!selectedWalletForMoney}
-        />
-      </LinearGradient>
-    </SafeAreaView>
+      {/* Add Money Modal */}
+      <AddMoneyModal
+        visible={showAddMoneyModal}
+        onClose={() => {
+          setShowAddMoneyModal(false);
+          setSelectedWalletForMoney(null);
+        }}
+        onAddMoney={handleAddMoney}
+        selectedWallet={selectedWalletForMoney}
+        availableWallets={wallets}
+        allowWalletSelection={!selectedWalletForMoney}
+      />
+    </View>
   );
 };
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F8F9FA',
   },
-  gradient: {
+  darkHeader: {
+    paddingHorizontal: 20,
+    paddingBottom: 20,
+  },
+  headerRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 16,
+  },
+  userInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  avatarContainer: {
+    marginRight: 10,
+  },
+  avatar: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+  },
+  avatarPlaceholder: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  avatarInitial: {
+    fontSize: 18,
+    fontWeight: '600',
+  },
+  userName: {
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  headerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  headerIconButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  balanceSection: {
+    paddingTop: 10,
+    paddingBottom: 20,
+  },
+  balanceLabel: {
+    fontSize: 14,
+    marginBottom: 4,
+  },
+  balanceRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  balanceAmount: {
+    fontSize: 36,
+    fontWeight: '700',
+    letterSpacing: -1,
+  },
+  walletStatsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 16,
+  },
+  walletStatItem: {
     flex: 1,
+  },
+  walletStatValue: {
+    fontSize: 18,
+    fontWeight: '600',
+    marginBottom: 2,
+  },
+  walletStatLabel: {
+    fontSize: 12,
+  },
+  walletStatDivider: {
+    width: 1,
+    height: 30,
+    marginHorizontal: 20,
+  },
+  contentContainer: {
+    flex: 1,
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
   },
   scrollView: {
     flex: 1,
     paddingHorizontal: 20,
-  },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingTop: 20,
-    paddingBottom: 20,
-  },
-  title: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: '#333',
-  },
-  addButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: 'white',
-    justifyContent: 'center',
-    alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 2,
-  },
-  overviewCard: {
-    backgroundColor: 'white',
-    borderRadius: 16,
-    padding: 24,
-    marginBottom: 24,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 3,
-  },
-  overviewLabel: {
-    fontSize: 14,
-    color: '#8E8E93',
-    marginBottom: 8,
-  },
-  overviewAmount: {
-    fontSize: 32,
-    fontWeight: 'bold',
-    color: '#333',
-    marginBottom: 20,
-  },
-  overviewStats: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-  },
-  statItem: {
-    alignItems: 'center',
-    flex: 1,
-  },
-  statDivider: {
-    width: 1,
-    backgroundColor: '#F2F2F7',
-    marginHorizontal: 20,
-  },
-  statValue: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#333',
-    marginBottom: 4,
-  },
-  statLabel: {
-    fontSize: 12,
-    color: '#8E8E93',
+    paddingTop: 24,
   },
   section: {
     marginBottom: 24,
@@ -520,7 +579,6 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 18,
     fontWeight: '600',
-    color: '#333',
     marginBottom: 16,
   },
   quickActions: {
@@ -541,7 +599,6 @@ const styles = StyleSheet.create({
   },
   quickActionText: {
     fontSize: 12,
-    color: '#333',
     textAlign: 'center',
   },
   walletCard: {

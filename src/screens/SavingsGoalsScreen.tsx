@@ -7,12 +7,15 @@ import {
   TouchableOpacity,
   RefreshControl,
   Alert,
+  StatusBar,
+  Image,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../contexts/ThemeContext';
 import { useLocalization } from '../contexts/LocalizationContext';
+import { useAuth } from '../contexts/AuthContext';
 import { useNavigation } from '@react-navigation/native';
 import { Goal } from '../types';
 import { GoalsService } from '../services/goalsService';
@@ -21,7 +24,9 @@ import AddGoalModal from '../components/AddGoalModal';
 const SavingsGoalsScreen = () => {
   const { theme } = useTheme();
   const { t, formatCurrency } = useLocalization();
+  const { user } = useAuth();
   const navigation = useNavigation();
+  const insets = useSafeAreaInsets();
   const [goals, setGoals] = useState<Goal[]>([]);
   const [refreshing, setRefreshing] = useState(false);
   const [showAddModal, setShowAddModal] = useState(false);
@@ -201,39 +206,68 @@ const SavingsGoalsScreen = () => {
   };
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: theme.colors.background }]} edges={['top', 'bottom']}>
-      <LinearGradient
-        colors={[theme.colors.gradientStart, theme.colors.gradientEnd]}
-        style={styles.gradient}
-      >
-        {/* Header */}
-        <View style={styles.header}>
-          <TouchableOpacity onPress={() => navigation.goBack()}>
-            <Ionicons name="arrow-back" size={24} color={theme.colors.text} />
+    <View style={[styles.container, { backgroundColor: theme.colors.headerBackground }]}>
+      <StatusBar barStyle="light-content" backgroundColor={theme.colors.headerBackground} />
+      
+      {/* Dark Header Section */}
+      <View style={[styles.darkHeader, { paddingTop: insets.top }]}>
+        {/* Top Header Row */}
+        <View style={styles.headerRow}>
+          <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
+            <Ionicons name="arrow-back" size={24} color={theme.colors.headerText} />
           </TouchableOpacity>
-          <Text style={styles.title}>{t('savingsGoals.title')}</Text>
-          <TouchableOpacity onPress={() => setShowAddModal(true)}>
-            <Ionicons name="add" size={24} color={theme.colors.text} />
+          <TouchableOpacity 
+            style={styles.userInfo}
+            onPress={() => (navigation as any).navigate('UserProfile')}
+            activeOpacity={0.7}
+          >
+            <View style={styles.avatarContainer}>
+              {user?.avatar ? (
+                <Image source={{ uri: user.avatar }} style={styles.avatar} />
+              ) : (
+                <View style={[styles.avatarPlaceholder, { backgroundColor: theme.colors.headerSurface }]}>
+                  <Text style={[styles.avatarInitial, { color: theme.colors.headerText }]}>
+                    {user?.name?.charAt(0)?.toUpperCase() || 'U'}
+                  </Text>
+                </View>
+              )}
+            </View>
+          </TouchableOpacity>
+          <TouchableOpacity 
+            onPress={() => setShowAddModal(true)}
+            style={[styles.headerIconButton, { backgroundColor: theme.colors.headerSurface }]}
+          >
+            <Ionicons name="add" size={22} color={theme.colors.headerText} />
           </TouchableOpacity>
         </View>
 
-        {/* Summary Cards */}
+        {/* Title Section */}
+        <View style={styles.headerTitleSection}>
+          <Text style={[styles.headerTitle, { color: theme.colors.headerText }]}>{t('savingsGoals.title')}</Text>
+          <Text style={[styles.headerSubtitle, { color: theme.colors.headerTextSecondary }]}>
+            {summary.completedGoals}/{summary.totalGoals} {t('savingsGoals.completed')}
+          </Text>
+        </View>
+
+        {/* Summary Cards in Header */}
         <View style={styles.summaryContainer}>
-          <View style={styles.summaryCard}>
-            <Text style={styles.summaryValue}>{summary.totalGoals}</Text>
-            <Text style={styles.summaryLabel}>{t('savingsGoals.totalGoals')}</Text>
+          <View style={[styles.summaryCard, { backgroundColor: theme.colors.headerSurface }]}>
+            <Text style={[styles.summaryValue, { color: theme.colors.headerText }]}>{summary.totalGoals}</Text>
+            <Text style={[styles.summaryLabel, { color: theme.colors.headerTextSecondary }]}>{t('savingsGoals.totalGoals')}</Text>
           </View>
-          <View style={styles.summaryCard}>
-            <Text style={styles.summaryValue}>{summary.completedGoals}</Text>
-            <Text style={styles.summaryLabel}>{t('savingsGoals.completed')}</Text>
+          <View style={[styles.summaryCard, { backgroundColor: theme.colors.headerSurface }]}>
+            <Text style={[styles.summaryValue, { color: theme.colors.headerText }]}>{summary.completedGoals}</Text>
+            <Text style={[styles.summaryLabel, { color: theme.colors.headerTextSecondary }]}>{t('savingsGoals.completed')}</Text>
           </View>
-          <View style={styles.summaryCard}>
-            <Text style={styles.summaryValue}>{formatCurrency(summary.totalSaved)}</Text>
-            <Text style={styles.summaryLabel}>{t('savingsGoals.totalSaved')}</Text>
+          <View style={[styles.summaryCard, { backgroundColor: theme.colors.headerSurface }]}>
+            <Text style={[styles.summaryValue, { color: theme.colors.headerText }]}>{formatCurrency(summary.totalSaved)}</Text>
+            <Text style={[styles.summaryLabel, { color: theme.colors.headerTextSecondary }]}>{t('savingsGoals.totalSaved')}</Text>
           </View>
         </View>
+      </View>
 
-        {/* Goals List */}
+      {/* White Content Section */}
+      <View style={[styles.contentContainer, { backgroundColor: theme.colors.background }]}>
         <ScrollView
           style={styles.scrollView}
           refreshControl={
@@ -244,11 +278,11 @@ const SavingsGoalsScreen = () => {
           {goals.length === 0 ? (
             <View style={styles.emptyState}>
               <Ionicons name="flag-outline" size={64} color={theme.colors.textSecondary} />
-              <Text style={styles.emptyTitle}>{t('savingsGoals.noGoalsYet')}</Text>
-              <Text style={styles.emptySubtitle}>
+              <Text style={[styles.emptyTitle, { color: theme.colors.text }]}>{t('savingsGoals.noGoalsYet')}</Text>
+              <Text style={[styles.emptySubtitle, { color: theme.colors.textSecondary }]}>
                 {t('savingsGoals.createFirstGoal')}
               </Text>
-              <TouchableOpacity style={styles.addButton} onPress={() => setShowAddModal(true)}>
+              <TouchableOpacity style={[styles.addButton, { backgroundColor: theme.colors.primary }]} onPress={() => setShowAddModal(true)}>
                 <Text style={styles.addButtonText}>{t('savingsGoals.addFirstGoal')}</Text>
               </TouchableOpacity>
             </View>
@@ -257,8 +291,9 @@ const SavingsGoalsScreen = () => {
               {goals.map(renderGoalCard)}
             </View>
           )}
+          <View style={{ height: 100 }} />
         </ScrollView>
-      </LinearGradient>
+      </View>
 
       {/* Add Goal Modal */}
       <AddGoalModal
@@ -270,7 +305,7 @@ const SavingsGoalsScreen = () => {
         onGoalAdded={handleGoalAdded}
         editingGoal={editingGoal}
       />
-    </SafeAreaView>
+    </View>
   );
 };
 
@@ -278,55 +313,96 @@ const createStyles = (theme: any) => StyleSheet.create({
   container: {
     flex: 1,
   },
-  gradient: {
-    flex: 1,
+  darkHeader: {
+    paddingHorizontal: 20,
+    paddingBottom: 20,
+    backgroundColor: theme.colors.headerBackground,
   },
-  header: {
+  headerRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: 20,
+    paddingVertical: 12,
+  },
+  backButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  userInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  avatarContainer: {
+    marginRight: 0,
+  },
+  avatar: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+  },
+  avatarPlaceholder: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  avatarInitial: {
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  headerIconButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  headerTitleSection: {
     paddingTop: 8,
     paddingBottom: 16,
   },
-  title: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: theme.colors.text,
+  headerTitle: {
+    fontSize: 26,
+    fontWeight: '700',
+    marginBottom: 4,
+  },
+  headerSubtitle: {
+    fontSize: 14,
+  },
+  contentContainer: {
+    flex: 1,
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
   },
   summaryContainer: {
     flexDirection: 'row',
-    paddingHorizontal: 20,
-    marginBottom: 20,
-    gap: 12,
+    marginBottom: 0,
+    gap: 10,
   },
   summaryCard: {
     flex: 1,
-    backgroundColor: theme.colors.card,
     borderRadius: 12,
-    padding: 16,
+    padding: 12,
     alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 2,
   },
   summaryValue: {
     fontSize: 18,
     fontWeight: 'bold',
-    color: theme.colors.text,
     marginBottom: 4,
     textAlign: 'center',
   },
   summaryLabel: {
     fontSize: 12,
-    color: theme.colors.textSecondary,
     textAlign: 'center',
   },
   scrollView: {
     flex: 1,
     paddingHorizontal: 20,
+    paddingTop: 20,
   },
   goalsContainer: {
     paddingBottom: 20,

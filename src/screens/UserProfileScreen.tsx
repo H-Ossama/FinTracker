@@ -12,8 +12,9 @@ import {
   Alert,
   KeyboardAvoidingView,
   Platform,
+  StatusBar,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useForm, Controller } from 'react-hook-form';
 import { yupResolver } from '@hookform/resolvers/yup';
 import * as yup from 'yup';
@@ -46,10 +47,10 @@ const UserProfileScreen: React.FC<UserProfileScreenProps> = ({ navigation }) => 
   const [showNewPassword, setShowNewPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
-  const [biometricEnabled, setBiometricEnabled] = useState(false);
 
   const { theme } = useTheme();
   const { t } = useLocalization();
+  const insets = useSafeAreaInsets();
   const { alertState, hideAlert, showSuccess, showError, showDestructive } = useCustomAlert();
   const {
     user,
@@ -57,10 +58,6 @@ const UserProfileScreen: React.FC<UserProfileScreenProps> = ({ navigation }) => 
     changePassword,
     deleteAccount,
     signOut,
-    enableBiometric,
-    disableBiometric,
-    checkBiometricAvailability,
-    biometricEnabled: currentBiometricEnabled,
   } = useAuth();
 
   const styles = createStyles(theme);
@@ -81,10 +78,6 @@ const UserProfileScreen: React.FC<UserProfileScreenProps> = ({ navigation }) => 
       confirmPassword: '',
     },
   });
-
-  React.useEffect(() => {
-    setBiometricEnabled(currentBiometricEnabled);
-  }, [currentBiometricEnabled]);
 
   const handleProfileUpdate = async (data: ProfileFormData) => {
     try {
@@ -130,35 +123,6 @@ const UserProfileScreen: React.FC<UserProfileScreenProps> = ({ navigation }) => 
       Alert.alert(t('error'), t('profile_screen_unexpected_error'));
     } finally {
       setIsLoading(false);
-    }
-  };
-
-  const handleBiometricToggle = async (enabled: boolean) => {
-    try {
-      if (enabled) {
-        const isAvailable = await checkBiometricAvailability();
-        if (!isAvailable) {
-          Alert.alert(
-            t('profile_screen_biometric_not_available'),
-            t('profile_screen_biometric_not_setup')
-          );
-          return;
-        }
-
-        const result = await enableBiometric();
-        if (result.success) {
-          setBiometricEnabled(true);
-          Alert.alert(t('success'), t('profile_screen_biometric_enabled'));
-        } else {
-          Alert.alert(t('profile_screen_biometric_failed'), result.error || t('profile_screen_biometric_failed'));
-        }
-      } else {
-        await disableBiometric();
-        setBiometricEnabled(false);
-        Alert.alert(t('success'), t('profile_screen_biometric_disabled'));
-      }
-    } catch (error) {
-      Alert.alert('Error', 'An unexpected error occurred.');
     }
   };
 
@@ -240,27 +204,34 @@ const UserProfileScreen: React.FC<UserProfileScreenProps> = ({ navigation }) => 
   };
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: theme.colors.background }]}>
-      {/* Modern Header */}
-      <View style={[styles.header, { backgroundColor: theme.colors.surface }]}>
-        <TouchableOpacity
-          style={styles.backButton}
-          onPress={() => navigation.goBack()}
-        >
-          <Ionicons name="arrow-back" size={24} color={theme.colors.text} />
-        </TouchableOpacity>
-        <Text style={[styles.headerTitle, { color: theme.colors.text }]}>{t('profile_screen_title')}</Text>
-        <TouchableOpacity
-          style={styles.headerAction}
-          onPress={() => setIsEditing(!isEditing)}
-        >
-          <Ionicons 
-            name={isEditing ? "checkmark" : "create-outline"} 
-            size={24} 
-            color="#3B82F6" 
-          />
-        </TouchableOpacity>
+    <View style={{ flex: 1, backgroundColor: theme.colors.headerBackground }}>
+      <StatusBar barStyle="light-content" backgroundColor={theme.colors.headerBackground} />
+      
+      {/* Dark Header */}
+      <View style={[styles.darkHeader, { paddingTop: insets.top }]}>
+        <View style={styles.headerRow}>
+          <TouchableOpacity
+            style={styles.backButton}
+            onPress={() => navigation.goBack()}
+          >
+            <Ionicons name="arrow-back" size={24} color="#FFFFFF" />
+          </TouchableOpacity>
+          <Text style={styles.headerTitle}>{t('profile_screen_title')}</Text>
+          <TouchableOpacity
+            style={styles.headerAction}
+            onPress={() => setIsEditing(!isEditing)}
+          >
+            <Ionicons 
+              name={isEditing ? "checkmark" : "create-outline"} 
+              size={24} 
+              color="#3B82F6" 
+            />
+          </TouchableOpacity>
+        </View>
       </View>
+      
+      {/* Content Container with rounded top */}
+      <View style={[styles.contentContainer, { backgroundColor: theme.colors.background }]}>
 
       <KeyboardAvoidingView
         style={styles.keyboardAvoidingView}
@@ -272,6 +243,10 @@ const UserProfileScreen: React.FC<UserProfileScreenProps> = ({ navigation }) => 
           showsVerticalScrollIndicator={false}
           bounces={false}
           keyboardShouldPersistTaps="handled"
+          scrollEnabled={true}
+          scrollEventThrottle={16}
+          nestedScrollEnabled={true}
+          directionalLockEnabled={true}
         >
         {/* Profile Hero Card */}
         <View style={[styles.heroCard, { backgroundColor: theme.colors.surface }]}>
@@ -316,13 +291,6 @@ const UserProfileScreen: React.FC<UserProfileScreenProps> = ({ navigation }) => 
               </Text>
             </View>
             <View style={styles.statDivider} />
-            <View style={styles.statItem}>
-              <Ionicons name="shield" size={20} color="#10B981" />
-              <Text style={[styles.statLabel, { color: theme.colors.textSecondary }]}>{t('profile_screen_security')}</Text>
-              <Text style={[styles.statValue, { color: theme.colors.text }]}>
-                {biometricEnabled ? t('profile_screen_enhanced') : t('profile_screen_standard')}
-              </Text>
-            </View>
           </View>
         </View>
 
@@ -427,26 +395,6 @@ const UserProfileScreen: React.FC<UserProfileScreenProps> = ({ navigation }) => 
                 </View>
                 <Ionicons name={showChangePassword ? "chevron-up" : "chevron-forward"} size={20} color={theme.colors.textSecondary} />
               </TouchableOpacity>
-
-              <View style={styles.modernSettingItem}>
-                <View style={styles.settingLeft}>
-                  <View style={[styles.settingIcon, { backgroundColor: '#DBEAFE' }]}>
-                    <Ionicons name="finger-print-outline" size={18} color="#3B82F6" />
-                  </View>
-                  <View>
-                    <Text style={[styles.settingLabel, { color: theme.colors.text }]}>{t('profile_screen_biometric_auth')}</Text>
-                    <Text style={[styles.settingDescription, { color: theme.colors.textSecondary }]}>
-                      {t('profile_screen_biometric_desc')}
-                    </Text>
-                  </View>
-                </View>
-                <Switch
-                  value={biometricEnabled}
-                  onValueChange={() => {}} // Read-only - managed in profile
-                  trackColor={{ false: theme.colors.border, true: '#3B82F6' }}
-                  thumbColor="#FFFFFF"
-                />
-              </View>
             </View>
           </View>
 
@@ -484,6 +432,7 @@ const UserProfileScreen: React.FC<UserProfileScreenProps> = ({ navigation }) => 
         </View>
       </ScrollView>
       </KeyboardAvoidingView>
+      </View>
       
       <CustomAlert
         visible={alertState.visible}
@@ -494,13 +443,52 @@ const UserProfileScreen: React.FC<UserProfileScreenProps> = ({ navigation }) => 
         iconColor={alertState.iconColor}
         onDismiss={hideAlert}
       />
-    </SafeAreaView>
+    </View>
   );
 };
 
 const createStyles = (theme: any) => StyleSheet.create({
   container: {
     flex: 1,
+  },
+  darkHeader: {
+    backgroundColor: '#1C1C1E',
+    paddingHorizontal: 20,
+    paddingBottom: 20,
+  },
+  headerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: 10,
+  },
+  backButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255,255,255,0.1)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  headerTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#FFFFFF',
+  },
+  headerAction: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255,255,255,0.1)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  contentContainer: {
+    flex: 1,
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+    marginTop: -1,
+    overflow: 'hidden',
   },
   keyboardAvoidingView: {
     flex: 1,

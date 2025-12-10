@@ -18,8 +18,10 @@ import {
   ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
+  StatusBar,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { useTheme } from '../contexts/ThemeContext';
 import { useLocalization } from '../contexts/LocalizationContext';
@@ -131,6 +133,7 @@ const AddExpenseModal: React.FC<AddExpenseModalProps> = ({
 }) => {
   const { theme } = useTheme();
   const { t } = useLocalization();
+  const insets = useSafeAreaInsets();
   
   // State with stable references
   const [title, setTitle] = useState('');
@@ -275,17 +278,24 @@ const AddExpenseModal: React.FC<AddExpenseModalProps> = ({
       presentationStyle="pageSheet"
       onRequestClose={handleClose}
     >
-      <View style={modalStyles.container}>
-        {/* Header */}
-        <View style={modalStyles.header}>
-          <TouchableOpacity onPress={handleClose} style={styles.headerButton}>
-            <Ionicons name="close" size={24} color={theme.colors.text} />
-          </TouchableOpacity>
-          <Text style={modalStyles.headerTitle}>{t('add_expense_title')}</Text>
-          <TouchableOpacity onPress={handleSubmit} style={styles.headerButton}>
-            <Text style={modalStyles.saveButtonText}>{t('save')}</Text>
-          </TouchableOpacity>
+      <View style={{ flex: 1, backgroundColor: '#1C1C1E' }}>
+        <StatusBar barStyle="light-content" backgroundColor="#1C1C1E" />
+        
+        {/* Dark Header */}
+        <View style={[styles.darkHeader, { paddingTop: insets.top }]}>
+          <View style={styles.headerRow}>
+            <TouchableOpacity onPress={handleClose} style={styles.closeButton}>
+              <Ionicons name="close" size={24} color="#FFFFFF" />
+            </TouchableOpacity>
+            <Text style={styles.headerTitle}>{t('add_expense_title')}</Text>
+            <TouchableOpacity onPress={handleSubmit} style={styles.saveButton}>
+              <Text style={styles.saveButtonText}>{t('save')}</Text>
+            </TouchableOpacity>
+          </View>
         </View>
+        
+        {/* Content Container */}
+        <View style={[styles.contentContainer, { backgroundColor: theme.colors.background }]}>
 
         <KeyboardAvoidingView
           style={styles.keyboardAvoidingView}
@@ -413,6 +423,7 @@ const AddExpenseModal: React.FC<AddExpenseModalProps> = ({
             onChange={onDateChange}
           />
         )}
+        </View>
       </View>
     </Modal>
   );
@@ -420,39 +431,51 @@ const AddExpenseModal: React.FC<AddExpenseModalProps> = ({
 
 // Optimize styles by creating them only once
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#FFFFFF',
+  darkHeader: {
+    backgroundColor: '#1C1C1E',
+    paddingBottom: 16,
+    paddingHorizontal: 20,
   },
-  keyboardAvoidingView: {
-    flex: 1,
-  },
-  header: {
+  headerRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 20,
-    paddingTop: 60,
-    paddingBottom: 20,
-    backgroundColor: 'white',
-    borderBottomWidth: 1,
-    borderBottomColor: '#F2F2F7',
-  },
-  headerButton: {
-    minWidth: 44,
     height: 44,
-    justifyContent: 'center',
+  },
+  closeButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255,255,255,0.1)',
     alignItems: 'center',
+    justifyContent: 'center',
   },
   headerTitle: {
-    fontSize: 18,
+    fontSize: 17,
     fontWeight: '600',
-    color: '#333',
+    color: '#FFFFFF',
+    flex: 1,
+    textAlign: 'center',
+  },
+  saveButton: {
+    paddingHorizontal: 4,
+    height: 40,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   saveButtonText: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#4A90E2',
+    color: '#10B981',
+  },
+  contentContainer: {
+    flex: 1,
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+    overflow: 'hidden',
+  },
+  keyboardAvoidingView: {
+    flex: 1,
   },
   content: {
     flex: 1,

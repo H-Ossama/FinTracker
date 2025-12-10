@@ -11,12 +11,14 @@ import {
   StyleSheet,
   Platform,
   KeyboardAvoidingView,
+  StatusBar,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { Picker } from '@react-native-picker/picker';
 import { useTheme } from '../contexts/ThemeContext';
 import { Reminder } from '../screens/RemindersScreen';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 interface Category {
   id: string;
@@ -44,6 +46,7 @@ export default function AddReminderModal({
   categories,
 }: AddReminderModalProps) {
   const { isDark } = useTheme();
+  const insets = useSafeAreaInsets();
   const styles = createStyles(isDark);
 
   // Form state
@@ -191,21 +194,28 @@ export default function AddReminderModal({
       presentationStyle="pageSheet"
       onRequestClose={onClose}
     >
-      <View style={styles.container}>
-        {/* Header */}
-        <View style={styles.header}>
-          <TouchableOpacity onPress={onClose} style={styles.closeButton}>
-            <Ionicons name="close" size={24} color={styles.headerIcon.color} />
-          </TouchableOpacity>
-          
-          <Text style={styles.headerTitle}>
-            {reminder ? 'Edit Reminder' : 'Add Reminder'}
-          </Text>
-          
-          <TouchableOpacity onPress={handleSave} style={styles.saveButton}>
-            <Text style={styles.saveButtonText}>Save</Text>
-          </TouchableOpacity>
+      <View style={{ flex: 1, backgroundColor: '#1C1C1E' }}>
+        <StatusBar barStyle="light-content" backgroundColor="#1C1C1E" />
+        
+        {/* Dark Header */}
+        <View style={[styles.darkHeader, { paddingTop: insets.top }]}>
+          <View style={styles.headerRow}>
+            <TouchableOpacity onPress={onClose} style={styles.closeButton}>
+              <Ionicons name="close" size={24} color="#FFFFFF" />
+            </TouchableOpacity>
+            
+            <Text style={styles.headerTitle}>
+              {reminder ? 'Edit Reminder' : 'Add Reminder'}
+            </Text>
+            
+            <TouchableOpacity onPress={handleSave} style={styles.saveButtonHeader}>
+              <Text style={styles.saveButtonTextHeader}>Save</Text>
+            </TouchableOpacity>
+          </View>
         </View>
+        
+        {/* Content Container */}
+        <View style={styles.contentContainer}>
 
         <KeyboardAvoidingView
           style={styles.keyboardAvoidingView}
@@ -431,6 +441,7 @@ export default function AddReminderModal({
             onChange={handleDateChange}
           />
         )}
+        </View>
       </View>
     </Modal>
   );
@@ -438,44 +449,52 @@ export default function AddReminderModal({
 
 function createStyles(isDark: boolean) {
   return StyleSheet.create({
-    container: {
-      flex: 1,
-      backgroundColor: isDark ? '#1F2937' : '#F9FAFB',
+    darkHeader: {
+      backgroundColor: '#1C1C1E',
+      paddingBottom: 16,
+      paddingHorizontal: 20,
     },
-    keyboardAvoidingView: {
-      flex: 1,
-    },
-    header: {
+    headerRow: {
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'space-between',
-      paddingHorizontal: 20,
-      paddingVertical: 16,
-      backgroundColor: isDark ? '#374151' : '#FFFFFF',
-      borderBottomWidth: 1,
-      borderBottomColor: isDark ? '#4B5563' : '#E5E7EB',
+      height: 44,
     },
     closeButton: {
-      padding: 4,
-    },
-    headerIcon: {
-      color: isDark ? '#9CA3AF' : '#6B7280',
+      width: 40,
+      height: 40,
+      borderRadius: 20,
+      backgroundColor: 'rgba(255,255,255,0.1)',
+      alignItems: 'center',
+      justifyContent: 'center',
     },
     headerTitle: {
-      fontSize: 18,
+      fontSize: 17,
       fontWeight: '600',
-      color: isDark ? '#FFFFFF' : '#1F2937',
+      color: '#FFFFFF',
+      flex: 1,
+      textAlign: 'center',
     },
-    saveButton: {
+    saveButtonHeader: {
       paddingHorizontal: 16,
       paddingVertical: 8,
       backgroundColor: '#10B981',
       borderRadius: 8,
     },
-    saveButtonText: {
+    saveButtonTextHeader: {
       color: '#FFFFFF',
       fontWeight: '600',
-      fontSize: 16,
+      fontSize: 14,
+    },
+    contentContainer: {
+      flex: 1,
+      backgroundColor: isDark ? '#1F2937' : '#F9FAFB',
+      borderTopLeftRadius: 28,
+      borderTopRightRadius: 28,
+      overflow: 'hidden',
+    },
+    keyboardAvoidingView: {
+      flex: 1,
     },
     content: {
       flex: 1,

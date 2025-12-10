@@ -13,15 +13,17 @@ import {
   Dimensions,
   Vibration,
   Alert,
+  StatusBar,
+  Image,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { useTheme } from '../contexts/ThemeContext';
 import { useLocalization } from '../contexts/LocalizationContext';
+import { useAuth } from '../contexts/AuthContext';
 import { hybridDataService, HybridTransaction } from '../services/hybridDataService';
-import useSafeAreaHelper from '../hooks/useSafeAreaHelper';
 import TransactionDetailsModal from '../components/TransactionDetailsModal';
 
 const { width } = Dimensions.get('window');
@@ -45,7 +47,8 @@ const TransactionsHistoryScreen = () => {
   const navigation = useNavigation();
   const { theme } = useTheme();
   const { formatCurrency, t } = useLocalization();
-  const { headerPadding } = useSafeAreaHelper();
+  const { user } = useAuth();
+  const insets = useSafeAreaInsets();
   
   const [transactions, setTransactions] = useState<HybridTransaction[]>([]);
   const [loading, setLoading] = useState(true);
@@ -502,56 +505,83 @@ const TransactionsHistoryScreen = () => {
   );
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: theme.colors.background }]}>
-      <LinearGradient
-        colors={[theme.colors.gradientStart, theme.colors.gradientEnd]}
-        style={styles.gradient}
-      >
-        {/* Enhanced Header */}
-        <View style={[styles.header, headerPadding]}>
+    <View style={[styles.container, { backgroundColor: theme.colors.headerBackground }]}>
+      <StatusBar barStyle="light-content" backgroundColor={theme.colors.headerBackground} />
+      
+      {/* Dark Header Section */}
+      <View style={[styles.darkHeader, { backgroundColor: theme.colors.headerBackground, paddingTop: insets.top }]}>
+        {/* Top Header Row */}
+        <View style={styles.headerRow}>
           <TouchableOpacity 
             onPress={() => navigation.goBack()}
             style={styles.backButton}
           >
-            <Ionicons name="arrow-back" size={24} color={theme.colors.text} />
+            <Ionicons name="arrow-back" size={24} color={theme.colors.headerText} />
           </TouchableOpacity>
-          <Text style={[styles.title, { color: theme.colors.text }]}>
-            {t('transactions_history')}
-          </Text>
+          <TouchableOpacity 
+            style={styles.userInfo}
+            onPress={() => (navigation as any).navigate('UserProfile')}
+            activeOpacity={0.7}
+          >
+            <View style={styles.avatarContainer}>
+              {user?.avatar ? (
+                <Image source={{ uri: user.avatar }} style={styles.avatar} />
+              ) : (
+                <View style={[styles.avatarPlaceholder, { backgroundColor: theme.colors.headerSurface }]}>
+                  <Text style={[styles.avatarInitial, { color: theme.colors.headerText }]}>
+                    {user?.name?.charAt(0)?.toUpperCase() || 'U'}
+                  </Text>
+                </View>
+              )}
+            </View>
+          </TouchableOpacity>
           <View style={styles.headerActions}>
-            <TouchableOpacity onPress={toggleSearch} style={styles.headerAction}>
+            <TouchableOpacity onPress={toggleSearch} style={[styles.headerIconButton, { backgroundColor: theme.colors.headerSurface }]}>
               <Ionicons 
                 name={searchVisible ? "close" : "search"} 
                 size={22} 
-                color={theme.colors.text} 
+                color={theme.colors.headerText} 
               />
             </TouchableOpacity>
           </View>
         </View>
 
-        {/* Search Bar */}
+        {/* Title Section */}
+        <View style={styles.headerTitleSection}>
+          <Text style={[styles.headerTitle, { color: theme.colors.headerText }]}>
+            {t('transactions_history')}
+          </Text>
+          <Text style={[styles.headerSubtitle, { color: theme.colors.headerTextSecondary }]}>
+            {statistics.total} {t('transaction_plural')}
+          </Text>
+        </View>
+
+        {/* Search Bar in Header */}
         <Animated.View style={[
           styles.searchContainer, 
           { height: animatedValues.searchHeight }
         ]}>
-          <View style={[styles.searchInputContainer, { backgroundColor: theme.colors.surface }]}>
-            <Ionicons name="search" size={20} color={theme.colors.textSecondary} />
+          <View style={[styles.searchInputContainer, { backgroundColor: theme.colors.headerSurface }]}>
+            <Ionicons name="search" size={20} color={theme.colors.headerTextSecondary} />
             <TextInput
-              style={[styles.searchInput, { color: theme.colors.text }]}
+              style={[styles.searchInput, { color: theme.colors.headerText }]}
               placeholder={t('search_transactions')}
-              placeholderTextColor={theme.colors.textSecondary}
+              placeholderTextColor={theme.colors.headerTextSecondary}
               value={filter.search}
               onChangeText={(text) => setFilter(prev => ({ ...prev, search: text }))}
               autoFocus={searchVisible}
             />
             {filter.search.length > 0 && (
               <TouchableOpacity onPress={() => setFilter(prev => ({ ...prev, search: '' }))}>
-                <Ionicons name="close-circle" size={20} color={theme.colors.textSecondary} />
+                <Ionicons name="close-circle" size={20} color={theme.colors.headerTextSecondary} />
               </TouchableOpacity>
             )}
           </View>
         </Animated.View>
+      </View>
 
+      {/* White Content Section */}
+      <View style={[styles.contentContainer, { backgroundColor: theme.colors.background }]}>
         {/* Enhanced Statistics */}
         <View style={[styles.statsContainer, { backgroundColor: theme.colors.surface }]}>
           <View style={styles.statsRow}>
@@ -598,19 +628,10 @@ const TransactionsHistoryScreen = () => {
               </Text>
             </View>
           </View>
-          
-          <View style={styles.statsSecondRow}>
-            <Text style={[styles.statsSecondaryText, { color: theme.colors.textSecondary }]}>
-              {statistics.total} {t('transaction_plural')} • {t('avg')} {formatCurrency(statistics.avgTransaction)}
-            </Text>
-          </View>
         </View>
 
         {/* Enhanced Filter Chips */}
         <View style={styles.filtersSection}>
-          <Text style={[styles.filterSectionTitle, { color: theme.colors.text }]}>
-            {t('type')}
-          </Text>
           <ScrollView 
             horizontal 
             showsHorizontalScrollIndicator={false}
@@ -626,13 +647,10 @@ const TransactionsHistoryScreen = () => {
               transactions.filter(t => t.type === 'TRANSFER').length)}
           </ScrollView>
 
-          <Text style={[styles.filterSectionTitle, { color: theme.colors.text, marginTop: 16 }]}>
-            {t('period')}
-          </Text>
           <ScrollView 
             horizontal 
             showsHorizontalScrollIndicator={false}
-            style={styles.filterScrollView}
+            style={[styles.filterScrollView, { marginTop: 12 }]}
             contentContainerStyle={styles.filterScrollContent}
           >
             {renderDateRangeChip('all', t('all_time'))}
@@ -662,15 +680,15 @@ const TransactionsHistoryScreen = () => {
               <RefreshControl
                 refreshing={refreshing}
                 onRefresh={onRefresh}
-                colors={[theme.colors.primary]} // Android
-                tintColor={theme.colors.primary} // iOS
+                colors={[theme.colors.primary]}
+                tintColor={theme.colors.primary}
               />
             }
             ListEmptyComponent={renderEmpty}
             ItemSeparatorComponent={() => <View style={styles.groupSeparator} />}
           />
         )}
-      </LinearGradient>
+      </View>
 
       {/* Transaction Details Modal */}
       <TransactionDetailsModal
@@ -681,7 +699,7 @@ const TransactionsHistoryScreen = () => {
         onDuplicate={handleDuplicateTransaction}
         onDelete={handleDeleteTransaction}
       />
-    </SafeAreaView>
+    </View>
   );
 };
 
@@ -689,39 +707,78 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
-  gradient: {
-    flex: 1,
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+  darkHeader: {
     paddingHorizontal: 20,
     paddingBottom: 16,
   },
-  backButton: {
-    padding: 8,
-    marginLeft: -8,
-    borderRadius: 20,
+  headerRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 12,
   },
-  title: {
-    fontSize: 22,
-    fontWeight: '700',
-    flex: 1,
-    textAlign: 'center',
+  backButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  userInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  avatarContainer: {
+    marginRight: 0,
+  },
+  avatar: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+  },
+  avatarPlaceholder: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  avatarInitial: {
+    fontSize: 16,
+    fontWeight: '600',
   },
   headerActions: {
     flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
   },
-  headerAction: {
-    padding: 8,
-    marginRight: -8,
+  headerIconButton: {
+    width: 40,
+    height: 40,
     borderRadius: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  headerTitleSection: {
+    paddingTop: 8,
+    paddingBottom: 16,
+  },
+  headerTitle: {
+    fontSize: 26,
+    fontWeight: '700',
+    marginBottom: 4,
+  },
+  headerSubtitle: {
+    fontSize: 14,
+  },
+  contentContainer: {
+    flex: 1,
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
   },
   
   // Search
   searchContainer: {
-    paddingHorizontal: 20,
     overflow: 'hidden',
   },
   searchInputContainer: {
@@ -731,11 +788,6 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     borderRadius: 12,
     marginBottom: 8,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
-    elevation: 2,
   },
   searchInput: {
     flex: 1,
@@ -747,14 +799,15 @@ const styles = StyleSheet.create({
   // Enhanced Statistics
   statsContainer: {
     marginHorizontal: 20,
-    marginBottom: 20,
+    marginTop: 20,
+    marginBottom: 16,
     borderRadius: 16,
-    padding: 20,
+    padding: 16,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
+    shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 4,
+    shadowRadius: 4,
+    elevation: 3,
   },
   statsRow: {
     flexDirection: 'row',
@@ -767,47 +820,29 @@ const styles = StyleSheet.create({
   statHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 8,
+    marginBottom: 6,
   },
   statLabel: {
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: '500',
     marginLeft: 4,
     textTransform: 'uppercase',
     letterSpacing: 0.5,
   },
   statValue: {
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: '700',
   },
   statDivider: {
     width: 1,
-    height: 40,
-    marginHorizontal: 16,
-  },
-  statsSecondRow: {
-    marginTop: 12,
-    paddingTop: 12,
-    borderTopWidth: 1,
-    borderTopColor: 'rgba(0,0,0,0.05)',
-    alignItems: 'center',
-  },
-  statsSecondaryText: {
-    fontSize: 12,
-    fontWeight: '500',
+    height: 36,
+    marginHorizontal: 12,
   },
 
   // Enhanced Filters
   filtersSection: {
     paddingHorizontal: 20,
-    marginBottom: 20,
-  },
-  filterSectionTitle: {
-    fontSize: 14,
-    fontWeight: '600',
-    marginBottom: 12,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
+    marginBottom: 16,
   },
   filterScrollView: {
     flexGrow: 0,
@@ -818,45 +853,40 @@ const styles = StyleSheet.create({
   filterChip: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 20,
-    marginRight: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 18,
+    marginRight: 10,
     borderWidth: 1,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 2,
   },
   filterChipIcon: {
     marginRight: 6,
   },
   filterChipText: {
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '600',
   },
   filterChipBadge: {
-    marginLeft: 8,
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 10,
-    minWidth: 20,
+    marginLeft: 6,
+    paddingHorizontal: 5,
+    paddingVertical: 1,
+    borderRadius: 8,
+    minWidth: 18,
     alignItems: 'center',
   },
   filterChipBadgeText: {
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: '700',
   },
   dateRangeChip: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 16,
-    marginRight: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 7,
+    borderRadius: 14,
+    marginRight: 10,
     borderWidth: 1,
   },
   dateRangeChipText: {
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: '600',
   },
 
@@ -866,10 +896,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
   },
   transactionsListContent: {
-    paddingBottom: 40,
+    paddingBottom: 100,
   },
   groupSeparator: {
-    height: 16,
+    height: 14,
   },
 
   // Date Groups
@@ -920,7 +950,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 16,
-    paddingVertical: 16,
+    paddingVertical: 14,
   },
   transactionLeft: {
     flexDirection: 'row',
@@ -928,9 +958,9 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   transactionIconContainer: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+    width: 42,
+    height: 42,
+    borderRadius: 21,
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 12,
@@ -939,9 +969,9 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   transactionTitle: {
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: '600',
-    marginBottom: 4,
+    marginBottom: 3,
     lineHeight: 20,
   },
   transactionMeta: {
@@ -966,9 +996,9 @@ const styles = StyleSheet.create({
     alignItems: 'flex-end',
   },
   transactionAmount: {
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: '700',
-    marginBottom: 4,
+    marginBottom: 3,
   },
   transactionTime: {
     fontSize: 11,

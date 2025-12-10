@@ -12,7 +12,9 @@ import {
   ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
+  StatusBar,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { useTheme } from '../contexts/ThemeContext';
@@ -53,6 +55,7 @@ const AddExpenseModal: React.FC<AddExpenseModalProps> = ({
 }) => {
   const { theme } = useTheme();
   const { t } = useLocalization();
+  const insets = useSafeAreaInsets();
   const [title, setTitle] = useState('');
   const [amount, setAmount] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('');
@@ -201,17 +204,24 @@ const AddExpenseModal: React.FC<AddExpenseModalProps> = ({
       presentationStyle="pageSheet"
       onRequestClose={handleClose}
     >
-      <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
-        {/* Header */}
-        <View style={[styles.header, { backgroundColor: theme.colors.surface, borderBottomColor: theme.colors.border }]}>
-          <TouchableOpacity onPress={handleClose} style={styles.headerButton}>
-            <Ionicons name="close" size={24} color={theme.colors.text} />
-          </TouchableOpacity>
-          <Text style={[styles.headerTitle, { color: theme.colors.text }]}>{t('add_expense_title')}</Text>
-          <TouchableOpacity onPress={handleSubmit} style={styles.headerButton}>
-            <Text style={[styles.saveButtonText, { color: theme.colors.primary }]}>{t('save')}</Text>
-          </TouchableOpacity>
+      <View style={{ flex: 1, backgroundColor: '#1C1C1E' }}>
+        <StatusBar barStyle="light-content" backgroundColor="#1C1C1E" />
+        
+        {/* Dark Header */}
+        <View style={[styles.darkHeader, { paddingTop: insets.top }]}>
+          <View style={styles.headerRow}>
+            <TouchableOpacity onPress={handleClose} style={styles.headerButton}>
+              <Ionicons name="close" size={24} color="#FFFFFF" />
+            </TouchableOpacity>
+            <Text style={styles.headerTitle}>{t('add_expense_title')}</Text>
+            <TouchableOpacity onPress={handleSubmit} style={styles.headerButton}>
+              <Text style={styles.saveButtonText}>{t('save')}</Text>
+            </TouchableOpacity>
+          </View>
         </View>
+
+        {/* Content Container with rounded top */}
+        <View style={[styles.contentContainer, { backgroundColor: theme.colors.background }]}>
 
         <KeyboardAvoidingView
           style={styles.keyboardAvoidingView}
@@ -380,6 +390,7 @@ const AddExpenseModal: React.FC<AddExpenseModalProps> = ({
           />
         )}
       </View>
+      </View>
     </Modal>
   );
 };
@@ -388,6 +399,40 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#FFFFFF',
+  },
+  darkHeader: {
+    backgroundColor: '#1C1C1E',
+    paddingHorizontal: 20,
+    paddingBottom: 20,
+  },
+  headerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: 10,
+  },
+  headerButton: {
+    minWidth: 44,
+    height: 44,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  headerTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#FFFFFF',
+  },
+  saveButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#3B82F6',
+  },
+  contentContainer: {
+    flex: 1,
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+    marginTop: -1,
+    overflow: 'hidden',
   },
   keyboardAvoidingView: {
     flex: 1,

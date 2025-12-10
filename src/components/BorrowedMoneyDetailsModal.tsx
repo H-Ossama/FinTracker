@@ -9,8 +9,10 @@ import {
   TextInput,
   Alert,
   Linking,
+  StatusBar,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { BorrowedMoney } from '../types';
 import { useTheme } from '../contexts/ThemeContext';
 import { useLocalization } from '../contexts/LocalizationContext';
@@ -34,6 +36,7 @@ const BorrowedMoneyDetailsModal: React.FC<BorrowedMoneyDetailsModalProps> = ({
 }) => {
   const { theme } = useTheme();
   const { formatCurrency, t } = useLocalization();
+  const insets = useSafeAreaInsets();
   const [isEditing, setIsEditing] = useState(false);
   const [editedData, setEditedData] = useState<BorrowedMoney | null>(null);
 
@@ -124,26 +127,33 @@ const BorrowedMoneyDetailsModal: React.FC<BorrowedMoneyDetailsModalProps> = ({
       presentationStyle="pageSheet"
       onRequestClose={onClose}
     >
-      <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
-        {/* Header */}
-        <View style={[styles.header, { borderBottomColor: theme.colors.border }]}>
-          <TouchableOpacity onPress={onClose} style={styles.closeButton}>
-            <Ionicons name="close" size={24} color={theme.colors.text} />
-          </TouchableOpacity>
-          <Text style={[styles.headerTitle, { color: theme.colors.text }]}>
-            {t('borrowed_money_details')}
-          </Text>
-          <TouchableOpacity 
-            onPress={isEditing ? handleSaveEdit : handleEdit} 
-            style={styles.editButton}
-          >
-            <Ionicons 
-              name={isEditing ? "checkmark" : "pencil"} 
-              size={24} 
-              color={theme.colors.primary} 
-            />
-          </TouchableOpacity>
+      <View style={{ flex: 1, backgroundColor: '#1C1C1E' }}>
+        <StatusBar barStyle="light-content" backgroundColor="#1C1C1E" />
+        
+        {/* Dark Header */}
+        <View style={[styles.darkHeader, { paddingTop: insets.top }]}>
+          <View style={styles.headerRow}>
+            <TouchableOpacity onPress={onClose} style={styles.closeButton}>
+              <Ionicons name="close" size={24} color="#FFFFFF" />
+            </TouchableOpacity>
+            <Text style={styles.headerTitle}>
+              {t('borrowed_money_details')}
+            </Text>
+            <TouchableOpacity 
+              onPress={isEditing ? handleSaveEdit : handleEdit} 
+              style={styles.editButton}
+            >
+              <Ionicons 
+                name={isEditing ? "checkmark" : "pencil"} 
+                size={24} 
+                color="#4A90E2" 
+              />
+            </TouchableOpacity>
+          </View>
         </View>
+        
+        {/* Content Container */}
+        <View style={[styles.contentContainer, { backgroundColor: theme.colors.background }]}>
 
         <ScrollView style={styles.content}>
           {/* Status Badge */}
@@ -363,34 +373,52 @@ const BorrowedMoneyDetailsModal: React.FC<BorrowedMoneyDetailsModalProps> = ({
             </TouchableOpacity>
           </View>
         )}
+        </View>
       </View>
     </Modal>
   );
 };
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
+  darkHeader: {
+    backgroundColor: '#1C1C1E',
+    paddingBottom: 16,
+    paddingHorizontal: 20,
   },
-  header: {
+  headerRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 20,
-    paddingVertical: 16,
-    borderBottomWidth: 1,
+    height: 44,
   },
   closeButton: {
-    padding: 4,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255,255,255,0.1)',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   headerTitle: {
-    fontSize: 18,
+    fontSize: 17,
     fontWeight: '600',
+    color: '#FFFFFF',
     flex: 1,
     textAlign: 'center',
   },
   editButton: {
-    padding: 4,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255,255,255,0.1)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  contentContainer: {
+    flex: 1,
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+    overflow: 'hidden',
   },
   content: {
     flex: 1,

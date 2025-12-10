@@ -12,14 +12,14 @@ import {
   BackHandler,
   KeyboardAvoidingView,
   Platform,
+  StatusBar,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../contexts/ThemeContext';
 import { useLocalization } from '../contexts/LocalizationContext';
 import { hybridDataService } from '../services/hybridDataService';
 import { Wallet } from '../types';
-import useSafeAreaHelper from '../hooks/useSafeAreaHelper';
 
 interface HybridWallet {
   id: string;
@@ -47,7 +47,7 @@ const TransferModal: React.FC<TransferModalProps> = ({
 }) => {
   const { theme } = useTheme();
   const { formatCurrency, currency, t } = useLocalization();
-  const { headerPadding } = useSafeAreaHelper();
+  const insets = useSafeAreaInsets();
   
   const getCurrencySymbol = () => {
     const symbols = { USD: '$', EUR: '€', MAD: 'MAD' };
@@ -252,22 +252,34 @@ const TransferModal: React.FC<TransferModalProps> = ({
   );
 
   return (
-    <Modal visible={visible} animationType="slide" presentationStyle="pageSheet">
-      <SafeAreaView style={[styles.container, { backgroundColor: theme.colors.background }]} edges={['top']}>
-        {/* Header */}
-        <View style={[styles.header, { borderBottomColor: theme.colors.border, paddingTop: headerPadding.paddingTop }]}>
-          <TouchableOpacity onPress={handleClose}>
-            <Text style={[styles.cancelButton, { color: theme.colors.primary }]}>{t('cancel')}</Text>
-          </TouchableOpacity>
-          <Text style={[styles.title, { color: theme.colors.text }]}>{t('transfer_title')}</Text>
-          <TouchableOpacity onPress={handleTransfer} disabled={transferring}>
-            {transferring ? (
-              <ActivityIndicator size="small" color={theme.colors.primary} />
-            ) : (
-              <Text style={[styles.saveButton, { color: theme.colors.primary }]}>{t('confirm_transfer')}</Text>
-            )}
-          </TouchableOpacity>
+    <Modal 
+      visible={visible} 
+      animationType="slide" 
+      presentationStyle="pageSheet"
+      onRequestClose={handleClose}
+    >
+      <View style={{ flex: 1, backgroundColor: '#1C1C1E' }}>
+        <StatusBar barStyle="light-content" backgroundColor="#1C1C1E" />
+        
+        {/* Dark Header */}
+        <View style={[styles.darkHeader, { paddingTop: insets.top }]}>
+          <View style={styles.headerRow}>
+            <TouchableOpacity style={styles.headerButton} onPress={handleClose}>
+              <Text style={styles.cancelButton}>{t('cancel')}</Text>
+            </TouchableOpacity>
+            <Text style={styles.headerTitle}>{t('transfer_title')}</Text>
+            <TouchableOpacity style={styles.headerButton} onPress={handleTransfer} disabled={transferring}>
+              {transferring ? (
+                <ActivityIndicator size="small" color="#3B82F6" />
+              ) : (
+                <Text style={styles.saveButton}>{t('confirm_transfer')}</Text>
+              )}
+            </TouchableOpacity>
+          </View>
         </View>
+
+        {/* Content Container with rounded top */}
+        <View style={[styles.contentContainer, { backgroundColor: theme.colors.background }]}>
 
         {loading ? (
           <View style={[styles.loadingContainer, { backgroundColor: theme.colors.background }]}>
@@ -405,7 +417,8 @@ const TransferModal: React.FC<TransferModalProps> = ({
         </ScrollView>
         </KeyboardAvoidingView>
         )}
-      </SafeAreaView>
+        </View>
+      </View>
     </Modal>
   );
 };
@@ -414,6 +427,44 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#F8F9FA',
+  },
+  darkHeader: {
+    backgroundColor: '#1C1C1E',
+    paddingHorizontal: 20,
+    paddingBottom: 20,
+  },
+  headerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: 10,
+  },
+  headerButton: {
+    minWidth: 60,
+  },
+  headerTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#FFFFFF',
+    flex: 1,
+    textAlign: 'center',
+  },
+  cancelButton: {
+    fontSize: 16,
+    color: '#FFFFFF',
+  },
+  saveButton: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#3B82F6',
+    textAlign: 'right',
+  },
+  contentContainer: {
+    flex: 1,
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+    marginTop: -1,
+    overflow: 'hidden',
   },
   keyboardAvoidingView: {
     flex: 1,

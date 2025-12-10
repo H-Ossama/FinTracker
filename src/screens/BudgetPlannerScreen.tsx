@@ -10,13 +10,16 @@ import {
   Modal,
   TextInput,
   Dimensions,
+  StatusBar,
+  Image,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { PieChart } from 'react-native-chart-kit';
 import { useTheme } from '../contexts/ThemeContext';
 import { useLocalization } from '../contexts/LocalizationContext';
+import { useAuth } from '../contexts/AuthContext';
 import { budgetService } from '../services/budgetService';
 import { Budget, BudgetCategory, MonthlyBudgetSummary } from '../types';
 import { useFocusEffect } from '@react-navigation/native';
@@ -26,6 +29,8 @@ const { width: screenWidth } = Dimensions.get('window');
 const BudgetPlannerScreen = ({ navigation }: any) => {
   const { theme } = useTheme();
   const { formatCurrency } = useLocalization();
+  const { user } = useAuth();
+  const insets = useSafeAreaInsets();
   const [budgets, setBudgets] = useState<Budget[]>([]);
   const [categories, setCategories] = useState<BudgetCategory[]>([]);
   const [monthlySummary, setMonthlySummary] = useState<MonthlyBudgetSummary | null>(null);
@@ -671,29 +676,63 @@ const BudgetPlannerScreen = ({ navigation }: any) => {
   }
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: theme.colors.background }]}>
-      <LinearGradient
-        colors={[theme.colors.gradientStart, theme.colors.gradientEnd]}
-        style={styles.gradient}
-      >
-        {/* Header */}
-        <View style={styles.header}>
-          <TouchableOpacity onPress={() => navigation.goBack()}>
-            <Ionicons name="arrow-back" size={24} color={theme.colors.text} />
+    <View style={[styles.container, { backgroundColor: theme.colors.headerBackground }]}>
+      <StatusBar barStyle="light-content" backgroundColor={theme.colors.headerBackground} />
+      
+      {/* Dark Header Section */}
+      <View style={[styles.darkHeader, { paddingTop: insets.top }]}>
+        {/* Top Header Row */}
+        <View style={styles.headerRow}>
+          <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
+            <Ionicons name="arrow-back" size={24} color={theme.colors.headerText} />
           </TouchableOpacity>
-          <TouchableOpacity onPress={() => setShowMonthPicker(true)}>
-            <View style={styles.monthSelector}>
-              <Text style={[styles.title, { color: theme.colors.text }]}>
-                {new Date(selectedMonth + '-01').toLocaleDateString('en-US', { month: 'short', year: 'numeric' })}
-              </Text>
-              <Ionicons name="chevron-down" size={20} color={theme.colors.text} />
+          <TouchableOpacity 
+            style={styles.userInfo}
+            onPress={() => navigation.navigate('UserProfile')}
+            activeOpacity={0.7}
+          >
+            <View style={styles.avatarContainer}>
+              {user?.avatar ? (
+                <Image source={{ uri: user.avatar }} style={styles.avatar} />
+              ) : (
+                <View style={[styles.avatarPlaceholder, { backgroundColor: theme.colors.headerSurface }]}>
+                  <Text style={[styles.avatarInitial, { color: theme.colors.headerText }]}>
+                    {user?.name?.charAt(0)?.toUpperCase() || 'U'}
+                  </Text>
+                </View>
+              )}
             </View>
           </TouchableOpacity>
-          <TouchableOpacity onPress={() => setShowAddModal(true)}>
-            <Ionicons name="add" size={24} color={theme.colors.text} />
-          </TouchableOpacity>
+          <View style={styles.headerActions}>
+            <TouchableOpacity 
+              onPress={() => setShowMonthPicker(true)}
+              style={[styles.headerIconButton, { backgroundColor: theme.colors.headerSurface }]}
+            >
+              <Ionicons name="calendar-outline" size={20} color={theme.colors.headerText} />
+            </TouchableOpacity>
+            <TouchableOpacity 
+              onPress={() => setShowAddModal(true)}
+              style={[styles.headerIconButton, { backgroundColor: theme.colors.headerSurface }]}
+            >
+              <Ionicons name="add" size={22} color={theme.colors.headerText} />
+            </TouchableOpacity>
+          </View>
         </View>
 
+        {/* Title Section */}
+        <View style={styles.headerTitleSection}>
+          <Text style={[styles.headerTitle, { color: theme.colors.headerText }]}>Budget Planner</Text>
+          <TouchableOpacity onPress={() => setShowMonthPicker(true)} style={styles.monthSelector}>
+            <Text style={[styles.headerSubtitle, { color: theme.colors.headerTextSecondary }]}>
+              {new Date(selectedMonth + '-01').toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
+            </Text>
+            <Ionicons name="chevron-down" size={16} color={theme.colors.headerTextSecondary} />
+          </TouchableOpacity>
+        </View>
+      </View>
+
+      {/* White Content Section */}
+      <View style={[styles.contentContainer, { backgroundColor: theme.colors.background }]}>
         <ScrollView
           style={styles.scrollView}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
@@ -731,13 +770,15 @@ const BudgetPlannerScreen = ({ navigation }: any) => {
               budgets.map(renderBudgetCard)
             )}
           </View>
+          
+          <View style={{ height: 100 }} />
         </ScrollView>
-      </LinearGradient>
+      </View>
 
       {/* Modals */}
       {renderAddBudgetModal()}
       {renderMonthPicker()}
-    </SafeAreaView>
+    </View>
   );
 };
 
@@ -745,8 +786,80 @@ const createStyles = (theme: any) => StyleSheet.create({
   container: {
     flex: 1,
   },
-  gradient: {
+  darkHeader: {
+    paddingHorizontal: 20,
+    paddingBottom: 16,
+    backgroundColor: theme.colors.headerBackground,
+  },
+  headerRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 12,
+  },
+  backButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  userInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  avatarContainer: {
+    marginRight: 0,
+  },
+  avatar: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+  },
+  avatarPlaceholder: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  avatarInitial: {
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  headerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  headerIconButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  headerTitleSection: {
+    paddingTop: 8,
+    paddingBottom: 8,
+  },
+  headerTitle: {
+    fontSize: 26,
+    fontWeight: '700',
+    marginBottom: 4,
+  },
+  headerSubtitle: {
+    fontSize: 14,
+  },
+  monthSelector: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  contentContainer: {
     flex: 1,
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
   },
   loadingContainer: {
     flex: 1,
@@ -757,26 +870,10 @@ const createStyles = (theme: any) => StyleSheet.create({
     fontSize: 16,
     fontStyle: 'italic',
   },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingTop: 8,
-    paddingBottom: 16,
-  },
-  monthSelector: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  title: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    marginRight: 8,
-  },
   scrollView: {
     flex: 1,
     paddingHorizontal: 20,
+    paddingTop: 20,
   },
   overviewCard: {
     borderRadius: 16,

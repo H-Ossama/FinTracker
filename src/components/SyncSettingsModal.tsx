@@ -10,13 +10,13 @@ import {
   Switch,
   TextInput,
   ScrollView,
+  StatusBar,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { hybridDataService } from '../services/hybridDataService';
 import { useTheme } from '../contexts/ThemeContext';
 import { useAuth } from '../contexts/AuthContext';
-import useSafeAreaHelper from '../hooks/useSafeAreaHelper';
 
 interface SyncProgress {
   stage: 'uploading' | 'downloading' | 'processing' | 'complete';
@@ -37,7 +37,7 @@ export const SyncSettingsModal: React.FC<SyncSettingsProps> = ({
 }) => {
   const { theme } = useTheme();
   const { user } = useAuth();
-  const { headerPadding } = useSafeAreaHelper();
+  const insets = useSafeAreaInsets();
   const isMountedRef = React.useRef(true);
   const [syncStatus, setSyncStatus] = useState({
     enabled: false,
@@ -483,14 +483,22 @@ export const SyncSettingsModal: React.FC<SyncSettingsProps> = ({
   return (
     <>
       <Modal visible={visible} animationType="slide" presentationStyle="pageSheet">
-        <SafeAreaView style={[styles.modalContainer, { backgroundColor: theme.colors.background }]} edges={['top']}>
-          <View style={[styles.modalHeader, { backgroundColor: theme.colors.surface, borderBottomColor: theme.colors.border, paddingTop: headerPadding.paddingTop }]}>
-            <TouchableOpacity onPress={onClose}>
-              <Ionicons name="close" size={24} color={theme.colors.textSecondary} />
-            </TouchableOpacity>
-            <Text style={[styles.modalTitle, { color: theme.colors.text }]}>Sync Settings</Text>
-            <View style={{ width: 24 }} />
+        <View style={{ flex: 1, backgroundColor: '#1C1C1E' }}>
+          <StatusBar barStyle="light-content" backgroundColor="#1C1C1E" />
+          
+          {/* Dark Header */}
+          <View style={[styles.darkHeader, { paddingTop: insets.top }]}>
+            <View style={styles.headerRow}>
+              <TouchableOpacity onPress={onClose} style={styles.closeButton}>
+                <Ionicons name="close" size={24} color="#FFFFFF" />
+              </TouchableOpacity>
+              <Text style={styles.headerTitle}>Sync Settings</Text>
+              <View style={{ width: 40 }} />
+            </View>
           </View>
+          
+          {/* Content Container */}
+          <View style={[styles.contentContainer, { backgroundColor: theme.colors.background }]}>
 
           <ScrollView style={styles.modalContent}>
             {/* Sync Status Section */}
@@ -927,7 +935,8 @@ export const SyncSettingsModal: React.FC<SyncSettingsProps> = ({
               </View>
             </View>
           </ScrollView>
-        </SafeAreaView>
+          </View>
+        </View>
       </Modal>
 
       {renderProgressModal()}
@@ -936,20 +945,37 @@ export const SyncSettingsModal: React.FC<SyncSettingsProps> = ({
 };
 
 const styles = StyleSheet.create({
-  modalContainer: {
-    flex: 1,
-  },
-  modalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 16,
+  darkHeader: {
+    backgroundColor: '#1C1C1E',
     paddingBottom: 16,
-    borderBottomWidth: 1,
+    paddingHorizontal: 20,
   },
-  modalTitle: {
-    fontSize: 18,
+  headerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    height: 44,
+  },
+  closeButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255,255,255,0.1)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  headerTitle: {
+    fontSize: 17,
     fontWeight: '600',
+    color: '#FFFFFF',
+    flex: 1,
+    textAlign: 'center',
+  },
+  contentContainer: {
+    flex: 1,
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+    overflow: 'hidden',
   },
   modalContent: {
     flex: 1,

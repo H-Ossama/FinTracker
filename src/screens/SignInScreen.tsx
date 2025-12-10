@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -7,14 +7,14 @@ import {
   StyleSheet,
   ScrollView,
   ActivityIndicator,
-  Dimensions,
   KeyboardAvoidingView,
   Platform,
   Animated,
   Image,
+  StatusBar,
+  Dimensions,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { LinearGradient } from 'expo-linear-gradient';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useForm, Controller } from 'react-hook-form';
 import { yupResolver } from '@hookform/resolvers/yup';
 import * as yup from 'yup';
@@ -25,19 +25,16 @@ import { useTheme } from '../contexts/ThemeContext';
 import { useCustomAlert } from '../hooks/useCustomAlert';
 import CustomAlert from '../components/CustomAlert';
 
-const { width, height } = Dimensions.get('window');
-
-// Validation schema
+// Validation Schema
 const signInSchema = yup.object().shape({
   email: yup
     .string()
-    .required('Email is required')
-    .email('Please enter a valid email address')
+    .required('Email address is required')
+    .email('Please enter a valid email')
     .lowercase(),
   password: yup
     .string()
-    .required('Password is required')
-    .min(6, 'Password must be at least 6 characters'),
+    .required('Password is required'),
 });
 
 interface SignInFormData {
@@ -46,22 +43,31 @@ interface SignInFormData {
 }
 
 interface SignInScreenProps {
-  navigation: any; // Replace with proper navigation type
+  navigation: any;
 }
 
 const SignInScreen: React.FC<SignInScreenProps> = ({ navigation }) => {
+  const insets = useSafeAreaInsets();
+  const { theme, isDark } = useTheme();
+  
+  // Logic States
   const [showPassword, setShowPassword] = useState(false);
   const [rememberMe, setRememberMe] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [isGoogleLoading, setIsGoogleLoading] = useState(false);
+  const [focusedField, setFocusedField] = useState<string | null>(null);
+  
+  // Biometric States
   const [biometricAvailable, setBiometricAvailable] = useState(false);
   const [showBiometricOption, setShowBiometricOption] = useState(false);
   const [showAutoBiometric, setShowAutoBiometric] = useState(false);
-  const [isGoogleLoading, setIsGoogleLoading] = useState(false);
-  const [fadeAnim] = useState(new Animated.Value(0));
-  const [slideAnim] = useState(new Animated.Value(50));
-  
-  const { signIn, signInWithGoogle, authenticateWithBiometric, checkBiometricAvailability, biometricEnabled, user } = useAuth();
-  const { theme, isDark } = useTheme();
+
+  // Animations
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+  const slideAnim = useRef(new Animated.Value(30)).current;
+
+  // Hooks
+  const { signIn, signInWithGoogle, authenticateWithBiometric, checkBiometricAvailability } = useAuth();
   const { alertState, hideAlert, showSuccess, showError, showConfirm } = useCustomAlert();
 
   const {
@@ -72,25 +78,24 @@ const SignInScreen: React.FC<SignInScreenProps> = ({ navigation }) => {
   } = useForm<SignInFormData>({
     resolver: yupResolver(signInSchema),
     mode: 'onChange',
-    defaultValues: {
-      email: '',
-      password: '',
-    },
+    defaultValues: { email: '', password: '' },
   });
 
+  // Initialization
   useEffect(() => {
     checkBiometricSupport();
     
-    // Start entrance animations
+    // Entrance Animation
     Animated.parallel([
       Animated.timing(fadeAnim, {
         toValue: 1,
-        duration: 1000,
+        duration: 800,
         useNativeDriver: true,
       }),
-      Animated.timing(slideAnim, {
+      Animated.spring(slideAnim, {
         toValue: 0,
-        duration: 800,
+        friction: 8,
+        tension: 40,
         useNativeDriver: true,
       }),
     ]).start();
@@ -100,10 +105,6 @@ const SignInScreen: React.FC<SignInScreenProps> = ({ navigation }) => {
     const isAvailable = await checkBiometricAvailability();
     setBiometricAvailable(isAvailable);
     
-    // Only show biometric option if:
-    // 1. Biometric is available on device
-    // 2. User has biometric enabled in settings
-    // 3. User has signed in before (has stored credentials or login history)
     try {
       const hasLoginHistory = await AsyncStorage.getItem('has_logged_in_before');
       const userBiometricEnabled = await AsyncStorage.getItem('biometric_enabled');
@@ -115,372 +116,280 @@ const SignInScreen: React.FC<SignInScreenProps> = ({ navigation }) => {
                                   rememberMeValue === 'true';
       
       setShowBiometricOption(shouldShowBiometric);
-      
-      // Auto-show biometric prompt for returning users
-      if (shouldShowBiometric) {
-        setShowAutoBiometric(true);
-      }
+      if (shouldShowBiometric) setShowAutoBiometric(true);
     } catch (error) {
-      console.log('Error checking biometric support:', error);
       setShowBiometricOption(false);
     }
   };
 
+  // Handlers
   const onSubmit = async (data: SignInFormData) => {
     try {
       setIsLoading(true);
-      
       const result = await signIn(data.email, data.password, rememberMe);
       
       if (result.success) {
-        // Store login history for future biometric checks
-        try {
-          await AsyncStorage.setItem('has_logged_in_before', 'true');
-          if (rememberMe) {
-            await AsyncStorage.setItem('remember_me', 'true');
-          }
-        } catch (error) {
-          console.log('Error storing login history:', error);
-        }
-        
-        // Show welcome message with a slight delay to ensure proper rendering
-        setTimeout(() => {
-          showSuccess(
-            '🎉 Welcome Back!',
-            'You have successfully signed in.',
-          );
-        }, 100);
+        await AsyncStorage.setItem('has_logged_in_before', 'true');
+        if (rememberMe) await AsyncStorage.setItem('remember_me', 'true');
       } else {
-        showError('Sign In Failed', result.error || 'Please check your credentials and try again');
+        showError('Sign In Failed', result.error || 'Please check your credentials');
       }
     } catch (error) {
-      showError('Error', 'An unexpected error occurred. Please try again.');
+      showError('Error', 'An unexpected error occurred');
     } finally {
       setIsLoading(false);
     }
-  };
-
-  const handleAutoBiometricLogin = async () => {
-    setShowAutoBiometric(false);
-    await handleBiometricLogin();
   };
 
   const handleBiometricLogin = async () => {
     try {
       setIsLoading(true);
-      
       const result = await authenticateWithBiometric();
-      
       if (result.success) {
-        // Store login history for future biometric checks
-        try {
-          await AsyncStorage.setItem('has_logged_in_before', 'true');
-        } catch (error) {
-          console.log('Error storing biometric login history:', error);
-        }
-        
-        // Show welcome message with delay
-        setTimeout(() => {
-          showSuccess(
-            '🎉 Welcome Back!',
-            'You have successfully signed in with biometric authentication.',
-          );
-        }, 100);
+        await AsyncStorage.setItem('has_logged_in_before', 'true');
       } else {
         showError('Authentication Failed', result.error || 'Biometric authentication failed');
       }
     } catch (error) {
-      showError('Error', 'An unexpected error occurred during biometric authentication.');
+      showError('Error', 'An unexpected error occurred');
     } finally {
       setIsLoading(false);
     }
   };
 
-  const handleForgotPassword = () => {
-    showConfirm(
-      'Reset Password',
-      'Password reset functionality will be implemented in the next update. For now, please contact support if you need help.',
-      () => {}, // Contact Support action
-      undefined // Cancel action
-    );
-  };
-
   const handleGoogleSignIn = async () => {
     try {
       setIsGoogleLoading(true);
-      
       const result = await signInWithGoogle();
-      
-      if (result.success) {
-        setTimeout(() => {
-          showSuccess(
-            '🎉 Welcome Back!',
-            'You have successfully signed in with Google.',
-          );
-        }, 100);
-      } else {
+      if (!result.success) {
         showError('Google Sign In Failed', result.error || 'Please try again');
       }
     } catch (error) {
-      showError('Error', 'An unexpected error occurred during Google Sign In.');
+      showError('Error', 'Google Sign In failed');
     } finally {
       setIsGoogleLoading(false);
     }
   };
 
   const fillDemoCredentials = () => {
-    setValue('email', 'demo@fintracker.app', { shouldValidate: true });
+    setValue('email', 'demo@finex.app', { shouldValidate: true });
     setValue('password', 'Demo123!', { shouldValidate: true });
-    // Use a slight delay to ensure the form updates before showing alert
-    setTimeout(() => {
-      showSuccess('Demo Credentials', 'Demo credentials have been filled in. You can now sign in to explore the app.');
-    }, 100);
+  };
+
+  // Design Tokens (Professional iOS Palette)
+  const colors = {
+    background: isDark ? '#000000' : '#FFFFFF',
+    text: isDark ? '#FFFFFF' : '#000000',
+    textSecondary: isDark ? '#8E8E93' : '#8E8E93', // System Gray
+    accent: '#007AFF', // iOS System Blue
+    inputBg: isDark ? '#1C1C1E' : '#F2F2F7', // System grouped background
+    inputBorder: isDark ? '#3A3A3C' : '#E5E5EA',
+    error: '#FF3B30',
+    divider: isDark ? '#38383A' : '#E5E5EA',
   };
 
   return (
-    <View style={styles.container}>
-      <LinearGradient
-        colors={isDark 
-          ? ['#0D1117', '#1C2128', '#0D1117'] 
-          : ['#F5F7FA', '#FFFFFF', '#F0F4F8']
-        }
-        style={styles.gradient}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 0, y: 1 }}
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
+      <StatusBar barStyle={isDark ? "light-content" : "dark-content"} />
+      
+      <KeyboardAvoidingView 
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        style={{ flex: 1 }}
       >
-        <KeyboardAvoidingView 
-          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-          style={styles.keyboardView}
+        <ScrollView 
+          contentContainerStyle={[styles.scrollContent, { paddingTop: insets.top + 20 }]}
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
         >
-          <SafeAreaView style={styles.safeArea}>
-            <ScrollView 
-              contentContainerStyle={styles.scrollContent} 
-              showsVerticalScrollIndicator={false}
-              keyboardShouldPersistTaps="handled"
-            >
-              {/* Hero Section with Branding */}
-              <Animated.View 
-                style={[
-                  styles.heroSection,
-                  {
-                    opacity: fadeAnim,
-                    transform: [{ translateY: slideAnim }],
-                  }
-                ]}
-              >
-                <View style={styles.brandContainer}>
-                  <Image
-                    source={require('../../assets/icon.png')}
-                    style={styles.appIcon}
-                  />
-                  <View style={styles.brandText}>
-                    <Text style={[styles.brandName, { color: theme.colors.text }]}>FinTracker</Text>
-                    <Text style={[styles.brandTagline, { color: theme.colors.textSecondary }]}>
-                      Smart Finance Management
-                    </Text>
-                  </View>
+          <Animated.View style={{ opacity: fadeAnim, transform: [{ translateY: slideAnim }] }}>
+            
+            {/* Minimal Header */}
+            <View style={styles.headerContainer}>
+              <View style={[styles.logoPlaceholder, { borderColor: colors.divider }]}>
+                 <Image source={require('../../assets/icon.png')} style={styles.logoImage} />
+              </View>
+              <Text style={[styles.title, { color: colors.text }]}>Welcome Back</Text>
+              <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
+                Sign in to your Finex account
+              </Text>
+            </View>
+
+            {/* Form Fields */}
+            <View style={styles.formContainer}>
+              {/* Email */}
+              <View style={styles.inputGroup}>
+                <Text style={[styles.label, { color: colors.text }]}>Email</Text>
+                <Controller
+                  control={control}
+                  name="email"
+                  render={({ field: { onChange, onBlur, value } }) => (
+                    <View style={[
+                      styles.inputWrapper, 
+                      { backgroundColor: colors.inputBg },
+                      focusedField === 'email' && { borderColor: colors.accent, borderWidth: 1, backgroundColor: isDark ? '#2C2C2E' : '#FFFFFF' },
+                      errors.email && { borderColor: colors.error, borderWidth: 1 }
+                    ]}>
+                      <TextInput
+                        style={[styles.input, { color: colors.text }]}
+                        placeholder="name@example.com"
+                        placeholderTextColor={colors.textSecondary}
+                        value={value}
+                        onChangeText={onChange}
+                        onBlur={() => { onBlur(); setFocusedField(null); }}
+                        onFocus={() => setFocusedField('email')}
+                        keyboardType="email-address"
+                        autoCapitalize="none"
+                        autoCorrect={false}
+                      />
+                      {value.length > 0 && !errors.email && (
+                        <Ionicons name="checkmark-circle" size={18} color={colors.accent} style={styles.validIcon} />
+                      )}
+                    </View>
+                  )}
+                />
+                {errors.email && <Text style={[styles.errorText, { color: colors.error }]}>{errors.email.message}</Text>}
+              </View>
+
+              {/* Password */}
+              <View style={styles.inputGroup}>
+                <View style={styles.passwordHeader}>
+                  <Text style={[styles.label, { color: colors.text }]}>Password</Text>
+                  <TouchableOpacity onPress={() => showConfirm('Reset Password', 'Password reset flow initiated.', () => {})}>
+                    <Text style={[styles.forgotLink, { color: colors.accent }]}>Forgot password?</Text>
+                  </TouchableOpacity>
                 </View>
                 
-                <View style={styles.welcomeBox}>
-                  <Text style={[styles.welcomeTitle, { color: theme.colors.text }]}>
-                    Welcome Back
-                  </Text>
-                  <Text style={[styles.welcomeSubtitle, { color: theme.colors.textSecondary }]}>
-                    Sign in to manage your finances
-                  </Text>
-                </View>
-              </Animated.View>
-
-              {/* Form Card */}
-              <Animated.View
-                style={[
-                  {
-                    opacity: fadeAnim,
-                    transform: [{ translateY: slideAnim }],
-                  }
-                ]}
-              >
-                <View style={[styles.formCard, { backgroundColor: theme.colors.surface }]}>
-                  {/* Email Input */}
-                  <View style={styles.inputGroup}>
-                    <Text style={[styles.inputLabel, { color: theme.colors.text }]}>Email Address</Text>
-                    <Controller
-                      control={control}
-                      name="email"
-                      render={({ field: { onChange, onBlur, value } }) => (
-                        <View style={[styles.inputWrapper, { 
-                          backgroundColor: theme.colors.background, 
-                          borderColor: errors.email ? '#EF4444' : theme.colors.border,
-                          borderWidth: errors.email ? 2 : 1,
-                        }]}>
-                          <Ionicons name="mail-outline" size={20} color={theme.colors.textSecondary} />
-                          <TextInput
-                            style={[styles.textInput, { color: theme.colors.text }]}
-                            placeholder="Enter your email"
-                            placeholderTextColor={theme.colors.textSecondary}
-                            value={value}
-                            onChangeText={onChange}
-                            onBlur={onBlur}
-                            keyboardType="email-address"
-                            autoCapitalize="none"
-                            autoCorrect={false}
-                            editable={!isLoading}
-                          />
-                        </View>
-                      )}
-                    />
-                    {errors.email && <Text style={styles.errorText}>{errors.email.message}</Text>}
-                  </View>
-
-                  {/* Password Input */}
-                  <View style={styles.inputGroup}>
-                    <View style={styles.labelRow}>
-                      <Text style={[styles.inputLabel, { color: theme.colors.text }]}>Password</Text>
-                      <TouchableOpacity onPress={handleForgotPassword}>
-                        <Text style={styles.forgotPasswordText}>Forgot?</Text>
+                <Controller
+                  control={control}
+                  name="password"
+                  render={({ field: { onChange, onBlur, value } }) => (
+                    <View style={[
+                      styles.inputWrapper, 
+                      { backgroundColor: colors.inputBg },
+                      focusedField === 'password' && { borderColor: colors.accent, borderWidth: 1, backgroundColor: isDark ? '#2C2C2E' : '#FFFFFF' },
+                      errors.password && { borderColor: colors.error, borderWidth: 1 }
+                    ]}>
+                      <TextInput
+                        style={[styles.input, { color: colors.text }]}
+                        placeholder="Enter your password"
+                        placeholderTextColor={colors.textSecondary}
+                        value={value}
+                        onChangeText={onChange}
+                        onBlur={() => { onBlur(); setFocusedField(null); }}
+                        onFocus={() => setFocusedField('password')}
+                        secureTextEntry={!showPassword}
+                        autoCapitalize="none"
+                      />
+                      <TouchableOpacity 
+                        onPress={() => setShowPassword(!showPassword)} 
+                        style={styles.eyeIcon}
+                        hitSlop={{top: 10, bottom: 10, left: 10, right: 10}}
+                      >
+                        <Ionicons 
+                          name={showPassword ? 'eye-off' : 'eye'} 
+                          size={20} 
+                          color={colors.textSecondary} 
+                        />
                       </TouchableOpacity>
                     </View>
-                    <Controller
-                      control={control}
-                      name="password"
-                      render={({ field: { onChange, onBlur, value } }) => (
-                        <View style={[styles.inputWrapper, { 
-                          backgroundColor: theme.colors.background, 
-                          borderColor: errors.password ? '#EF4444' : theme.colors.border,
-                          borderWidth: errors.password ? 2 : 1,
-                        }]}>
-                          <Ionicons name="lock-closed-outline" size={20} color={theme.colors.textSecondary} />
-                          <TextInput
-                            style={[styles.textInput, { color: theme.colors.text }]}
-                            placeholder="Enter your password"
-                            placeholderTextColor={theme.colors.textSecondary}
-                            value={value}
-                            onChangeText={onChange}
-                            onBlur={onBlur}
-                            secureTextEntry={!showPassword}
-                            autoCapitalize="none"
-                            editable={!isLoading}
-                          />
-                          <TouchableOpacity 
-                            onPress={() => setShowPassword(!showPassword)}
-                            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                          >
-                            <Ionicons
-                              name={showPassword ? 'eye-off-outline' : 'eye-outline'}
-                              size={20}
-                              color={theme.colors.textSecondary}
-                            />
-                          </TouchableOpacity>
-                        </View>
-                      )}
-                    />
-                    {errors.password && <Text style={styles.errorText}>{errors.password.message}</Text>}
-                  </View>
-
-                  {/* Remember Me */}
-                  <TouchableOpacity
-                    style={styles.rememberContainer}
-                    onPress={() => setRememberMe(!rememberMe)}
-                    activeOpacity={0.7}
-                  >
-                    <View style={[styles.checkbox, rememberMe && { backgroundColor: theme.colors.primary, borderColor: theme.colors.primary }]}>
-                      {rememberMe && <Ionicons name="checkmark" size={14} color="#FFFFFF" />}
-                    </View>
-                    <Text style={[styles.rememberText, { color: theme.colors.textSecondary }]}>
-                      Remember me
-                    </Text>
-                  </TouchableOpacity>
-
-                  {/* Sign In Button */}
-                  <LinearGradient
-                    colors={['#4A90E2', '#357ABD']}
-                    style={[styles.signInButton, (!isValid || isLoading) && styles.buttonDisabled]}
-                    start={{ x: 0, y: 0 }}
-                    end={{ x: 1, y: 0 }}
-                  >
-                    <TouchableOpacity
-                      onPress={handleSubmit(onSubmit)}
-                      disabled={!isValid || isLoading}
-                      style={styles.buttonContent}
-                    >
-                      {isLoading ? (
-                        <ActivityIndicator color="#FFFFFF" size="small" />
-                      ) : (
-                        <>
-                          <Text style={styles.signInButtonText}>Sign In</Text>
-                          <Ionicons name="arrow-forward" size={18} color="#FFFFFF" />
-                        </>
-                      )}
-                    </TouchableOpacity>
-                  </LinearGradient>
-
-                  {/* Biometric Option */}
-                  {showBiometricOption && (
-                    <TouchableOpacity
-                      style={[styles.biometricButton, { borderColor: theme.colors.primary }]}
-                      onPress={handleBiometricLogin}
-                      disabled={isLoading}
-                      activeOpacity={0.7}
-                    >
-                      <Ionicons name="finger-print" size={22} color={theme.colors.primary} />
-                      <Text style={[styles.biometricText, { color: theme.colors.primary }]}>
-                        Use Biometric
-                      </Text>
-                    </TouchableOpacity>
                   )}
+                />
+                {errors.password && <Text style={[styles.errorText, { color: colors.error }]}>{errors.password.message}</Text>}
+              </View>
 
-                  {/* Divider */}
-                  <View style={styles.dividerContainer}>
-                    <View style={[styles.divider, { backgroundColor: theme.colors.border }]} />
-                    <Text style={[styles.dividerText, { color: theme.colors.textSecondary }]}>OR</Text>
-                    <View style={[styles.divider, { backgroundColor: theme.colors.border }]} />
+              {/* Controls Row */}
+              <View style={styles.controlsRow}>
+                <TouchableOpacity 
+                  style={styles.rememberMeContainer} 
+                  activeOpacity={0.8}
+                  onPress={() => setRememberMe(!rememberMe)}
+                >
+                  <View style={[
+                    styles.checkbox, 
+                    { borderColor: rememberMe ? colors.accent : colors.textSecondary },
+                    rememberMe && { backgroundColor: colors.accent }
+                  ]}>
+                    {rememberMe && <Ionicons name="checkmark" size={12} color="#FFFFFF" />}
                   </View>
+                  <Text style={[styles.rememberMeText, { color: colors.textSecondary }]}>Remember me</Text>
+                </TouchableOpacity>
+              </View>
 
-                  {/* Social Buttons */}
+              {/* Main Actions */}
+              <View style={styles.actionContainer}>
+                <TouchableOpacity
+                  style={[
+                    styles.primaryBtn, 
+                    { backgroundColor: colors.text }, // Black button on light, White on dark
+                    (!isValid || isLoading) && { opacity: 0.5 }
+                  ]}
+                  onPress={handleSubmit(onSubmit)}
+                  disabled={!isValid || isLoading}
+                >
+                  {isLoading ? (
+                    <ActivityIndicator color={isDark ? '#000' : '#fff'} />
+                  ) : (
+                    <Text style={[styles.primaryBtnText, { color: colors.background }]}>Sign In</Text>
+                  )}
+                </TouchableOpacity>
+
+                {showBiometricOption && (
                   <TouchableOpacity 
-                    style={[styles.socialButton, { backgroundColor: theme.colors.background, borderColor: theme.colors.border }]}
-                    onPress={handleGoogleSignIn}
-                    disabled={isLoading || isGoogleLoading}
-                    activeOpacity={0.7}
+                    style={[styles.biometricBtn, { backgroundColor: colors.inputBg }]}
+                    onPress={handleBiometricLogin}
                   >
-                    {isGoogleLoading ? (
-                      <ActivityIndicator size="small" color="#EA4335" />
-                    ) : (
-                      <>
-                        <Ionicons name="logo-google" size={20} color="#EA4335" />
-                        <Text style={[styles.socialText, { color: theme.colors.text }]}>Continue with Google</Text>
-                      </>
-                    )}
+                    <Ionicons name="finger-print" size={24} color={colors.accent} />
                   </TouchableOpacity>
+                )}
+              </View>
 
-                  {/* Demo Account */}
-                  <TouchableOpacity
-                    style={[styles.demoButton, { backgroundColor: theme.colors.background, borderColor: theme.colors.border }]}
-                    onPress={fillDemoCredentials}
-                    disabled={isLoading}
-                    activeOpacity={0.7}
-                  >
-                    <Ionicons name="play-circle-outline" size={20} color={theme.colors.textSecondary} />
-                    <Text style={[styles.demoText, { color: theme.colors.text }]}>Try Demo Account</Text>
-                  </TouchableOpacity>
+              {/* Divider */}
+              <View style={styles.dividerContainer}>
+                <View style={[styles.dividerLine, { backgroundColor: colors.divider }]} />
+                <Text style={[styles.dividerText, { color: colors.textSecondary }]}>Or continue with</Text>
+                <View style={[styles.dividerLine, { backgroundColor: colors.divider }]} />
+              </View>
 
-                  {/* Sign Up Link */}
-                  <View style={styles.signUpSection}>
-                    <Text style={[styles.signUpPrompt, { color: theme.colors.textSecondary }]}>
-                      New user?{' '}
-                    </Text>
-                    <TouchableOpacity onPress={() => navigation.navigate('SignUp')} activeOpacity={0.7}>
-                      <Text style={[styles.signUpLink, { color: theme.colors.primary }]}>
-                        Create Account
-                      </Text>
-                    </TouchableOpacity>
-                  </View>
-                </View>
-              </Animated.View>
-            </ScrollView>
-          </SafeAreaView>
-        </KeyboardAvoidingView>
-      </LinearGradient>
+              {/* Social Login */}
+              <View style={styles.socialContainer}>
+                <TouchableOpacity 
+                  style={[styles.socialBtn, { borderColor: colors.divider, backgroundColor: colors.background }]}
+                  onPress={handleGoogleSignIn}
+                  disabled={isGoogleLoading}
+                >
+                  {isGoogleLoading ? (
+                    <ActivityIndicator size="small" color={colors.text} />
+                  ) : (
+                    <>
+                      <Ionicons name="logo-google" size={20} color={colors.text} />
+                      <Text style={[styles.socialBtnText, { color: colors.text }]}>Google</Text>
+                    </>
+                  )}
+                </TouchableOpacity>
+
+                <TouchableOpacity 
+                  style={[styles.socialBtn, { borderColor: colors.divider, backgroundColor: colors.background }]}
+                  onPress={fillDemoCredentials}
+                >
+                  <Ionicons name="key-outline" size={20} color={colors.text} />
+                  <Text style={[styles.socialBtnText, { color: colors.text }]}>Demo</Text>
+                </TouchableOpacity>
+              </View>
+
+              {/* Footer */}
+              <View style={styles.footer}>
+                <Text style={[styles.footerText, { color: colors.textSecondary }]}>
+                  New to Finex?
+                </Text>
+                <TouchableOpacity onPress={() => navigation.navigate('SignUp')}>
+                  <Text style={[styles.footerLink, { color: colors.accent }]}>Create an account</Text>
+                </TouchableOpacity>
+              </View>
+
+            </View>
+          </Animated.View>
+        </ScrollView>
+      </KeyboardAvoidingView>
 
       <CustomAlert
         visible={alertState.visible}
@@ -491,26 +400,17 @@ const SignInScreen: React.FC<SignInScreenProps> = ({ navigation }) => {
         iconColor={alertState.iconColor}
         onDismiss={hideAlert}
       />
-      
-      {/* Auto Biometric Prompt */}
+
       <CustomAlert
         visible={showAutoBiometric}
-        title="Welcome Back!"
-        message="Use your biometric authentication to sign in quickly."
+        title="Welcome Back"
+        message="Confirm your identity to sign in."
         buttons={[
-          { 
-            text: 'Use Password', 
-            onPress: () => setShowAutoBiometric(false), 
-            style: 'cancel' 
-          },
-          { 
-            text: 'Use Biometric', 
-            onPress: handleAutoBiometricLogin, 
-            style: 'default' 
-          },
+          { text: 'Cancel', onPress: () => setShowAutoBiometric(false), style: 'cancel' },
+          { text: 'Authenticate', onPress: () => { setShowAutoBiometric(false); handleBiometricLogin(); }, style: 'default' },
         ]}
         icon="finger-print"
-        iconColor={theme.colors.primary}
+        iconColor={colors.accent}
         onDismiss={() => setShowAutoBiometric(false)}
       />
     </View>
@@ -521,285 +421,188 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
-  gradient: {
-    flex: 1,
-  },
-  keyboardView: {
-    flex: 1,
-  },
-  safeArea: {
-    flex: 1,
-  },
   scrollContent: {
     flexGrow: 1,
-    paddingBottom: 40,
-  },
-
-  // Hero Section
-  heroSection: {
-    paddingTop: 30,
-    paddingBottom: 40,
     paddingHorizontal: 24,
+    paddingBottom: 40,
   },
-  brandContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
+  headerContainer: {
     marginBottom: 40,
+    alignItems: 'flex-start',
   },
-  appIcon: {
-    width: 56,
-    height: 56,
-    borderRadius: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.15,
-    shadowRadius: 12,
-    elevation: 6,
+  logoPlaceholder: {
+    width: 48,
+    height: 48,
+    borderRadius: 12,
+    borderWidth: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 20,
+    overflow: 'hidden',
   },
-  brandText: {
-    marginLeft: 16,
+  logoImage: {
+    width: '100%',
+    height: '100%',
+    resizeMode: 'cover',
   },
-  brandName: {
-    fontSize: 28,
-    fontWeight: '800',
-    letterSpacing: -0.5,
-    marginBottom: 4,
-  },
-  brandTagline: {
-    fontSize: 14,
-    fontWeight: '500',
-  },
-
-  welcomeBox: {
-    paddingHorizontal: 4,
-  },
-  welcomeTitle: {
-    fontSize: 32,
-    fontWeight: '800',
-    letterSpacing: -0.5,
+  title: {
+    fontSize: 34,
+    fontWeight: '700',
+    letterSpacing: 0.3,
     marginBottom: 8,
   },
-  welcomeSubtitle: {
-    fontSize: 16,
+  subtitle: {
+    fontSize: 17,
     fontWeight: '400',
-    lineHeight: 22,
+    letterSpacing: -0.2,
   },
-
-  // Form Card
-  formCard: {
-    marginHorizontal: 16,
-    marginBottom: 20,
-    paddingHorizontal: 24,
-    paddingVertical: 28,
-    borderRadius: 24,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 12 },
-    shadowOpacity: 0.08,
-    shadowRadius: 24,
-    elevation: 12,
+  formContainer: {
+    width: '100%',
   },
-
-  // Input Styles
   inputGroup: {
-    marginBottom: 20,
+    marginBottom: 24,
   },
-  labelRow: {
+  label: {
+    fontSize: 13,
+    fontWeight: '600',
+    marginBottom: 8,
+    marginLeft: 4,
+    textTransform: 'uppercase',
+    opacity: 0.8,
+  },
+  passwordHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     marginBottom: 8,
   },
-  inputLabel: {
-    fontSize: 14,
-    fontWeight: '700',
-    letterSpacing: -0.2,
+  forgotLink: {
+    fontSize: 13,
+    fontWeight: '500',
   },
   inputWrapper: {
     flexDirection: 'row',
     alignItems: 'center',
-    borderWidth: 1,
-    borderRadius: 14,
+    height: 56,
+    borderRadius: 16,
     paddingHorizontal: 16,
-    paddingVertical: 14,
-    height: 54,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.04,
-    shadowRadius: 8,
-    elevation: 2,
+    // Note: No border by default for modern iOS look, acts as a "surface"
   },
-  textInput: {
+  input: {
     flex: 1,
-    fontSize: 16,
-    fontWeight: '500',
-    marginLeft: 12,
-    marginRight: 8,
-    backgroundColor: 'transparent',
-    paddingVertical: 0,
-    paddingHorizontal: 0,
+    fontSize: 17,
+    height: '100%',
+    paddingRight: 10,
+  },
+  validIcon: {
+    marginLeft: 8,
+  },
+  eyeIcon: {
+    padding: 8,
   },
   errorText: {
-    color: '#EF4444',
-    fontSize: 12,
+    fontSize: 13,
     marginTop: 6,
     marginLeft: 4,
-    fontWeight: '600',
   },
-
-  // Remember & Forgot
-  rememberContainer: {
+  controlsRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 32,
+  },
+  rememberMeContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 24,
-    marginLeft: 2,
   },
   checkbox: {
     width: 20,
     height: 20,
-    borderWidth: 2,
     borderRadius: 6,
-    borderColor: '#D1D5DB',
+    borderWidth: 1.5,
     marginRight: 10,
     justifyContent: 'center',
     alignItems: 'center',
   },
-  rememberText: {
-    fontSize: 14,
-    fontWeight: '500',
+  rememberMeText: {
+    fontSize: 15,
   },
-  forgotPasswordText: {
-    fontSize: 13,
-    color: '#4A90E2',
-    fontWeight: '700',
-  },
-
-  // Buttons
-  signInButton: {
-    borderRadius: 14,
-    marginBottom: 16,
-    overflow: 'hidden',
-    shadowColor: '#4A90E2',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.3,
-    shadowRadius: 16,
-    elevation: 10,
-  },
-  buttonContent: {
-    paddingVertical: 16,
+  actionContainer: {
     flexDirection: 'row',
-    alignItems: 'center',
+    gap: 12,
+  },
+  primaryBtn: {
+    flex: 1,
+    height: 56,
+    borderRadius: 28, // Pill shape
     justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: "#000",
+    shadowOffset: {
+      width: 0,
+      height: 4,
+    },
+    shadowOpacity: 0.15,
+    shadowRadius: 12,
+    elevation: 4,
   },
-  buttonDisabled: {
-    opacity: 0.6,
-  },
-  signInButtonText: {
-    color: '#FFFFFF',
+  primaryBtnText: {
     fontSize: 17,
-    fontWeight: '700',
-    marginRight: 8,
-    letterSpacing: -0.2,
+    fontWeight: '600',
   },
-
-  biometricButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
+  biometricBtn: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
     justifyContent: 'center',
-    borderWidth: 2,
-    borderRadius: 14,
-    paddingVertical: 14,
-    marginBottom: 20,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.04,
-    shadowRadius: 8,
-    elevation: 2,
+    alignItems: 'center',
   },
-  biometricText: {
-    fontSize: 16,
-    fontWeight: '700',
-    marginLeft: 12,
-    letterSpacing: -0.2,
-  },
-
-  // Divider
   dividerContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginVertical: 20,
+    marginVertical: 32,
   },
-  divider: {
+  dividerLine: {
     flex: 1,
     height: 1,
+    opacity: 0.5,
   },
   dividerText: {
     marginHorizontal: 16,
     fontSize: 13,
-    fontWeight: '700',
-    letterSpacing: 0.5,
-  },
-
-  // Social & Demo Buttons
-  socialButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1.5,
-    borderRadius: 14,
-    paddingVertical: 14,
-    marginBottom: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.04,
-    shadowRadius: 8,
-    elevation: 2,
-  },
-  socialText: {
-    fontSize: 15,
-    fontWeight: '700',
-    marginLeft: 12,
-    letterSpacing: -0.2,
-  },
-
-  demoButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1.5,
-    borderRadius: 14,
-    paddingVertical: 14,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.04,
-    shadowRadius: 8,
-    elevation: 2,
-  },
-  demoText: {
-    fontSize: 15,
-    fontWeight: '700',
-    marginLeft: 12,
-    letterSpacing: -0.2,
-  },
-
-  // Sign Up Section
-  signUpSection: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingHorizontal: 0,
-    paddingVertical: 0,
-    marginTop: 16,
-  },
-  signUpPrompt: {
-    fontSize: 16,
     fontWeight: '500',
-    marginRight: 4,
   },
-  signUpLink: {
-    fontSize: 16,
-    color: '#4A90E2',
-    fontWeight: '800',
-    letterSpacing: -0.2,
+  socialContainer: {
+    flexDirection: 'row',
+    gap: 16,
+  },
+  socialBtn: {
+    flex: 1,
+    height: 50,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 14,
+    borderWidth: 1,
+    gap: 10,
+  },
+  socialBtnText: {
+    fontSize: 15,
+    fontWeight: '600',
+  },
+  footer: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginTop: 40,
+    gap: 5,
+  },
+  footerText: {
+    fontSize: 15,
+  },
+  footerLink: {
+    fontSize: 15,
+    fontWeight: '600',
   },
 });
 

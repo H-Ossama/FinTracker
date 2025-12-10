@@ -8,57 +8,38 @@ global.Buffer = Buffer;
 // Import console override first to silence production logs
 import './src/utils/consoleOverride';
 
-import React, { useEffect, useState, useCallback, Suspense, lazy } from 'react';
+import React, { useEffect, useState, useCallback, Suspense, lazy, useRef } from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { createStackNavigator } from '@react-navigation/stack';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
-import { View, Text, ActivityIndicator, StyleSheet, InteractionManager } from 'react-native';
+import { View, Text, ActivityIndicator, StyleSheet, InteractionManager, Animated, Easing, Image } from 'react-native';
 
 // Lazy load components to reduce initial bundle size and improve performance
-const loadSwipeableBottomTabNavigator = () => import('./src/components/SwipeableBottomTabNavigator');
-const SwipeableBottomTabNavigator = lazy(loadSwipeableBottomTabNavigator);
-const loadTouchActivityWrapper = () => import('./src/components/TouchActivityWrapper');
-const TouchActivityWrapper = lazy(loadTouchActivityWrapper);
-const loadAddIncomeScreen = () => import('./src/screens/AddIncomeScreen');
-const AddIncomeScreen = lazy(loadAddIncomeScreen);
-const loadBorrowedMoneyHistoryScreen = () => import('./src/screens/BorrowedMoneyHistoryScreen');
-const BorrowedMoneyHistoryScreen = lazy(loadBorrowedMoneyHistoryScreen);
-const loadTransactionsHistoryScreen = () => import('./src/screens/TransactionsHistoryScreen');
-const TransactionsHistoryScreen = lazy(loadTransactionsHistoryScreen);
-const loadNotificationCenterScreen = () => import('./src/screens/NotificationCenterScreen');
-const NotificationCenterScreen = lazy(loadNotificationCenterScreen);
-const loadNotificationPreferencesScreen = () => import('./src/screens/NotificationPreferencesScreen');
-const NotificationPreferencesScreen = lazy(loadNotificationPreferencesScreen);
-const loadSignUpScreen = () => import('./src/screens/SignUpScreen');
-const SignUpScreen = lazy(loadSignUpScreen);
-const loadSignInScreen = () => import('./src/screens/SignInScreen');
-const SignInScreen = lazy(loadSignInScreen);
+const SwipeableBottomTabNavigator = lazy(() => import('./src/components/SwipeableBottomTabNavigator'));
+const TouchActivityWrapper = lazy(() => import('./src/components/TouchActivityWrapper'));
+const AddIncomeScreen = lazy(() => import('./src/screens/AddIncomeScreen'));
+const BorrowedMoneyHistoryScreen = lazy(() => import('./src/screens/BorrowedMoneyHistoryScreen'));
+const TransactionsHistoryScreen = lazy(() => import('./src/screens/TransactionsHistoryScreen'));
+const NotificationCenterScreen = lazy(() => import('./src/screens/NotificationCenterScreen'));
+const NotificationPreferencesScreen = lazy(() => import('./src/screens/NotificationPreferencesScreen'));
+const SignUpScreen = lazy(() => import('./src/screens/SignUpScreen'));
+const SignInScreen = lazy(() => import('./src/screens/SignInScreen'));
 import AccessDeniedScreen from './src/screens/AccessDeniedScreen'; // Import directly instead of lazy loading
-const loadUserProfileScreen = () => import('./src/screens/UserProfileScreen');
-const UserProfileScreen = lazy(loadUserProfileScreen);
-const loadSavingsGoalsScreen = () => import('./src/screens/SavingsGoalsScreen');
-const SavingsGoalsScreen = lazy(loadSavingsGoalsScreen);
-const loadQuickSettingsScreen = () => import('./src/screens/QuickSettingsScreen');
-const QuickSettingsScreen = lazy(loadQuickSettingsScreen);
-const loadQuickActionsSettingsScreen = () => import('./src/screens/QuickActionsSettingsScreen');
-const QuickActionsSettingsScreen = lazy(loadQuickActionsSettingsScreen);
-const loadAppLockSettingsScreen = () => import('./src/screens/AppLockSettingsScreen');
-const AppLockSettingsScreen = lazy(loadAppLockSettingsScreen);
-const loadPinSetupScreen = () => import('./src/screens/PinSetupScreen');
-const PinSetupScreen = lazy(loadPinSetupScreen);
-const loadAppLockScreen = () => import('./src/screens/AppLockScreen');
-const AppLockScreen = lazy(loadAppLockScreen);
-const loadBillsTrackerScreen = () => import('./src/screens/BillsTrackerScreen');
-const BillsTrackerScreen = lazy(loadBillsTrackerScreen);
-const loadBudgetPlannerScreen = () => import('./src/screens/BudgetPlannerScreen');
-const BudgetPlannerScreen = lazy(loadBudgetPlannerScreen);
-const loadRemindersScreen = () => import('./src/screens/RemindersScreen');
-const RemindersScreen = lazy(loadRemindersScreen);
-const loadSyncTestScreen = () => import('./src/screens/SyncTestScreen');
-const SyncTestScreen = lazy(loadSyncTestScreen);
-const loadDevelopmentToolsScreen = () => import('./src/screens/DevelopmentToolsScreen');
-const DevelopmentToolsScreen = lazy(loadDevelopmentToolsScreen);
+const UserProfileScreen = lazy(() => import('./src/screens/UserProfileScreen'));
+const SavingsGoalsScreen = lazy(() => import('./src/screens/SavingsGoalsScreen'));
+const QuickSettingsScreen = lazy(() => import('./src/screens/QuickSettingsScreen'));
+const QuickActionsSettingsScreen = lazy(() => import('./src/screens/QuickActionsSettingsScreen'));
+const AppLockSettingsScreen = lazy(() => import('./src/screens/AppLockSettingsScreen'));
+const PinSetupScreen = lazy(() => import('./src/screens/PinSetupScreen'));
+const AppLockScreen = lazy(() => import('./src/screens/AppLockScreen'));
+const BillsTrackerScreen = lazy(() => import('./src/screens/BillsTrackerScreen'));
+const BudgetPlannerScreen = lazy(() => import('./src/screens/BudgetPlannerScreen'));
+const RemindersScreen = lazy(() => import('./src/screens/RemindersScreen'));
+const SyncTestScreen = lazy(() => import('./src/screens/SyncTestScreen'));
+const DevelopmentToolsScreen = lazy(() => import('./src/screens/DevelopmentToolsScreen'));
+const PrivacyPolicyScreen = lazy(() => import('./src/screens/PrivacyPolicyScreen'));
+const TermsOfUseScreen = lazy(() => import('./src/screens/TermsOfUseScreen'));
 import { ThemeProvider, useTheme } from './src/contexts/ThemeContext';
 import { LocalizationProvider } from './src/contexts/LocalizationContext';
 import { AuthProvider, useAuth } from './src/contexts/AuthContext';
@@ -68,18 +49,84 @@ import { hybridDataService, AppInitResult } from './src/services/hybridDataServi
 import AppLockService from './src/services/appLockService';
 import BatteryOptimizer from './src/utils/batteryOptimizer';
 // import { initializeAppOptimizations } from './src/utils/optimizations';
-const loadSyncReminderBanner = () => import('./src/components/SyncReminderBanner');
-const SyncReminderBanner = lazy(loadSyncReminderBanner);
+const SyncReminderBanner = lazy(() => import('./src/components/SyncReminderBanner'));
 import { navigationRef, onNavigationReady } from './src/navigation/navigationService';
+import { FullScreenLoader } from './src/components/ScreenLoadingIndicator';
 
 const Stack = createStackNavigator();
 
-// Suspense fallback component for lazy loading
-const LazyLoadingFallback = () => (
-  <View style={styles.loadingContainer}>
-    <ActivityIndicator size="small" color="#007AFF" />
-  </View>
-);
+// Elegant Loading Screen with animated dots (matching the new dark theme)
+const ScreenLoadingFallback = () => {
+  const [dotAnimation] = useState(() => new Animated.Value(0));
+  
+  useEffect(() => {
+    const animation = Animated.loop(
+      Animated.sequence([
+        Animated.timing(dotAnimation, {
+          toValue: 1,
+          duration: 600,
+          easing: Easing.inOut(Easing.ease),
+          useNativeDriver: true,
+        }),
+        Animated.timing(dotAnimation, {
+          toValue: 0,
+          duration: 600,
+          easing: Easing.inOut(Easing.ease),
+          useNativeDriver: true,
+        }),
+      ])
+    );
+    animation.start();
+    return () => animation.stop();
+  }, [dotAnimation]);
+
+  return (
+    <View style={loadingStyles.container}>
+      <View style={loadingStyles.dotsContainer}>
+        {[0, 1, 2].map((index) => (
+          <Animated.View
+            key={index}
+            style={[
+              loadingStyles.dot,
+              {
+                opacity: dotAnimation.interpolate({
+                  inputRange: [0, 0.5, 1],
+                  outputRange: index === 0 ? [0.3, 1, 0.3] : index === 1 ? [0.6, 0.3, 0.6] : [1, 0.6, 1],
+                }),
+                transform: [{
+                  scale: dotAnimation.interpolate({
+                    inputRange: [0, 0.5, 1],
+                    outputRange: index === 1 ? [1, 1.3, 1] : [1, 1.1, 1],
+                  }),
+                }],
+              },
+            ]}
+          />
+        ))}
+      </View>
+    </View>
+  );
+};
+
+const loadingStyles = StyleSheet.create({
+  container: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#1C1C1E',
+  },
+  dotsContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  dot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: '#FFFFFF',
+  },
+});
 
 // Optimized screen wrapper for better performance
 const ScreenWrapper = ({ children }: { children: React.ReactNode }) => {
@@ -94,7 +141,7 @@ const ScreenWrapper = ({ children }: { children: React.ReactNode }) => {
   }, []);
   
   if (!isReady) {
-    return <LazyLoadingFallback />;
+    return <ScreenLoadingFallback />;
   }
   
   return <>{children}</>;
@@ -105,6 +152,10 @@ const AppNavigator = React.memo(() => {
   const { isAuthenticated, isLoading: authLoading, accessDenied } = useAuth();
   const [isAppLocked, setIsAppLocked] = useState(false);
   const [appLockInitialized, setAppLockInitialized] = useState(false);
+  const [isNavigating, setIsNavigating] = useState(false);
+  const navigationTransitionTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const isMounted = useRef(false);
+  const visitedScreens = useRef<Set<string>>(new Set());
   const appLockService = AppLockService.getInstance();
 
   // ALL HOOKS MUST BE DEFINED BEFORE ANY CONDITIONAL RETURNS
@@ -133,6 +184,52 @@ const AppNavigator = React.memo(() => {
   const handleUnlock = useCallback(() => {
     appLockService.unlock();
   }, [appLockService]);
+
+  useEffect(() => {
+    isMounted.current = true;
+    return () => {
+      isMounted.current = false;
+    };
+  }, []);
+
+  const handleNavigationStateChange = useCallback(() => {
+    if (!navigationRef.isReady() || !isMounted.current) {
+      return;
+    }
+
+    const currentRouteName = navigationRef.getCurrentRoute()?.name;
+    const isNewScreen = currentRouteName && !visitedScreens.current.has(currentRouteName);
+
+    // Only show loader for new screens, not for cached/visited ones
+    if (isNewScreen) {
+      setIsNavigating(true);
+
+      if (navigationTransitionTimeout.current) {
+        clearTimeout(navigationTransitionTimeout.current);
+      }
+
+      navigationTransitionTimeout.current = setTimeout(() => {
+        InteractionManager.runAfterInteractions(() => {
+          if (isMounted.current) {
+            setIsNavigating(false);
+          }
+        });
+      }, 500);
+    }
+
+    // Mark screen as visited for future navigation
+    if (currentRouteName) {
+      visitedScreens.current.add(currentRouteName);
+    }
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (navigationTransitionTimeout.current) {
+        clearTimeout(navigationTransitionTimeout.current);
+      }
+    };
+  }, []);
 
   useEffect(() => {
     if (isAuthenticated) {
@@ -168,18 +265,19 @@ const AppNavigator = React.memo(() => {
   // Show lock screen if app is locked and user is authenticated
   if (isAuthenticated && isAppLocked) {
     return (
-      <Suspense fallback={<LazyLoadingFallback />}>
+      <Suspense fallback={<ScreenLoadingFallback />}>
         <AppLockScreen onUnlock={handleUnlock} />
       </Suspense>
     );
   }
 
   return (
-    <Suspense fallback={<LazyLoadingFallback />}>
+    <Suspense fallback={<ScreenLoadingFallback />}>
       <TouchActivityWrapper>
         <NavigationContainer 
           ref={navigationRef} 
           onReady={onNavigationReady}
+          onStateChange={handleNavigationStateChange}
           theme={{
             dark: isDark,
             colors: {
@@ -248,6 +346,7 @@ const AppNavigator = React.memo(() => {
                   options={{ 
                     headerShown: false,
                     presentation: 'modal',
+                    gestureEnabled: false,
                   }}
                 />
                 <Stack.Screen 
@@ -256,6 +355,7 @@ const AppNavigator = React.memo(() => {
                   options={{ 
                     headerShown: false,
                     presentation: 'modal',
+                    gestureEnabled: false,
                   }}
                 />
                 <Stack.Screen 
@@ -335,6 +435,24 @@ const AppNavigator = React.memo(() => {
                     presentation: 'modal',
                   }}
                 />
+                <Stack.Screen 
+                  name="PrivacyPolicy" 
+                  component={PrivacyPolicyScreen}
+                  options={{ 
+                    headerShown: false,
+                    presentation: 'modal',
+                    gestureEnabled: false,
+                  }}
+                />
+                <Stack.Screen 
+                  name="TermsOfUse" 
+                  component={TermsOfUseScreen}
+                  options={{ 
+                    headerShown: false,
+                    presentation: 'modal',
+                    gestureEnabled: false,
+                  }}
+                />
               </>
             ) : (
               // Unauthenticated user screens
@@ -353,18 +471,102 @@ const AppNavigator = React.memo(() => {
             )}
           </Stack.Navigator>
         </NavigationContainer>
+        <FullScreenLoader visible={isNavigating} message="Switching screens..." transparent />
       </TouchActivityWrapper>
     </Suspense>
   );
 });
 
-// Loading screen component
-const LoadingScreen = () => (
-  <View style={styles.loadingContainer}>
-    <ActivityIndicator size="large" color="#007AFF" />
-    <Text style={styles.loadingText}>Initializing FINEX...</Text>
-  </View>
-);
+// Loading screen component with elegant animation
+const LoadingScreen = () => {
+  const [fadeAnim] = useState(() => new Animated.Value(0));
+  const [scaleAnim] = useState(() => new Animated.Value(0.8));
+  const [dotAnimation] = useState(() => new Animated.Value(0));
+
+  useEffect(() => {
+    // Entrance animation
+    Animated.parallel([
+      Animated.timing(fadeAnim, {
+        toValue: 1,
+        duration: 400,
+        useNativeDriver: true,
+      }),
+      Animated.spring(scaleAnim, {
+        toValue: 1,
+        friction: 8,
+        tension: 40,
+        useNativeDriver: true,
+      }),
+    ]).start();
+
+    // Dots animation
+    const animation = Animated.loop(
+      Animated.sequence([
+        Animated.timing(dotAnimation, {
+          toValue: 1,
+          duration: 800,
+          easing: Easing.inOut(Easing.ease),
+          useNativeDriver: true,
+        }),
+        Animated.timing(dotAnimation, {
+          toValue: 0,
+          duration: 800,
+          easing: Easing.inOut(Easing.ease),
+          useNativeDriver: true,
+        }),
+      ])
+    );
+    animation.start();
+    return () => animation.stop();
+  }, [fadeAnim, scaleAnim, dotAnimation]);
+
+  return (
+    <View style={styles.loadingContainer}>
+      <Animated.View 
+        style={[
+          styles.loadingContent,
+          { 
+            opacity: fadeAnim, 
+            transform: [{ scale: scaleAnim }] 
+          }
+        ]}
+      >
+        <View style={styles.loadingLogoContainer}>
+          <View style={styles.loadingLogo}>
+            <Image 
+              source={require('./assets/icon.png')} 
+              style={styles.loadingLogoImage}
+              resizeMode="cover"
+            />
+          </View>
+        </View>
+        <Text style={styles.loadingTitle}>FINEX</Text>
+        <View style={styles.loadingDotsRow}>
+          {[0, 1, 2].map((index) => (
+            <Animated.View
+              key={index}
+              style={[
+                styles.loadingDot,
+                {
+                  opacity: dotAnimation.interpolate({
+                    inputRange: [0, 0.5, 1],
+                    outputRange: index === 0 ? [0.3, 1, 0.3] : index === 1 ? [0.6, 0.3, 0.6] : [1, 0.6, 1],
+                  }),
+                  transform: [{
+                    scale: dotAnimation.interpolate({
+                      inputRange: [0, 0.5, 1],
+                      outputRange: index === 1 ? [1, 1.4, 1] : [1, 1.2, 1],
+                    }),
+                  }],
+                },
+              ]}
+            />
+          ))}
+        </View>
+      </Animated.View>
+    </View>
+  );
+};
 
 // Error screen component
 const ErrorScreen = ({ error, onRetry }: { error: string; onRetry: () => void }) => (
@@ -495,18 +697,61 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#f8f9fa',
+    backgroundColor: '#1C1C1E',
+  },
+  loadingContent: {
+    alignItems: 'center',
+  },
+  loadingLogoContainer: {
+    marginBottom: 20,
+  },
+  loadingLogo: {
+    width: 80,
+    height: 80,
+    borderRadius: 20,
+    backgroundColor: '#007AFF',
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#007AFF',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.4,
+    shadowRadius: 16,
+    elevation: 12,
+    overflow: 'hidden',
+  },
+  loadingLogoImage: {
+    width: 80,
+    height: 80,
+    borderRadius: 20,
+  },
+  loadingTitle: {
+    fontSize: 28,
+    fontWeight: '700',
+    color: '#FFFFFF',
+    letterSpacing: 4,
+    marginBottom: 32,
+  },
+  loadingDotsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  loadingDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: '#007AFF',
   },
   loadingText: {
     marginTop: 16,
     fontSize: 16,
-    color: '#666',
+    color: '#8E8E93',
   },
   errorContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#f8f9fa',
+    backgroundColor: '#1C1C1E',
     padding: 32,
   },
   errorTitle: {
@@ -518,7 +763,7 @@ const styles = StyleSheet.create({
   },
   errorText: {
     fontSize: 16,
-    color: '#666',
+    color: '#8E8E93',
     textAlign: 'center',
     marginBottom: 24,
     lineHeight: 24,

@@ -10,11 +10,15 @@ import {
   ActivityIndicator,
   processColor,
   RefreshControl,
+  StatusBar,
+  Image,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import Svg, { Circle, Path, Text as SvgText, Defs, RadialGradient, Stop } from 'react-native-svg';
 import { Ionicons } from '@expo/vector-icons';
+import { useNavigation } from '@react-navigation/native';
+import { useAuth } from '../contexts/AuthContext';
 // Lazy import for analytics service to reduce initial bundle
 type SpendingCategory = {
   id: string;
@@ -81,6 +85,9 @@ const centerY = chartSize / 2;
 const InsightsScreen = () => {
   const { theme } = useTheme();
   const { currency, formatCurrency, t, language } = useLocalization();
+  const navigation = useNavigation();
+  const { user } = useAuth();
+  const insets = useSafeAreaInsets();
   
   const getCurrencySymbol = () => {
     const symbols = { USD: '$', EUR: '€', MAD: 'MAD' };
@@ -519,26 +526,6 @@ const InsightsScreen = () => {
           />
         }
       >
-        {/* Header */}
-        <View style={styles.header}>
-          <Text style={[styles.title, { color: theme.colors.text }]}>{t('insights_title')}</Text>
-          <TouchableOpacity 
-            style={[styles.refreshButton, { backgroundColor: theme.colors.surface }]}
-            onPress={() => fetchData(true)}
-            disabled={refreshing || loading}
-          >
-            {refreshing ? (
-              <ActivityIndicator size="small" color={theme.colors.primary} />
-            ) : (
-              <Ionicons 
-                name="refresh" 
-                size={20} 
-                color={theme.colors.primary} 
-              />
-            )}
-          </TouchableOpacity>
-        </View>
-
         {/* Period Selector */}
         <View style={[styles.periodSelector, { backgroundColor: theme.colors.surface }]}>
           {(['Week', 'Month', 'Year'] as const).map((period) => (
@@ -777,18 +764,138 @@ const InsightsScreen = () => {
   };
   
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: theme.colors.background }]}>
-      <LinearGradient
-        colors={[theme.colors.gradientStart, theme.colors.gradientEnd]}
-        style={styles.gradient}
-      >
+    <View style={[styles.container, { backgroundColor: theme.colors.headerBackground }]}>
+      <StatusBar barStyle="light-content" backgroundColor={theme.colors.headerBackground} />
+      
+      {/* Dark Header Section */}
+      <View style={[styles.darkHeader, { backgroundColor: theme.colors.headerBackground, paddingTop: insets.top }]}>
+        {/* Top Header Row */}
+        <View style={styles.headerRow}>
+          <TouchableOpacity 
+            style={styles.userInfo}
+            onPress={() => (navigation as any).navigate('UserProfile')}
+            activeOpacity={0.7}
+          >
+            <View style={styles.avatarContainer}>
+              {user?.avatar ? (
+                <Image source={{ uri: user.avatar }} style={styles.avatar} />
+              ) : (
+                <View style={[styles.avatarPlaceholder, { backgroundColor: theme.colors.headerSurface }]}>
+                  <Text style={[styles.avatarInitial, { color: theme.colors.headerText }]}>
+                    {user?.name?.charAt(0)?.toUpperCase() || 'U'}
+                  </Text>
+                </View>
+              )}
+            </View>
+            <Text style={[styles.userName, { color: theme.colors.headerText }]}>{user?.name || 'User'}</Text>
+            <Ionicons name="chevron-forward" size={16} color={theme.colors.headerTextSecondary} style={{ marginLeft: 4 }} />
+          </TouchableOpacity>
+          <View style={styles.headerActions}>
+            <TouchableOpacity 
+              style={[styles.headerIconButton, { backgroundColor: theme.colors.headerSurface }]}
+              onPress={() => (navigation as any).navigate('QuickSettings')}
+            >
+              <Ionicons name="settings-outline" size={22} color={theme.colors.headerText} />
+            </TouchableOpacity>
+          </View>
+        </View>
+
+        {/* Title & Period Selector in Header */}
+        <View style={styles.headerTitleSection}>
+          <Text style={[styles.screenTitle, { color: theme.colors.headerText }]}>{t('insights_title')}</Text>
+          <Text style={[styles.screenSubtitle, { color: theme.colors.headerTextSecondary }]}>
+            {t('analyze_spending') || 'Analyze your spending patterns'}
+          </Text>
+        </View>
+      </View>
+
+      {/* Content Section */}
+      <View style={[styles.contentContainer, { backgroundColor: theme.colors.background }]}>
         {renderContent()}
-      </LinearGradient>
-    </SafeAreaView>
+      </View>
+    </View>
   );
 };
 
 const styles = StyleSheet.create({
+  // Container
+  container: {
+    flex: 1,
+    backgroundColor: '#1C1C1E',
+  },
+  
+  // Dark Header Section
+  darkHeader: {
+    paddingHorizontal: 20,
+    paddingBottom: 24,
+  },
+  headerRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 16,
+  },
+  userInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  avatarContainer: {
+    marginRight: 12,
+  },
+  avatar: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+  },
+  avatarPlaceholder: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  avatarInitial: {
+    fontSize: 18,
+    fontWeight: '600',
+  },
+  userName: {
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  headerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  headerIconButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginLeft: 8,
+  },
+  headerTitleSection: {
+    marginTop: 8,
+  },
+  screenTitle: {
+    fontSize: 28,
+    fontWeight: '700',
+    letterSpacing: -0.5,
+  },
+  screenSubtitle: {
+    fontSize: 14,
+    marginTop: 4,
+  },
+  
+  // Content Container
+  contentContainer: {
+    flex: 1,
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+    marginTop: -4,
+    overflow: 'hidden',
+  },
+
   // Loading and error states
   loaderContainer: {
     flex: 1,
@@ -837,10 +944,6 @@ const styles = StyleSheet.create({
     color: 'white',
     fontWeight: '600',
   },
-  container: {
-    flex: 1,
-    backgroundColor: '#F8F9FA',
-  },
   gradient: {
     flex: 1,
   },
@@ -878,6 +981,8 @@ const styles = StyleSheet.create({
     backgroundColor: '#F2F2F7',
     borderRadius: 8,
     padding: 4,
+    marginHorizontal: 20,
+    marginTop: 16,
     marginBottom: 24,
   },
   periodButton: {
@@ -906,6 +1011,7 @@ const styles = StyleSheet.create({
   chartContainer: {
     alignItems: 'center',
     marginBottom: 32,
+    paddingHorizontal: 20,
   },
   chartWrapper: {
     backgroundColor: 'white',
@@ -927,6 +1033,7 @@ const styles = StyleSheet.create({
   },
   section: {
     marginBottom: 24,
+    paddingHorizontal: 20,
   },
   sectionTitle: {
     fontSize: 18,

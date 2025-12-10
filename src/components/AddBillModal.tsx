@@ -9,8 +9,9 @@ import {
   TextInput,
   Switch,
   Alert,
+  StatusBar,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../contexts/ThemeContext';
 import { billsService } from '../services/billsService';
@@ -28,6 +29,7 @@ export const AddBillModal: React.FC<AddBillModalProps> = ({
   onBillAdded,
 }) => {
   const { theme } = useTheme();
+  const insets = useSafeAreaInsets();
   const [categories, setCategories] = useState<BillCategory[]>([]);
   const [loading, setLoading] = useState(false);
   
@@ -132,21 +134,28 @@ export const AddBillModal: React.FC<AddBillModalProps> = ({
       presentationStyle="pageSheet"
       onRequestClose={onClose}
     >
-      <SafeAreaView style={[styles.container, { backgroundColor: theme.colors.background }]}>
-        {/* Header */}
-        <View style={styles.header}>
-          <TouchableOpacity onPress={onClose} disabled={loading}>
-            <Ionicons name="close" size={24} color={theme.colors.text} />
-          </TouchableOpacity>
-          <Text style={[styles.title, { color: theme.colors.text }]}>Add Bill</Text>
-          <TouchableOpacity onPress={handleSave} disabled={loading}>
-            <Text style={[styles.saveButton, { 
-              color: loading ? theme.colors.textSecondary : theme.colors.primary 
-            }]}>
-              {loading ? 'Saving...' : 'Save'}
-            </Text>
-          </TouchableOpacity>
+      <View style={{ flex: 1, backgroundColor: '#1C1C1E' }}>
+        <StatusBar barStyle="light-content" backgroundColor="#1C1C1E" />
+        
+        {/* Dark Header */}
+        <View style={[styles.darkHeader, { paddingTop: insets.top }]}>
+          <View style={styles.headerRow}>
+            <TouchableOpacity onPress={onClose} disabled={loading} style={styles.closeButton}>
+              <Ionicons name="close" size={24} color="#FFFFFF" />
+            </TouchableOpacity>
+            <Text style={styles.headerTitle}>Add Bill</Text>
+            <TouchableOpacity onPress={handleSave} disabled={loading} style={styles.saveButton}>
+              <Text style={[styles.saveButtonText, { 
+                color: loading ? '#8E8E93' : '#4A90E2' 
+              }]}>
+                {loading ? 'Saving...' : 'Save'}
+              </Text>
+            </TouchableOpacity>
+          </View>
         </View>
+        
+        {/* Content Container */}
+        <View style={[styles.contentContainer, { backgroundColor: theme.colors.background }]}>
 
         <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
           {/* Basic Information */}
@@ -412,31 +421,52 @@ export const AddBillModal: React.FC<AddBillModalProps> = ({
             </View>
           </View>
         </ScrollView>
-      </SafeAreaView>
+        </View>
+      </View>
     </Modal>
   );
 };
 
 const createStyles = (theme: any) => StyleSheet.create({
-  container: {
-    flex: 1,
-  },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+  darkHeader: {
+    backgroundColor: '#1C1C1E',
+    paddingBottom: 16,
     paddingHorizontal: 20,
-    paddingVertical: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: theme.colors.border,
   },
-  title: {
-    fontSize: 18,
+  headerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    height: 44,
+  },
+  closeButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255,255,255,0.1)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  headerTitle: {
+    fontSize: 17,
     fontWeight: '600',
+    color: '#FFFFFF',
+    flex: 1,
+    textAlign: 'center',
   },
   saveButton: {
+    width: 60,
+    alignItems: 'flex-end',
+  },
+  saveButtonText: {
     fontSize: 16,
     fontWeight: '600',
+  },
+  contentContainer: {
+    flex: 1,
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+    overflow: 'hidden',
   },
   content: {
     flex: 1,

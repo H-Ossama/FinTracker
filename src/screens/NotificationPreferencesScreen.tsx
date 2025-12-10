@@ -12,8 +12,9 @@ import {
   Linking,
   Modal,
   KeyboardAvoidingView,
+  StatusBar,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -52,6 +53,7 @@ const NotificationPreferencesScreen = () => {
   const navigation = useNavigation();
   const { addNotification } = useNotification();
   const { t } = useLocalization();
+  const insets = useSafeAreaInsets();
   const [preferences, setPreferences] = useState<NotificationPreferences>({
     enablePushNotifications: true,
     enableEmailNotifications: false,
@@ -518,30 +520,44 @@ const NotificationPreferencesScreen = () => {
   };
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: theme.colors.background }]} edges={['top', 'bottom']}>
-      <KeyboardAvoidingView 
-        style={styles.keyboardContainer}
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
-      >
-        <LinearGradient
-          colors={[theme.colors.gradientStart, theme.colors.gradientEnd]}
-          style={styles.gradient}
+    <View style={{ flex: 1, backgroundColor: '#1C1C1E' }}>
+      <StatusBar barStyle="light-content" backgroundColor="#1C1C1E" />
+      
+      {/* Dark Header */}
+      <View style={[styles.darkHeader, { paddingTop: insets.top }]}>
+        <View style={styles.headerRow}>
+          <TouchableOpacity onPress={handleGoBack} style={styles.backButtonHeader}>
+            <Ionicons name="arrow-back" size={24} color="#FFFFFF" />
+          </TouchableOpacity>
+          <Text style={styles.headerTitle}>{t('notificationPrefs.title')}</Text>
+          <View style={{ width: 40 }} />
+        </View>
+      </View>
+      
+      {/* Content Container */}
+      <View style={[styles.contentContainer, { backgroundColor: theme.colors.background }]}>
+        <KeyboardAvoidingView 
+          style={styles.keyboardContainer}
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
         >
-          {/* Header */}
-          <View style={styles.header}>
-            <TouchableOpacity onPress={handleGoBack} style={styles.backButton}>
-              <Ionicons name="arrow-back" size={24} color={theme.colors.text} />
-            </TouchableOpacity>
-            <Text style={[styles.title, { color: theme.colors.text }]}>{t('notificationPrefs.title')}</Text>
-            <View style={styles.placeholder} />
-          </View>
+
+          <LinearGradient
+            colors={isDark ? ['#0f1115', '#1C1C1E'] : [theme.colors.background, '#FFFFFF']}
+            style={styles.gradientBackground}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 0, y: 1 }}
+          >
 
           <ScrollView 
             style={styles.scrollView}
             showsVerticalScrollIndicator={false}
             contentContainerStyle={styles.scrollContentContainer}
             keyboardShouldPersistTaps="handled"
+            scrollEnabled={true}
+            scrollEventThrottle={16}
+            nestedScrollEnabled={true}
+            directionalLockEnabled={true}
           >
           {/* Status Overview */}
           <View style={styles.section}>
@@ -870,7 +886,7 @@ const NotificationPreferencesScreen = () => {
 
           {/* Action Buttons */}
           </ScrollView>
-          
+
           {/* Fixed Bottom Button Container */}
           <View style={[styles.fixedButtonContainer, { backgroundColor: theme.colors.background, borderTopColor: theme.colors.border }]}>
             <View style={styles.buttonRow}>
@@ -910,9 +926,10 @@ const NotificationPreferencesScreen = () => {
               </TouchableOpacity>
             </View>
           </View>
-        </LinearGradient>
-      </KeyboardAvoidingView>
-      
+          </LinearGradient>
+        </KeyboardAvoidingView>
+      </View>
+
       {/* Start Time Picker Modal */}
       <Modal
         visible={showStartTimePicker}
@@ -1010,40 +1027,48 @@ const NotificationPreferencesScreen = () => {
           </View>
         </View>
       </Modal>
-    </SafeAreaView>
+    </View>
   );
 };
 
 const createStyles = (theme: any) => StyleSheet.create({
-  container: {
+  darkHeader: {
+    backgroundColor: '#1C1C1E',
+    paddingBottom: 16,
+    paddingHorizontal: 20,
+  },
+  headerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    height: 44,
+  },
+  backButtonHeader: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255,255,255,0.1)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  headerTitle: {
+    fontSize: 17,
+    fontWeight: '600',
+    color: '#FFFFFF',
+    flex: 1,
+    textAlign: 'center',
+  },
+  contentContainer: {
+    flex: 1,
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+    overflow: 'hidden',
+  },
+  gradientBackground: {
     flex: 1,
   },
   keyboardContainer: {
     flex: 1,
-  },
-  gradient: {
-    flex: 1,
-  },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingVertical: 16,
-  },
-  backButton: {
-    padding: 8,
-    borderRadius: 20,
-    backgroundColor: theme.colors.surface + '80',
-  },
-  title: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    flex: 1,
-    textAlign: 'center',
-  },
-  placeholder: {
-    width: 40,
   },
   scrollView: {
     flex: 1,

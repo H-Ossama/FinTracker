@@ -18,6 +18,12 @@ interface ThemeColors {
   tabBarBackground: string;
   tabBarActive: string;
   tabBarInactive: string;
+  // New dark header colors
+  headerBackground: string;
+  headerText: string;
+  headerTextSecondary: string;
+  headerSurface: string;
+  headerBorder: string;
 }
 
 interface Theme {
@@ -28,42 +34,54 @@ interface Theme {
 const lightTheme: Theme = {
   isDark: false,
   colors: {
-    primary: '#4A90E2',
+    primary: '#007AFF',
     background: '#F8F9FA',
     surface: '#FFFFFF',
-    text: '#333333',
+    text: '#1C1C1E',
     textSecondary: '#8E8E93',
     border: '#E5E5EA',
     card: '#FFFFFF',
-    success: '#7ED321',
+    success: '#34C759',
     warning: '#FF9500',
     error: '#FF3B30',
     gradientStart: '#F8F9FA',
     gradientEnd: '#FFFFFF',
     tabBarBackground: '#FFFFFF',
-    tabBarActive: '#4A90E2',
+    tabBarActive: '#1C1C1E',
     tabBarInactive: '#8E8E93',
+    // Dark header for contrast
+    headerBackground: '#1C1C1E',
+    headerText: '#FFFFFF',
+    headerTextSecondary: 'rgba(255, 255, 255, 0.6)',
+    headerSurface: '#2C2C2E',
+    headerBorder: 'rgba(255, 255, 255, 0.1)',
   },
 };
 
 const darkTheme: Theme = {
   isDark: true,
   colors: {
-    primary: '#5BA0F2',
-    background: '#0D1117',
-    surface: '#161B22',
-    text: '#F0F6FC',
-    textSecondary: '#7D8590',
-    border: '#30363D',
-    card: '#21262D',
-    success: '#238636',
-    warning: '#F85149',
-    error: '#F85149',
-    gradientStart: '#0D1117',
-    gradientEnd: '#161B22',
-    tabBarBackground: '#161B22',
-    tabBarActive: '#58A6FF',
-    tabBarInactive: '#7D8590',
+    primary: '#0A84FF',
+    background: '#000000',
+    surface: '#1C1C1E',
+    text: '#FFFFFF',
+    textSecondary: '#8E8E93',
+    border: '#38383A',
+    card: '#1C1C1E',
+    success: '#30D158',
+    warning: '#FF9F0A',
+    error: '#FF453A',
+    gradientStart: '#000000',
+    gradientEnd: '#1C1C1E',
+    tabBarBackground: '#1C1C1E',
+    tabBarActive: '#FFFFFF',
+    tabBarInactive: '#8E8E93',
+    // Dark header (same as background in dark mode)
+    headerBackground: '#000000',
+    headerText: '#FFFFFF',
+    headerTextSecondary: 'rgba(255, 255, 255, 0.6)',
+    headerSurface: '#1C1C1E',
+    headerBorder: 'rgba(255, 255, 255, 0.1)',
   },
 };
 

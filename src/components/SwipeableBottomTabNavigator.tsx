@@ -1,7 +1,7 @@
-import React, { useState, useMemo, useCallback, lazy, Suspense, useEffect } from 'react';
-import { View, StyleSheet, Pressable, Dimensions, Text, ActivityIndicator, InteractionManager } from 'react-native';
+import React, { useState, useMemo, useCallback, lazy, Suspense, useEffect, useRef } from 'react';
+import { View, StyleSheet, Pressable, Dimensions, Text, ActivityIndicator, InteractionManager, Platform } from 'react-native';
 import { TabView } from 'react-native-tab-view';
-import { Ionicons } from '@expo/vector-icons';
+import { Ionicons, Feather } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 // Lazy load screens for better performance
@@ -16,7 +16,7 @@ const MoreScreen = lazy(loadMoreScreen);
 
 import { useTheme } from '../contexts/ThemeContext';
 import { useLocalization } from '../contexts/LocalizationContext';
-import QuickActionMenuButton from './QuickActionMenuButton';
+import { FullScreenLoader } from './ScreenLoadingIndicator';
 
 const initialLayout = { width: Dimensions.get('window').width };
 
@@ -35,8 +35,14 @@ const SwipeableBottomTabNavigator = React.memo(() => {
   const { t } = useLocalization();
   const insets = useSafeAreaInsets();
   const [index, setIndex] = useState(0);
+  const [isSwitching, setIsSwitching] = useState(false);
+  const tabSwitchTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const isMounted = useRef(false);
+  const visitedTabs = useRef<Set<number>>(new Set([0])); // Home tab is visited on mount
 
   useEffect(() => {
+    isMounted.current = true;
+
     const handle = InteractionManager.runAfterInteractions(() => {
       Promise.allSettled([
         loadInsightsScreen(),
@@ -45,7 +51,18 @@ const SwipeableBottomTabNavigator = React.memo(() => {
       ]).catch(() => {});
     });
 
-    return () => handle.cancel();
+    return () => {
+      isMounted.current = false;
+      handle.cancel();
+    };
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (tabSwitchTimeout.current) {
+        clearTimeout(tabSwitchTimeout.current);
+      }
+    };
   }, []);
   
   // Memoize routes to prevent unnecessary re-renders
@@ -88,109 +105,102 @@ const SwipeableBottomTabNavigator = React.memo(() => {
     }
   }, []);
 
-  // Memoized icon function
+  // Memoized icon function - using Ionicons to match the design
   const getIconName = useCallback((routeKey: string, focused: boolean) => {
     switch (routeKey) {
       case 'home':
         return focused ? 'home' : 'home-outline';
       case 'insights':
-        return focused ? 'bar-chart' : 'bar-chart-outline';
+        return focused ? 'pie-chart' : 'pie-chart-outline';
       case 'wallet':
         return focused ? 'wallet' : 'wallet-outline';
       case 'more':
-        return focused ? 'menu' : 'menu-outline';
+        return focused ? 'ellipsis-horizontal-circle' : 'ellipsis-horizontal-circle-outline';
       default:
-        return 'help-outline';
+        return 'help-circle-outline';
+    }
+  }, []);
+
+  const handleIndexChange = useCallback((newIndex: number) => {
+    const isNewTab = !visitedTabs.current.has(newIndex);
+
+    // Only show loader for new/unvisited tabs
+    if (isNewTab && isMounted.current) {
+      setIsSwitching(true);
+
+      if (tabSwitchTimeout.current) {
+        clearTimeout(tabSwitchTimeout.current);
+      }
+
+      tabSwitchTimeout.current = setTimeout(() => {
+        InteractionManager.runAfterInteractions(() => {
+          if (isMounted.current) {
+            setIsSwitching(false);
+          }
+        });
+      }, 400);
+    }
+
+    // Mark tab as visited
+    visitedTabs.current.add(newIndex);
+
+    // Update state
+    if (isMounted.current) {
+      setIndex(newIndex);
     }
   }, []);
 
   const renderTabBar = useCallback((props: any) => (
-    <View style={[
-      styles.tabBarContainer,
-      {
-        backgroundColor: theme.colors.surface,
-        borderTopColor: theme.colors.border,
-        paddingBottom: Math.max(insets.bottom, 8),
-      }
-    ]}>
-      <View style={styles.tabBar}>
-        {props.navigationState.routes.slice(0, 2).map((route: any, i: number) => {
-          const focused = index === i;
-          const iconName = getIconName(route.key, focused) as keyof typeof Ionicons.glyphMap;
+    <View style={styles.tabBarWrapper}>
+      <View style={styles.tabBarContainer}>
+        <View style={styles.tabBar}>
+          {props.navigationState.routes.map((route: any, i: number) => {
+            const focused = index === i;
+            const iconName = getIconName(route.key, focused);
+            const activeColor = '#FFFFFF';
+            const inactiveColor = '#8E8E93';
           
-          return (
-            <Pressable
-              key={route.key}
-              style={styles.tabItem}
-              onPress={() => {
-                setIndex(i);
-                props.jumpTo(route.key);
-              }}
-              android_ripple={{ color: theme.colors.primary + '20', borderless: true }}
-            >
-              <Ionicons
-                name={iconName}
-                size={24}
-                color={focused ? theme.colors.primary : theme.colors.textSecondary}
-              />
-              <Text style={[
-                styles.tabLabel,
-                {
-                  color: focused ? theme.colors.primary : theme.colors.textSecondary,
-                }
-              ]}>
-                {route.title}
-              </Text>
-            </Pressable>
-          );
-        })}
-        
-        {/* Center Quick Action Button */}
-        <View style={styles.centerButtonContainer}>
-          <QuickActionMenuButton color={theme.colors.primary} />
+            return (
+              <Pressable
+                key={route.key}
+                style={styles.tabItem}
+                onPress={() => {
+                  handleIndexChange(i);
+                  props.jumpTo(route.key);
+                }}
+                android_ripple={{ color: 'transparent' }}
+              >
+                <View style={styles.tabIconWrapper}>
+                  <Ionicons
+                    name={iconName as any}
+                    size={24}
+                    color={focused ? activeColor : inactiveColor}
+                  />
+                </View>
+                <Text style={[
+                  styles.tabLabel,
+                  {
+                    color: focused ? activeColor : inactiveColor,
+                    fontWeight: focused ? '600' : '400',
+                  }
+                ]}>
+                  {route.title}
+                </Text>
+              </Pressable>
+            );
+          })}
         </View>
-        
-        {props.navigationState.routes.slice(2).map((route: any, i: number) => {
-          const actualIndex = i + 2;
-          const focused = index === actualIndex;
-          const iconName = getIconName(route.key, focused) as keyof typeof Ionicons.glyphMap;
-          
-          return (
-            <Pressable
-              key={route.key}
-              style={styles.tabItem}
-              onPress={() => {
-                setIndex(actualIndex);
-                props.jumpTo(route.key);
-              }}
-              android_ripple={{ color: theme.colors.primary + '20', borderless: true }}
-            >
-              <Ionicons
-                name={iconName}
-                size={24}
-                color={focused ? theme.colors.primary : theme.colors.textSecondary}
-              />
-              <Text style={[
-                styles.tabLabel,
-                {
-                  color: focused ? theme.colors.primary : theme.colors.textSecondary,
-                }
-              ]}>
-                {route.title}
-              </Text>
-            </Pressable>
-          );
-        })}
+        <View style={{ height: insets.bottom, backgroundColor: '#000000' }} />
       </View>
     </View>
-  ), [index, theme, insets.bottom, getIconName]);
+  ), [index, insets.bottom, getIconName]);
 
   return (
     <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
       <TabView
         navigationState={{ index, routes }}
         renderScene={renderScene}
-        onIndexChange={setIndex}
+        onIndexChange={handleIndexChange}
         initialLayout={initialLayout}
         renderTabBar={renderTabBar}
         tabBarPosition="bottom"
@@ -202,6 +212,8 @@ const SwipeableBottomTabNavigator = React.memo(() => {
         animationEnabled={true}
         sceneContainerStyle={{ backgroundColor: 'transparent' }}
       />
+
+      <FullScreenLoader visible={isSwitching} message={t('loading') || 'Loading...'} transparent />
     </View>
   );
 });
@@ -215,39 +227,46 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
+  tabBarWrapper: {
+    backgroundColor: 'transparent',
+  },
   tabBarContainer: {
-    borderTopWidth: 0.5,
+    backgroundColor: '#000000',
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
     shadowColor: '#000',
     shadowOffset: {
       width: 0,
-      height: -2,
+      height: -4,
     },
     shadowOpacity: 0.1,
-    shadowRadius: 3.84,
-    elevation: 5,
+    shadowRadius: 12,
+    elevation: 8,
   },
   tabBar: {
     flexDirection: 'row',
-    height: 60, // Increased height to accommodate text
+    height: 60,
     alignItems: 'center',
+    paddingHorizontal: 16,
+    justifyContent: 'space-around',
+    paddingTop: 8,
   },
   tabItem: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
     height: '100%',
-    paddingTop: 8,
+    paddingVertical: 4,
   },
-  tabLabel: {
-    fontSize: 12,
-    marginTop: 4,
-    fontWeight: '500',
-  },
-  centerButtonContainer: {
-    flex: 1,
+  tabIconWrapper: {
     alignItems: 'center',
     justifyContent: 'center',
-    height: '100%',
+    marginBottom: 4,
+  },
+  tabLabel: {
+    fontSize: 10,
+    fontWeight: '500',
+    letterSpacing: 0.2,
   },
 });
 

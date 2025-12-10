@@ -11,8 +11,10 @@ import {
   ScrollView,
   KeyboardAvoidingView,
   Platform,
+  StatusBar,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { useTheme } from '../contexts/ThemeContext';
 import { useLocalization } from '../contexts/LocalizationContext';
@@ -53,6 +55,7 @@ const AddMoneyModal: React.FC<AddMoneyModalProps> = ({
 }) => {
   const { theme } = useTheme();
   const { formatCurrency, t } = useLocalization();
+  const insets = useSafeAreaInsets();
   
   const [title, setTitle] = useState('');
   const [amount, setAmount] = useState('');
@@ -158,28 +161,35 @@ const AddMoneyModal: React.FC<AddMoneyModalProps> = ({
       presentationStyle="pageSheet"
       onRequestClose={handleClose}
     >
-      <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
-        {/* Header */}
-        <View style={[styles.header, { backgroundColor: theme.colors.surface, borderBottomColor: theme.colors.border }]}>
-          <TouchableOpacity onPress={handleClose} style={styles.headerButton}>
-            <Ionicons name="close" size={24} color={theme.colors.text} />
-          </TouchableOpacity>
-          <Text style={[styles.headerTitle, { color: theme.colors.text }]}>
-            {allowWalletSelection ? t('add_money_title') : t('add_money_to_wallet', { wallet: currentSelectedWallet?.name || 'Wallet' })}
-          </Text>
-          <TouchableOpacity 
-            onPress={handleSubmit} 
-            style={styles.headerButton}
-            disabled={isLoading}
-          >
-            <Text style={[
-              styles.saveButtonText, 
-              { color: isLoading ? theme.colors.textSecondary : theme.colors.success }
-            ]}>
-              {isLoading ? t('add_money_adding') : t('add')}
+      <View style={{ flex: 1, backgroundColor: '#1C1C1E' }}>
+        <StatusBar barStyle="light-content" backgroundColor="#1C1C1E" />
+        
+        {/* Dark Header */}
+        <View style={[styles.darkHeader, { paddingTop: insets.top }]}>
+          <View style={styles.headerRow}>
+            <TouchableOpacity onPress={handleClose} style={styles.closeButton}>
+              <Ionicons name="close" size={24} color="#FFFFFF" />
+            </TouchableOpacity>
+            <Text style={styles.headerTitle}>
+              {allowWalletSelection ? t('add_money_title') : t('add_money_to_wallet', { wallet: currentSelectedWallet?.name || 'Wallet' })}
             </Text>
-          </TouchableOpacity>
+            <TouchableOpacity 
+              onPress={handleSubmit} 
+              style={styles.saveButton}
+              disabled={isLoading}
+            >
+              <Text style={[
+                styles.saveButtonText, 
+                { color: isLoading ? '#8E8E93' : '#10B981' }
+              ]}>
+                {isLoading ? t('add_money_adding') : t('add')}
+              </Text>
+            </TouchableOpacity>
+          </View>
         </View>
+        
+        {/* Content Container */}
+        <View style={[styles.contentContainer, { backgroundColor: theme.colors.background }]}>
 
         <KeyboardAvoidingView
           style={styles.keyboardAvoidingView}
@@ -402,55 +412,57 @@ const AddMoneyModal: React.FC<AddMoneyModalProps> = ({
             maximumDate={new Date()}
           />
         )}
+        </View>
       </View>
     </Modal>
   );
 };
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#FFFFFF',
+  darkHeader: {
+    backgroundColor: '#1C1C1E',
+    paddingBottom: 16,
+    paddingHorizontal: 20,
   },
-  keyboardAvoidingView: {
-    flex: 1,
-  },
-  header: {
+  headerRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 20,
-    paddingTop: 60,
-    paddingBottom: 20,
-    backgroundColor: 'white',
-    borderBottomWidth: 1,
-    borderBottomColor: '#F2F2F7',
-  },
-  headerButton: {
-    minWidth: 44,
     height: 44,
-    justifyContent: 'center',
+  },
+  closeButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255,255,255,0.1)',
     alignItems: 'center',
+    justifyContent: 'center',
   },
   headerTitle: {
-    fontSize: 18,
+    fontSize: 17,
     fontWeight: '600',
-    color: '#333',
+    color: '#FFFFFF',
     flex: 1,
     textAlign: 'center',
     marginHorizontal: 10,
   },
+  saveButton: {
+    minWidth: 44,
+    height: 44,
+    justifyContent: 'center',
+    alignItems: 'flex-end',
+  },
   saveButtonText: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#7ED321',
   },
-  content: {
+  contentContainer: {
     flex: 1,
-    paddingHorizontal: 20,
-    paddingBottom: 20,
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+    overflow: 'hidden',
   },
-  scrollView: {
+  keyboardAvoidingView: {
     flex: 1,
   },
   scrollContent: {

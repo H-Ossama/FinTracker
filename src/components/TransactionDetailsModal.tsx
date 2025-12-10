@@ -8,8 +8,10 @@ import {
   ScrollView,
   Alert,
   Dimensions,
+  StatusBar,
 } from 'react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../contexts/ThemeContext';
 import { useLocalization } from '../contexts/LocalizationContext';
 import { HybridTransaction } from '../services/hybridDataService';
@@ -35,6 +37,7 @@ const TransactionDetailsModal: React.FC<TransactionDetailsModalProps> = ({
 }) => {
   const { theme } = useTheme();
   const { formatCurrency, t } = useLocalization();
+  const insets = useSafeAreaInsets();
 
   if (!transaction) return null;
 
@@ -127,17 +130,24 @@ const TransactionDetailsModal: React.FC<TransactionDetailsModalProps> = ({
       presentationStyle="pageSheet"
       onRequestClose={onClose}
     >
-      <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
-        {/* Header */}
-        <View style={[styles.header, { backgroundColor: theme.colors.surface }]}>
-          <TouchableOpacity onPress={onClose} style={styles.closeButton}>
-            <Ionicons name="close" size={24} color={theme.colors.text} />
-          </TouchableOpacity>
-          <Text style={[styles.headerTitle, { color: theme.colors.text }]}>
-            {t('transaction_details')}
-          </Text>
-          <View style={styles.headerSpacer} />
+      <View style={{ flex: 1, backgroundColor: '#1C1C1E' }}>
+        <StatusBar barStyle="light-content" backgroundColor="#1C1C1E" />
+        
+        {/* Dark Header */}
+        <View style={[styles.darkHeader, { paddingTop: insets.top }]}>
+          <View style={styles.headerRow}>
+            <TouchableOpacity onPress={onClose} style={styles.closeButton}>
+              <Ionicons name="close" size={24} color="#FFFFFF" />
+            </TouchableOpacity>
+            <Text style={styles.headerTitle}>
+              {t('transaction_details')}
+            </Text>
+            <View style={{ width: 40 }} />
+          </View>
         </View>
+        
+        {/* Content Container */}
+        <View style={[styles.contentContainer, { backgroundColor: theme.colors.background }]}>
 
         <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
           {/* Transaction Icon & Amount */}
@@ -306,35 +316,44 @@ const TransactionDetailsModal: React.FC<TransactionDetailsModalProps> = ({
             </TouchableOpacity>
           </View>
         </ScrollView>
+        </View>
       </View>
     </Modal>
   );
 };
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
+  darkHeader: {
+    backgroundColor: '#1C1C1E',
+    paddingBottom: 16,
+    paddingHorizontal: 20,
   },
-  header: {
+  headerRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingVertical: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(0,0,0,0.1)',
+    justifyContent: 'space-between',
+    height: 44,
   },
   closeButton: {
-    padding: 8,
-    marginLeft: -8,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255,255,255,0.1)',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   headerTitle: {
-    flex: 1,
-    fontSize: 18,
+    fontSize: 17,
     fontWeight: '600',
+    color: '#FFFFFF',
+    flex: 1,
     textAlign: 'center',
   },
-  headerSpacer: {
-    width: 40,
+  contentContainer: {
+    flex: 1,
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+    overflow: 'hidden',
   },
   content: {
     flex: 1,

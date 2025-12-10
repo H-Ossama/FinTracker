@@ -7,9 +7,9 @@ import {
   TouchableOpacity,
   Switch,
   Alert,
+  StatusBar,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { LinearGradient } from 'expo-linear-gradient';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../contexts/ThemeContext';
 import { useAuth } from '../contexts/AuthContext';
@@ -33,6 +33,7 @@ const AppLockSettingsScreen = () => {
   const { biometricEnabled } = useAuth();
   const navigation = useNavigation();
   const { t } = useLocalization();
+  const insets = useSafeAreaInsets();
   
   const [settings, setSettings] = useState<AppLockSettings>({
     isEnabled: false,
@@ -217,20 +218,23 @@ const AppLockSettingsScreen = () => {
   };
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: theme.colors.background }]} edges={['top', 'bottom']}>
-      <LinearGradient
-        colors={[theme.colors.gradientStart, theme.colors.gradientEnd]}
-        style={styles.gradient}
-      >
+    <View style={{ flex: 1, backgroundColor: '#1C1C1E' }}>
+      <StatusBar barStyle="light-content" backgroundColor="#1C1C1E" />
+      
+      {/* Dark Header */}
+      <View style={[styles.darkHeader, { paddingTop: insets.top }]}>
+        <View style={styles.headerRow}>
+          <TouchableOpacity onPress={handleGoBack} style={styles.backButtonHeader}>
+            <Ionicons name="arrow-back" size={24} color="#FFFFFF" />
+          </TouchableOpacity>
+          <Text style={styles.headerTitle}>{t('appLock.title')}</Text>
+          <View style={{ width: 40 }} />
+        </View>
+      </View>
+      
+      {/* Content Container */}
+      <View style={[styles.contentContainer, { backgroundColor: theme.colors.background }]}>
         <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
-          {/* Header */}
-          <View style={styles.header}>
-            <TouchableOpacity onPress={handleGoBack} style={styles.backButton}>
-              <Ionicons name="arrow-back" size={24} color={theme.colors.text} />
-            </TouchableOpacity>
-            <Text style={[styles.title, { color: theme.colors.text }]}>{t('appLock.title')}</Text>
-            <View style={styles.placeholder} />
-          </View>
 
           {/* Master Toggle */}
           <View style={styles.section}>
@@ -378,42 +382,48 @@ const AppLockSettingsScreen = () => {
             </View>
           </View>
         </ScrollView>
-      </LinearGradient>
-    </SafeAreaView>
+      </View>
+    </View>
   );
 };
 
 const createStyles = (theme: any) =>
   StyleSheet.create({
-    container: {
-      flex: 1,
+    darkHeader: {
+      backgroundColor: '#1C1C1E',
+      paddingBottom: 16,
+      paddingHorizontal: 20,
     },
-    gradient: {
+    headerRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      height: 44,
+    },
+    backButtonHeader: {
+      width: 40,
+      height: 40,
+      borderRadius: 20,
+      backgroundColor: 'rgba(255,255,255,0.1)',
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    headerTitle: {
+      fontSize: 17,
+      fontWeight: '600',
+      color: '#FFFFFF',
       flex: 1,
+      textAlign: 'center',
+    },
+    contentContainer: {
+      flex: 1,
+      borderTopLeftRadius: 28,
+      borderTopRightRadius: 28,
+      overflow: 'hidden',
     },
     scrollView: {
       flex: 1,
       paddingHorizontal: 20,
-    },
-    header: {
-      flexDirection: 'row',
-      justifyContent: 'space-between',
-      alignItems: 'center',
-      paddingVertical: 20,
-    },
-    backButton: {
-      padding: 8,
-      borderRadius: 20,
-      backgroundColor: theme.colors.surface + '80',
-    },
-    title: {
-      fontSize: 24,
-      fontWeight: 'bold',
-      flex: 1,
-      textAlign: 'center',
-    },
-    placeholder: {
-      width: 40,
     },
     section: {
       marginBottom: 24,

@@ -699,6 +699,9 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
   const signOut = async () => {
     try {
+      // Set loading state to show transition animation
+      setState(prev => ({ ...prev, isLoading: true }));
+      
       // Sign out from Google if user is Google authenticated
       if (state.isGoogleAuthenticated) {
         await googleAuthService.signOut();
@@ -712,6 +715,9 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       await AsyncStorage.removeItem(STORAGE_KEYS.REMEMBER_ME);
       await AsyncStorage.removeItem(STORAGE_KEYS.GOOGLE_USER);
       await AsyncStorage.removeItem(STORAGE_KEYS.CLOUD_SYNC_ENABLED);
+      
+      // Small delay to allow animation to complete
+      await new Promise(resolve => setTimeout(resolve, 500));
       
       setState({
         user: null,
@@ -729,6 +735,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       });
     } catch (error) {
       console.error('Error signing out:', error);
+      setState(prev => ({ ...prev, isLoading: false }));
     }
   };
 

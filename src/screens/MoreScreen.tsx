@@ -11,8 +11,9 @@ import {
   ActionSheetIOS,
   Platform,
   ActivityIndicator,
+  StatusBar,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../contexts/ThemeContext';
@@ -32,6 +33,7 @@ const MoreScreen = () => {
   const { formatCurrency, t } = useLocalization();
   const { user, isAuthenticated, biometricEnabled } = useAuth();
   const navigation = useNavigation();
+  const insets = useSafeAreaInsets();
   const [isBalanceMasked, setIsBalanceMasked] = useState(false);
   const [showSyncModal, setShowSyncModal] = useState(false);
   const [goals, setGoals] = useState<Goal[]>([]);
@@ -389,63 +391,70 @@ const MoreScreen = () => {
   };
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: theme.colors.background }]} edges={['top', 'bottom']}>
-      <LinearGradient
-        colors={[theme.colors.gradientStart, theme.colors.gradientEnd]}
-        style={styles.gradient}
-      >
-        <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
-          {/* Header */}
-          <View style={styles.header}>
-            <Text style={[styles.title, { color: theme.colors.text }]}>{t('more_screen_title')}</Text>
-            <TouchableOpacity onPress={handleSettingsPress}>
-              <Ionicons name="settings" size={24} color={theme.colors.text} />
-            </TouchableOpacity>
-          </View>
-
-          {/* User Profile Section */}
-          {isAuthenticated && user && (
-            <TouchableOpacity style={styles.profileSection} onPress={handleProfilePress}>
-              <View style={styles.profileInfo}>
-                <View style={styles.avatarContainer}>
-                  {user.avatar ? (
-                    <Image source={{ uri: user.avatar }} style={styles.avatar} />
-                  ) : (
-                    <View style={styles.avatarPlaceholder}>
-                      <Text style={styles.avatarText}>{getInitials(user.name)}</Text>
-                    </View>
-                  )}
-                </View>
-                <View style={styles.profileText}>
-                  <Text style={styles.profileName}>{user.name}</Text>
-                  <Text style={styles.profileEmail}>{user.email}</Text>
-                  <Text style={styles.profileStatus}>
-                    <Ionicons name="checkmark-circle" size={12} color="#34C759" /> {t('more_screen_verified_account')}
+    <View style={[styles.container, { backgroundColor: theme.colors.headerBackground }]}>
+      <StatusBar barStyle="light-content" backgroundColor={theme.colors.headerBackground} />
+      
+      {/* Dark Header Section */}
+      <View style={[styles.darkHeader, { backgroundColor: theme.colors.headerBackground, paddingTop: insets.top }]}>
+        {/* Top Header Row */}
+        <View style={styles.headerRow}>
+          <TouchableOpacity 
+            style={styles.userInfo}
+            onPress={handleProfilePress}
+            activeOpacity={0.7}
+          >
+            <View style={styles.avatarContainer}>
+              {user?.avatar ? (
+                <Image source={{ uri: user.avatar }} style={styles.avatar} />
+              ) : (
+                <View style={[styles.avatarPlaceholder, { backgroundColor: theme.colors.headerSurface }]}>
+                  <Text style={[styles.avatarText, { color: theme.colors.headerText }]}>
+                    {user?.name ? getInitials(user.name) : 'U'}
                   </Text>
                 </View>
-              </View>
-              <View style={styles.profileActions}>
-                <Ionicons name="chevron-forward" size={20} color="#8E8E93" />
-              </View>
+              )}
+            </View>
+            <Text style={[styles.userName, { color: theme.colors.headerText }]}>{user?.name || 'User'}</Text>
+            <Ionicons name="chevron-forward" size={16} color={theme.colors.headerTextSecondary} style={{ marginLeft: 4 }} />
+          </TouchableOpacity>
+          <View style={styles.headerActions}>
+            <TouchableOpacity 
+              style={[styles.headerIconButton, { backgroundColor: theme.colors.headerSurface }]}
+              onPress={handleSettingsPress}
+            >
+              <Ionicons name="settings-outline" size={22} color={theme.colors.headerText} />
             </TouchableOpacity>
-          )}
+          </View>
+        </View>
 
+        {/* Title Section in Header */}
+        <View style={styles.headerTitleSection}>
+          <Text style={[styles.headerTitle, { color: theme.colors.headerText }]}>{t('more_screen_title')}</Text>
+          <Text style={[styles.headerSubtitle, { color: theme.colors.headerTextSecondary }]}>
+            {t('more_screen_financial_tools')}
+          </Text>
+        </View>
+      </View>
+
+      {/* White Content Section */}
+      <View style={[styles.contentContainer, { backgroundColor: theme.colors.background }]}>
+        <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
           {/* Quick Overview Cards */}
           <View style={styles.overviewSection}>
-            <View style={styles.overviewCard}>
-              <Text style={styles.overviewTitle}>{t('more_screen_active_goals')}</Text>
-              <Text style={styles.overviewValue}>{goals.length}</Text>
+            <View style={[styles.overviewCard, { backgroundColor: theme.colors.card }]}>
+              <Text style={[styles.overviewTitle, { color: theme.colors.textSecondary }]}>{t('more_screen_active_goals')}</Text>
+              <Text style={[styles.overviewValue, { color: theme.colors.text }]}>{goals.length}</Text>
             </View>
-            <View style={styles.overviewCard}>
-              <Text style={styles.overviewTitle}>{t('more_screen_pending_bills')}</Text>
-              <Text style={styles.overviewValue}>{dataStats?.pendingBills || 0}</Text>
+            <View style={[styles.overviewCard, { backgroundColor: theme.colors.card }]}>
+              <Text style={[styles.overviewTitle, { color: theme.colors.textSecondary }]}>{t('more_screen_pending_bills')}</Text>
+              <Text style={[styles.overviewValue, { color: theme.colors.text }]}>{dataStats?.pendingBills || 0}</Text>
             </View>
           </View>
 
           {/* Recent Goals */}
           <View style={styles.section}>
             <View style={styles.sectionHeader}>
-              <Text style={styles.sectionTitle}>{t('more_screen_savings_goals')}</Text>
+              <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>{t('more_screen_savings_goals')}</Text>
               <TouchableOpacity onPress={() => navigation.navigate('SavingsGoals' as never)}>
                 <Text style={styles.seeAllText}>{t('more_screen_see_all')}</Text>
               </TouchableOpacity>
@@ -537,8 +546,8 @@ const MoreScreen = () => {
                   <View style={styles.emptyIconContainer}>
                     <Ionicons name="calendar-outline" size={40} color="#6C63FF" />
                   </View>
-                  <Text style={styles.emptyRemindersTitle}>{t('more_screen_no_bills')}</Text>
-                  <Text style={styles.emptyRemindersSubtitle}>{t('more_screen_stay_on_top')}</Text>
+                  <Text style={[styles.emptyRemindersTitle, { color: theme.colors.text }]}>{t('more_screen_no_bills')}</Text>
+                  <Text style={[styles.emptyRemindersSubtitle, { color: theme.colors.textSecondary }]}>{t('more_screen_stay_on_top')}</Text>
                   <TouchableOpacity 
                     style={styles.addReminderButton}
                     onPress={() => navigation.navigate('BillsReminder' as never)}
@@ -604,7 +613,6 @@ const MoreScreen = () => {
                   {bills
                     .filter(b => b.status === 'pending' || b.status === 'overdue')
                     .sort((a, b) => {
-                      // Sort by status (overdue first) then by due date
                       if (a.status === 'overdue' && b.status !== 'overdue') return -1;
                       if (b.status === 'overdue' && a.status !== 'overdue') return 1;
                       return new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime();
@@ -636,14 +644,16 @@ const MoreScreen = () => {
           {/* Menu Sections */}
           {menuSections.map((section, sectionIndex) => (
             <View key={sectionIndex} style={styles.section}>
-              <Text style={styles.sectionTitle}>{section.title}</Text>
+              <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>{section.title}</Text>
               <View style={[styles.menuSection, { backgroundColor: theme.colors.surface }]}>
                 {section.items.map(renderMenuItem)}
               </View>
             </View>
           ))}
+          
+          <View style={{ height: 100 }} />
         </ScrollView>
-      </LinearGradient>
+      </View>
 
       {/* Sync Settings Modal */}
       <SyncSettingsModal
@@ -651,36 +661,86 @@ const MoreScreen = () => {
         onClose={() => setShowSyncModal(false)}
         onSyncComplete={() => {
           setShowSyncModal(false);
-          // You can add any additional logic here after successful sync
         }}
       />
-    </SafeAreaView>
+    </View>
   );
 };
 
 const createStyles = (theme: any) => StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: theme.colors.background,
   },
-  gradient: {
+  darkHeader: {
+    paddingHorizontal: 20,
+    paddingBottom: 20,
+  },
+  headerRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 16,
+  },
+  userInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  avatarContainer: {
+    marginRight: 10,
+  },
+  avatar: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+  },
+  avatarPlaceholder: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  avatarText: {
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  userName: {
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  headerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  headerIconButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  headerTitleSection: {
+    paddingTop: 10,
+    paddingBottom: 10,
+  },
+  headerTitle: {
+    fontSize: 28,
+    fontWeight: '700',
+    marginBottom: 4,
+  },
+  headerSubtitle: {
+    fontSize: 14,
+  },
+  contentContainer: {
     flex: 1,
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
   },
   scrollView: {
     flex: 1,
     paddingHorizontal: 20,
-  },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingTop: 8,
-    paddingBottom: 20,
-  },
-  title: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: theme.colors.text,
+    paddingTop: 24,
   },
   overviewSection: {
     flexDirection: 'row',

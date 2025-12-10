@@ -9,8 +9,9 @@ import {
   ActivityIndicator,
   Alert,
   Modal,
+  StatusBar,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { BorrowedMoney } from '../types';
 import { useTheme } from '../contexts/ThemeContext';
@@ -18,13 +19,12 @@ import { useLocalization } from '../contexts/LocalizationContext';
 import BorrowedMoneyDetailsModal from '../components/BorrowedMoneyDetailsModal';
 import AddBorrowedMoneyModal from '../components/AddBorrowedMoneyModal';
 import { localStorageService } from '../services/localStorageService';
-import useSafeAreaHelper from '../hooks/useSafeAreaHelper';
 import borrowedMoneyService from '../services/borrowedMoneyService';
 
 const BorrowedMoneyHistoryScreen = ({ navigation }: any) => {
   const { theme } = useTheme();
   const { formatCurrency, t } = useLocalization();
-  const { headerPadding } = useSafeAreaHelper();
+  const insets = useSafeAreaInsets();
   const [borrowedMoneyList, setBorrowedMoneyList] = useState<BorrowedMoney[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -309,25 +309,32 @@ const BorrowedMoneyHistoryScreen = ({ navigation }: any) => {
   };
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: theme.colors.background }]}>
-      {/* Header */}
-      <View style={[styles.header, { borderBottomColor: theme.colors.border }, headerPadding]}>
-        <TouchableOpacity 
-          onPress={() => navigation.goBack()} 
-          style={styles.backButton}
-        >
-          <Ionicons name="arrow-back" size={24} color={theme.colors.text} />
-        </TouchableOpacity>
-        <Text style={[styles.headerTitle, { color: theme.colors.text }]}>
-          {t('borrowed_money_history')}
-        </Text>
-        <TouchableOpacity 
-          onPress={() => setShowAddModal(true)} 
-          style={styles.addButton}
-        >
-          <Ionicons name="add" size={24} color={theme.colors.primary} />
-        </TouchableOpacity>
+    <View style={{ flex: 1, backgroundColor: '#1C1C1E' }}>
+      <StatusBar barStyle="light-content" backgroundColor="#1C1C1E" />
+      
+      {/* Dark Header */}
+      <View style={[styles.darkHeader, { paddingTop: insets.top }]}>
+        <View style={styles.headerRow}>
+          <TouchableOpacity 
+            onPress={() => navigation.goBack()} 
+            style={styles.backButtonHeader}
+          >
+            <Ionicons name="arrow-back" size={24} color="#FFFFFF" />
+          </TouchableOpacity>
+          <Text style={styles.headerTitle}>
+            {t('borrowed_money_history')}
+          </Text>
+          <TouchableOpacity 
+            onPress={() => setShowAddModal(true)} 
+            style={styles.addButtonHeader}
+          >
+            <Ionicons name="add" size={24} color="#FFFFFF" />
+          </TouchableOpacity>
+        </View>
       </View>
+      
+      {/* Content Container */}
+      <View style={[styles.contentContainer, { backgroundColor: theme.colors.background }]}>
 
       {/* Summary Cards */}
       <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.summarySection}>
@@ -452,33 +459,51 @@ const BorrowedMoneyHistoryScreen = ({ navigation }: any) => {
 
       {/* Payment Modal */}
       {renderPaymentModal()}
-    </SafeAreaView>
+      </View>
+    </View>
   );
 };
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
+  darkHeader: {
+    backgroundColor: '#1C1C1E',
+    paddingBottom: 16,
+    paddingHorizontal: 20,
   },
-  header: {
+  headerRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 20,
-    paddingVertical: 16,
-    borderBottomWidth: 1,
+    height: 44,
   },
-  backButton: {
-    padding: 4,
+  backButtonHeader: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255,255,255,0.1)',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   headerTitle: {
-    fontSize: 18,
+    fontSize: 17,
     fontWeight: '600',
+    color: '#FFFFFF',
     flex: 1,
     textAlign: 'center',
   },
-  addButton: {
-    padding: 4,
+  addButtonHeader: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255,255,255,0.1)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  contentContainer: {
+    flex: 1,
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+    overflow: 'hidden',
   },
   summarySection: {
     paddingHorizontal: 20,

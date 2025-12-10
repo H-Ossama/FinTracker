@@ -57,7 +57,7 @@ class GoogleAuthService {
       console.log('🔧 Configuring Google Sign-In...');
       console.log('📱 Web Client ID:', webClientId.substring(0, 20) + '...');
       console.log('📦 Expected package: com.oussamaaaaa.finex');
-      console.log('🔑 Expected SHA-1: 04:D1:E2:DF:06:D3:F1:B9:9F:25:36:AA:3D:BC:5F:78:AF:AF:3F:93');
+      console.log('🔑 Expected SHA-1: 5E:8F:16:06:2E:A3:CD:2C:4A:0D:54:78:76:BA:A6:F3:8C:AB:F6:25');
       
       // Validate configuration before proceeding
       if (!webClientId || webClientId.includes('abcdefg')) {
@@ -91,7 +91,7 @@ class GoogleAuthService {
       console.log('⚠️ Google Sign-In configuration failed, but app will continue without it');
       console.log('🔍 Troubleshooting tips:');
       console.log('   1. Verify package name: com.oussamaaaaa.finex');
-      console.log('   2. Verify SHA-1: 04:D1:E2:DF:06:D3:F1:B9:9F:25:36:AA:3D:BC:5F:78:AF:AF:3F:93');
+      console.log('   2. Verify SHA-1: 5E:8F:16:06:2E:A3:CD:2C:4A:0D:54:78:76:BA:A6:F3:8C:AB:F6:25');
       console.log('   3. Check google-services.json in android/app/');
       console.log('   4. Verify Web Client ID in .env file');
       this.isConfigured = false;
@@ -178,7 +178,7 @@ class GoogleAuthService {
         errorMessage = 'Google Sign-In configuration error. Configuration mismatch detected.';
         console.log('🚨 DEVELOPER_ERROR Details:');
         console.log('🔍 Debug info: Expected package: com.oussamaaaaa.finex');
-        console.log('🔍 Debug info: Expected SHA-1: 04:D1:E2:DF:06:D3:F1:B9:9F:25:36:AA:3D:BC:5F:78:AF:AF:3F:93');
+        console.log('🔍 Debug info: Expected SHA-1: 5E:8F:16:06:2E:A3:CD:2C:4A:0D:54:78:76:BA:A6:F3:8C:AB:F6:25');
         console.log('🔍 Debug info: Web Client ID should be: 1034435232632-cfdpko...');
         console.log('📝 Troubleshooting steps:');
         console.log('   1. Rebuild the app with: npx expo run:android');

@@ -262,7 +262,13 @@ class CloudSyncService {
       const responseData = await this.requestWithAuth('/restore');
       return !!responseData?.data;
     } catch (error) {
-      console.error('❌ Error checking cloud backup:', error);
+      // Silently handle backend unavailability (expected when backend is not running)
+      const errorMsg = error instanceof Error ? error.message : String(error);
+      if (errorMsg.includes('Application not found') || errorMsg.includes('Failed to fetch') || errorMsg.includes('Network')) {
+        console.log('ℹ️  Cloud sync backend not available - using local storage only');
+      } else {
+        console.warn('⚠️ Cloud backup check failed:', errorMsg);
+      }
       return false;
     }
   }

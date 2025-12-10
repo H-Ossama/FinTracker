@@ -9,8 +9,9 @@ import {
   Alert,
   TextInput,
   Modal,
+  StatusBar,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../contexts/ThemeContext';
 import { useLocalization } from '../contexts/LocalizationContext';
@@ -21,6 +22,7 @@ const QuickActionsSettingsScreen = () => {
   const { theme } = useTheme();
   const { t } = useLocalization();
   const navigation = useNavigation();
+  const insets = useSafeAreaInsets();
   const [actions, setActions] = useState<QuickAction[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
@@ -350,28 +352,33 @@ const QuickActionsSettingsScreen = () => {
   ), [theme]);
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: theme.colors.background }]}>
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
-          <Ionicons name="arrow-back" size={24} color={theme.colors.text} />
-        </TouchableOpacity>
-        <Text style={[styles.title, { color: theme.colors.text }]}>
-          {t('quick_actions_settings')}
-        </Text>
-        <TouchableOpacity 
-          onPress={() => setSortMode(sortMode === 'category' ? 'alphabetical' : 'category')}
-          style={styles.sortButton}
-        >
-          <Ionicons 
-            name={sortMode === 'category' ? 'list' : 'albums'} 
-            size={16} 
-            color={theme.colors.primary} 
-          />
-          <Text style={[styles.sortButtonText, { color: theme.colors.primary }]}>
-            {sortMode === 'category' ? 'A-Z' : 'Cat'}
+    <View style={{ flex: 1, backgroundColor: '#1C1C1E' }}>
+      <StatusBar barStyle="light-content" backgroundColor="#1C1C1E" />
+      
+      {/* Dark Header */}
+      <View style={[styles.darkHeader, { paddingTop: insets.top }]}>
+        <View style={styles.headerRow}>
+          <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButtonHeader}>
+            <Ionicons name="arrow-back" size={24} color="#FFFFFF" />
+          </TouchableOpacity>
+          <Text style={styles.headerTitle}>
+            {t('quick_actions_settings')}
           </Text>
-        </TouchableOpacity>
+          <TouchableOpacity 
+            onPress={() => setSortMode(sortMode === 'category' ? 'alphabetical' : 'category')}
+            style={styles.sortButton}
+          >
+            <Ionicons 
+              name={sortMode === 'category' ? 'list' : 'albums'} 
+              size={16} 
+              color="#FFFFFF" 
+            />
+          </TouchableOpacity>
+        </View>
       </View>
+      
+      {/* Content Container */}
+      <View style={[styles.contentContainer, { backgroundColor: theme.colors.background }]}>
 
       {/* Search Bar */}
       <View style={styles.searchContainer}>
@@ -597,48 +604,54 @@ const QuickActionsSettingsScreen = () => {
           </View>
         </View>
       </Modal>
-    </SafeAreaView>
+      </View>
+    </View>
   );
 };
 
 const createStyles = (theme: any) =>
   StyleSheet.create({
-    container: {
-      flex: 1,
+    darkHeader: {
+      backgroundColor: '#1C1C1E',
+      paddingBottom: 16,
+      paddingHorizontal: 20,
     },
-    header: {
+    headerRow: {
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'space-between',
-      paddingHorizontal: 20,
-      paddingVertical: 16,
-      paddingTop: 60,
-      borderBottomWidth: 1,
-      borderBottomColor: theme.colors.border,
+      height: 44,
     },
-    backButton: {
-      padding: 4,
+    backButtonHeader: {
+      width: 40,
+      height: 40,
+      borderRadius: 20,
+      backgroundColor: 'rgba(255,255,255,0.1)',
+      alignItems: 'center',
+      justifyContent: 'center',
     },
-    title: {
-      fontSize: 18,
+    headerTitle: {
+      fontSize: 17,
       fontWeight: '600',
-    },
-    placeholder: {
-      width: 32,
+      color: '#FFFFFF',
+      flex: 1,
+      textAlign: 'center',
     },
     sortButton: {
-      flexDirection: 'row',
+      width: 40,
+      height: 40,
+      borderRadius: 20,
+      backgroundColor: 'rgba(255,255,255,0.1)',
       alignItems: 'center',
-      padding: 8,
-      borderRadius: 8,
-      backgroundColor: 'transparent',
-      gap: 4,
+      justifyContent: 'center',
     },
-    sortButtonText: {
-      fontSize: 12,
-      fontWeight: '600',
+    contentContainer: {
+      flex: 1,
+      borderTopLeftRadius: 28,
+      borderTopRightRadius: 28,
+      overflow: 'hidden',
     },
-    scrollView: {
+    searchContainer: {
       paddingHorizontal: 20,
     },
     scrollViewContent: {

@@ -9,6 +9,7 @@ import {
   Alert,
   ScrollView,
   Platform,
+  StatusBar,
 } from 'react-native';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { Ionicons } from '@expo/vector-icons';
@@ -16,7 +17,7 @@ import { useTheme } from '../contexts/ThemeContext';
 import { useLocalization } from '../contexts/LocalizationContext';
 import { Goal } from '../types';
 import { GoalsService } from '../services/goalsService';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 interface AddGoalModalProps {
   visible: boolean;
@@ -33,6 +34,7 @@ const AddGoalModal: React.FC<AddGoalModalProps> = ({
 }) => {
   const { theme } = useTheme();
   const { t, formatCurrency } = useLocalization();
+  const insets = useSafeAreaInsets();
   
   const categories = [
     { id: 'vacation', name: t('goalCategory.vacation'), icon: '✈️', color: '#FF9500' },
@@ -195,28 +197,35 @@ const AddGoalModal: React.FC<AddGoalModalProps> = ({
       presentationStyle="fullScreen"
       onRequestClose={handleClose}
     >
-      <SafeAreaView style={[styles.container, { backgroundColor: theme.colors.background }]} edges={['top', 'bottom']}>
-        {/* Header */}
-        <View style={styles.header}>
-          <TouchableOpacity onPress={handleClose}>
-            <Text style={styles.cancelButton}>{t('payment.cancel')}</Text>
-          </TouchableOpacity>
-          <Text style={styles.title}>
-            {editingGoal ? t('addGoal.editTitle') : t('addGoal.title')}
-          </Text>
-          <TouchableOpacity 
-            onPress={handleSubmit} 
-            disabled={isSubmitting}
-            style={[styles.saveButton, isSubmitting && styles.saveButtonDisabled]}
-          >
-            <Text style={[
-              styles.saveButtonText,
-              isSubmitting && styles.saveButtonTextDisabled
-            ]}>
-              {isSubmitting ? 'Saving...' : (editingGoal ? t('addGoal.update') : t('addGoal.save'))}
+      <View style={{ flex: 1, backgroundColor: '#1C1C1E' }}>
+        <StatusBar barStyle="light-content" backgroundColor="#1C1C1E" />
+        
+        {/* Dark Header */}
+        <View style={[styles.darkHeader, { paddingTop: insets.top }]}>
+          <View style={styles.headerRow}>
+            <TouchableOpacity onPress={handleClose} style={styles.headerButton}>
+              <Ionicons name="close" size={24} color="#FFFFFF" />
+            </TouchableOpacity>
+            <Text style={styles.headerTitle}>
+              {editingGoal ? t('addGoal.editTitle') : t('addGoal.title')}
             </Text>
-          </TouchableOpacity>
+            <TouchableOpacity 
+              onPress={handleSubmit} 
+              disabled={isSubmitting}
+              style={styles.headerButton}
+            >
+              <Text style={[
+                styles.saveButtonText,
+                isSubmitting && styles.saveButtonTextDisabled
+              ]}>
+                {isSubmitting ? 'Saving...' : (editingGoal ? t('addGoal.update') : t('addGoal.save'))}
+              </Text>
+            </TouchableOpacity>
+          </View>
         </View>
+        
+        {/* Content Container */}
+        <View style={[styles.contentContainer, { backgroundColor: theme.colors.background }]}>
 
         <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
           {/* Goal Title */}
@@ -343,49 +352,49 @@ const AddGoalModal: React.FC<AddGoalModalProps> = ({
             minimumDate={new Date()}
           />
         )}
-      </SafeAreaView>
+        </View>
+      </View>
     </Modal>
   );
 };
 
 const createStyles = (theme: any) => StyleSheet.create({
-  container: {
-    flex: 1,
-  },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+  darkHeader: {
+    backgroundColor: '#1C1C1E',
+    paddingBottom: 16,
     paddingHorizontal: 20,
-    paddingVertical: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: theme.colors.border,
   },
-  title: {
-    fontSize: 18,
+  headerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    height: 44,
+  },
+  headerButton: {
+    width: 60,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  headerTitle: {
+    fontSize: 17,
     fontWeight: '600',
-    color: theme.colors.text,
-  },
-  cancelButton: {
-    fontSize: 16,
-    color: '#FF3B30',
-  },
-  saveButton: {
-    backgroundColor: '#4A90E2',
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 8,
-  },
-  saveButtonDisabled: {
-    backgroundColor: '#C7C7CC',
+    color: '#FFFFFF',
+    flex: 1,
+    textAlign: 'center',
   },
   saveButtonText: {
-    color: 'white',
+    color: '#4A90E2',
     fontSize: 16,
     fontWeight: '600',
   },
   saveButtonTextDisabled: {
     color: '#8E8E93',
+  },
+  contentContainer: {
+    flex: 1,
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+    overflow: 'hidden',
   },
   content: {
     flex: 1,

@@ -10,13 +10,14 @@ import {
   Alert,
   Platform,
   KeyboardAvoidingView,
+  StatusBar,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { Ionicons } from '@expo/vector-icons';
 import { BorrowedMoney } from '../types';
 import { useTheme } from '../contexts/ThemeContext';
 import { useLocalization } from '../contexts/LocalizationContext';
-import useSafeAreaHelper from '../hooks/useSafeAreaHelper';
 import { localStorageService, LocalWallet } from '../services/localStorageService';
 
 interface AddBorrowedMoneyModalProps {
@@ -34,7 +35,7 @@ const AddBorrowedMoneyModal: React.FC<AddBorrowedMoneyModalProps> = ({
 }) => {
   const { theme } = useTheme();
   const { t } = useLocalization();
-  const { headerPadding } = useSafeAreaHelper();
+  const insets = useSafeAreaInsets();
   const [formData, setFormData] = useState({
     personName: '',
     amount: '',
@@ -153,21 +154,28 @@ const AddBorrowedMoneyModal: React.FC<AddBorrowedMoneyModalProps> = ({
       presentationStyle="pageSheet"
       onRequestClose={handleClose}
     >
-      <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
-        {/* Header */}
-        <View style={[styles.header, { borderBottomColor: theme.colors.border }, headerPadding]}>
-          <TouchableOpacity onPress={handleClose} style={styles.closeButton}>
-            <Ionicons name="close" size={24} color={theme.colors.text} />
-          </TouchableOpacity>
-          <Text style={[styles.headerTitle, { color: theme.colors.text }]}>
-            {t('add_borrowed_money_title')}
-          </Text>
-          <TouchableOpacity onPress={handleAdd} style={styles.addButton}>
-            <Text style={[styles.addButtonText, { color: theme.colors.primary }]}>
-              {t('add_new')}
+      <View style={{ flex: 1, backgroundColor: '#1C1C1E' }}>
+        <StatusBar barStyle="light-content" backgroundColor="#1C1C1E" />
+        
+        {/* Dark Header */}
+        <View style={[styles.darkHeader, { paddingTop: insets.top }]}>
+          <View style={styles.headerRow}>
+            <TouchableOpacity onPress={handleClose} style={styles.closeButton}>
+              <Ionicons name="close" size={24} color="#FFFFFF" />
+            </TouchableOpacity>
+            <Text style={styles.headerTitle}>
+              {t('add_borrowed_money_title')}
             </Text>
-          </TouchableOpacity>
+            <TouchableOpacity onPress={handleAdd} style={styles.addButton}>
+              <Text style={styles.addButtonText}>
+                {t('add_new')}
+              </Text>
+            </TouchableOpacity>
+          </View>
         </View>
+
+        {/* Content Container with rounded top */}
+        <View style={[styles.contentContainer, { backgroundColor: theme.colors.background }]}>
 
         <KeyboardAvoidingView
           style={styles.keyboardAvoidingView}
@@ -440,6 +448,7 @@ const AddBorrowedMoneyModal: React.FC<AddBorrowedMoneyModalProps> = ({
           </View>
         </ScrollView>
         </KeyboardAvoidingView>
+        </View>
       </View>
     </Modal>
   );
@@ -448,6 +457,47 @@ const AddBorrowedMoneyModal: React.FC<AddBorrowedMoneyModalProps> = ({
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+  },
+  darkHeader: {
+    backgroundColor: '#1C1C1E',
+    paddingHorizontal: 20,
+    paddingBottom: 20,
+  },
+  headerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: 10,
+  },
+  closeButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255,255,255,0.1)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  headerTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#FFFFFF',
+    flex: 1,
+    textAlign: 'center',
+  },
+  addButton: {
+    padding: 4,
+  },
+  addButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#3B82F6',
+  },
+  contentContainer: {
+    flex: 1,
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+    marginTop: -1,
+    overflow: 'hidden',
   },
   keyboardAvoidingView: {
     flex: 1,

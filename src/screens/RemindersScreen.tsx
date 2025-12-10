@@ -7,9 +7,10 @@ import {
   FlatList,
   Alert,
   RefreshControl,
+  StatusBar,
 } from 'react-native';
 
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useIsFocused, useNavigation, useRoute } from '@react-navigation/native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -147,6 +148,7 @@ export default function RemindersScreen() {
   const navigation = useNavigation<any>();
   const route = useRoute<any>();
   const isFocused = useIsFocused();
+  const insets = useSafeAreaInsets();
   const [reminders, setReminders] = useState<Reminder[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -802,19 +804,32 @@ export default function RemindersScreen() {
   );
 
   return (
-    <SafeAreaView style={styles.container}>
-      {/* Header */}
-      <View style={styles.header}>
-        <Text style={styles.title}>Reminders</Text>
-        <View style={styles.headerButtons}>
-          <TouchableOpacity style={styles.testButton} onPress={handleTestNotification}>
-            <Ionicons name="notifications-outline" size={20} color="#FFFFFF" />
+    <View style={{ flex: 1, backgroundColor: '#1C1C1E' }}>
+      <StatusBar barStyle="light-content" backgroundColor="#1C1C1E" />
+      
+      {/* Dark Header */}
+      <View style={[styles.darkHeader, { paddingTop: insets.top }]}>
+        <View style={styles.headerRow}>
+          <TouchableOpacity 
+            style={styles.backButton} 
+            onPress={() => navigation.goBack()}
+          >
+            <Ionicons name="arrow-back" size={24} color="#FFFFFF" />
           </TouchableOpacity>
-          <TouchableOpacity style={styles.addButton} onPress={handleAddReminder}>
-            <Ionicons name="add" size={24} color="#FFFFFF" />
-          </TouchableOpacity>
+          <Text style={styles.headerTitle}>Reminders</Text>
+          <View style={styles.headerButtons}>
+            <TouchableOpacity style={styles.testButton} onPress={handleTestNotification}>
+              <Ionicons name="notifications-outline" size={20} color="#FFFFFF" />
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.addButtonHeader} onPress={handleAddReminder}>
+              <Ionicons name="add" size={24} color="#FFFFFF" />
+            </TouchableOpacity>
+          </View>
         </View>
       </View>
+
+      {/* Content Container with rounded top */}
+      <View style={[styles.contentContainer, { backgroundColor: isDark ? '#1F2937' : '#F8F9FA' }]}>
 
       {/* Filter Buttons */}
       <View style={styles.filterContainer}>
@@ -890,7 +905,8 @@ export default function RemindersScreen() {
           }
         }}
       />
-    </SafeAreaView>
+      </View>
+    </View>
   );
 }
 
@@ -899,6 +915,59 @@ function createStyles(isDark: boolean) {
     container: {
       flex: 1,
       backgroundColor: isDark ? '#1F2937' : '#F8F9FA',
+    },
+    darkHeader: {
+      backgroundColor: '#1C1C1E',
+      paddingHorizontal: 20,
+      paddingBottom: 20,
+    },
+    headerRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      marginTop: 10,
+    },
+    backButton: {
+      width: 40,
+      height: 40,
+      borderRadius: 20,
+      backgroundColor: 'rgba(255,255,255,0.1)',
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    headerTitle: {
+      fontSize: 20,
+      fontWeight: '600',
+      color: '#FFFFFF',
+      flex: 1,
+      textAlign: 'center',
+    },
+    headerButtons: {
+      flexDirection: 'row',
+      gap: 8,
+    },
+    testButton: {
+      backgroundColor: '#F59E0B',
+      width: 40,
+      height: 40,
+      borderRadius: 20,
+      justifyContent: 'center',
+      alignItems: 'center',
+    },
+    addButtonHeader: {
+      backgroundColor: '#3B82F6',
+      width: 40,
+      height: 40,
+      borderRadius: 20,
+      justifyContent: 'center',
+      alignItems: 'center',
+    },
+    contentContainer: {
+      flex: 1,
+      borderTopLeftRadius: 28,
+      borderTopRightRadius: 28,
+      marginTop: -1,
+      overflow: 'hidden',
     },
     header: {
       flexDirection: 'row',
