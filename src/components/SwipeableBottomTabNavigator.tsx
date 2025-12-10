@@ -30,6 +30,28 @@ const ScreenLoadingFallback = () => {
   );
 };
 
+// Screen content wrapper that tracks when content is actually rendered
+interface ScreenContentWrapperProps {
+  children: React.ReactNode;
+  onContentReady?: () => void;
+}
+
+const ScreenContentWrapper: React.FC<ScreenContentWrapperProps> = ({ 
+  children, 
+  onContentReady 
+}) => {
+  useEffect(() => {
+    // Call onContentReady after the content has been laid out
+    const timeoutId = setTimeout(() => {
+      onContentReady?.();
+    }, 0);
+
+    return () => clearTimeout(timeoutId);
+  }, [onContentReady]);
+
+  return <>{children}</>;
+};
+
 const SwipeableBottomTabNavigator = React.memo(() => {
   const { isDark, theme } = useTheme();
   const { t } = useLocalization();
@@ -75,29 +97,43 @@ const SwipeableBottomTabNavigator = React.memo(() => {
 
   // Memoized scene renderer with lazy loading
   const renderScene = useCallback(({ route }: { route: any }) => {
+    const handleContentReady = () => {
+      if (isMounted.current) {
+        setIsSwitching(false);
+      }
+    };
+
     switch (route.key) {
       case 'home':
         return (
           <Suspense fallback={<ScreenLoadingFallback />}>
-            <HomeScreen />
+            <ScreenContentWrapper onContentReady={handleContentReady}>
+              <HomeScreen />
+            </ScreenContentWrapper>
           </Suspense>
         );
       case 'insights':
         return (
           <Suspense fallback={<ScreenLoadingFallback />}>
-            <InsightsScreen />
+            <ScreenContentWrapper onContentReady={handleContentReady}>
+              <InsightsScreen />
+            </ScreenContentWrapper>
           </Suspense>
         );
       case 'wallet':
         return (
           <Suspense fallback={<ScreenLoadingFallback />}>
-            <WalletScreen />
+            <ScreenContentWrapper onContentReady={handleContentReady}>
+              <WalletScreen />
+            </ScreenContentWrapper>
           </Suspense>
         );
       case 'more':
         return (
           <Suspense fallback={<ScreenLoadingFallback />}>
-            <MoreScreen />
+            <ScreenContentWrapper onContentReady={handleContentReady}>
+              <MoreScreen />
+            </ScreenContentWrapper>
           </Suspense>
         );
       default:
@@ -132,13 +168,14 @@ const SwipeableBottomTabNavigator = React.memo(() => {
         clearTimeout(tabSwitchTimeout.current);
       }
 
+      // Set a max timeout to prevent infinite loading, but content ready callback will dismiss it first
       tabSwitchTimeout.current = setTimeout(() => {
         InteractionManager.runAfterInteractions(() => {
           if (isMounted.current) {
             setIsSwitching(false);
           }
         });
-      }, 400);
+      }, 2000); // Increased timeout to give content time to render
     }
 
     // Mark tab as visited

@@ -24,7 +24,7 @@ import { useLocalization } from '../contexts/LocalizationContext';
 import { useQuickActions } from '../contexts/QuickActionsContext';
 import { useAuth } from '../contexts/AuthContext';
 import { hybridDataService } from '../services/hybridDataService';
-import { useOptimizedCallback, useOptimizedMemo, createOptimizedListItem } from '../utils/componentOptimization';
+import { withOptimizedMemo } from '../utils/componentOptimization';
 
 const WalletScreen = () => {
   const { theme } = useTheme();
@@ -232,8 +232,26 @@ const WalletScreen = () => {
     }
   };
 
+  const handleSetPreferredWallet = async (walletId: string) => {
+    try {
+      // Update all wallets: set the selected one as preferred, others as not preferred
+      const updatedWallets = wallets.map(w => ({
+        ...w,
+        isPreferred: w.id === walletId
+      }));
+      
+      setWallets(updatedWallets);
+      // In a real app, you would save this to storage/backend
+      Alert.alert(t('success'), t('wallet set as preferred, this is the default wallet that will be displayed first in Dashboard'));
+    } catch (error) {
+      console.error('Error setting preferred wallet:', error);
+      Alert.alert(t('error'), t('wallet_screen_error_update'));
+    }
+  };
+
   const renderWalletCard = (wallet: any) => {
-    const transactions = getWalletTransactions(wallet.id);
+    // Don't call async functions during render
+    // getWalletTransactions is async and shouldn't be called here
     
     return (
       <View key={wallet.id} style={styles.walletCard}>
@@ -251,6 +269,16 @@ const WalletScreen = () => {
               <Text style={styles.walletName}>{wallet.name}</Text>
             </View>
             <View style={styles.walletHeaderActions}>
+              <TouchableOpacity 
+                onPress={() => handleSetPreferredWallet(wallet.id)}
+                style={styles.preferredButton}
+              >
+                <Ionicons 
+                  name={wallet.isPreferred ? 'star' : 'star-outline'} 
+                  size={20} 
+                  color={wallet.isPreferred ? '#FFD700' : 'white'}
+                />
+              </TouchableOpacity>
               <TouchableOpacity onPress={() => setIsBalanceVisible(!isBalanceVisible)}>
                 <Ionicons 
                   name={isBalanceVisible ? 'eye-outline' : 'eye-off-outline'} 
@@ -793,6 +821,10 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
+  },
+  preferredButton: {
+    padding: 4,
+    opacity: 0.9,
   },
   deleteButton: {
     padding: 4,

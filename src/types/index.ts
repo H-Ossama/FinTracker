@@ -14,6 +14,8 @@ export interface Wallet {
   balance: number;
   type: 'bank' | 'cash' | 'savings';
   color: string;
+  isPreferred?: boolean;
+  icon?: string;
 }
 
 export interface SpendingCategory {

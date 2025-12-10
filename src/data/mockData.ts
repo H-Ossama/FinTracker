@@ -6,21 +6,27 @@ export const mockWallets: Wallet[] = [
     name: 'Bank Account',
     balance: 2847.64,
     type: 'bank',
-    color: '#4A90E2'
+    color: '#4A90E2',
+    isPreferred: true,
+    icon: 'card'
   },
   {
     id: '2',
     name: 'Pocket Money',
     balance: 248.8,
     type: 'cash',
-    color: '#7ED321'
+    color: '#7ED321',
+    isPreferred: false,
+    icon: 'cash'
   },
   {
     id: '3',
     name: 'Savings',
     balance: 1244.65,
     type: 'savings',
-    color: '#9013FE'
+    color: '#9013FE',
+    isPreferred: false,
+    icon: 'wallet'
   }
 ];
 

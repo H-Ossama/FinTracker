@@ -26,6 +26,7 @@ import AddIncomeModal from '../components/AddIncomeModal';
 import TransferModal from '../components/TransferModal';
 import BorrowedMoneyDetailsModal from '../components/BorrowedMoneyDetailsModal';
 import AddBorrowedMoneyModal from '../components/AddBorrowedMoneyModal';
+import SwipeableWalletDisplay from '../components/SwipeableWalletDisplay';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useTheme } from '../contexts/ThemeContext';
 import { useLocalization } from '../contexts/LocalizationContext';
@@ -905,15 +906,34 @@ const HomeScreen = () => {
               </View>
             </View>
 
+            {/* Swipeable Wallet Display */}
+            <SwipeableWalletDisplay
+              wallets={wallets}
+              onWalletChange={(wallet: any, index: number) => {
+                setCurrentWalletIndex(index);
+                setSelectedWallet(wallet.id);
+              }}
+              currentWalletIndex={currentWalletIndex}
+              isBalanceVisible={isBalanceVisible}
+              formatCurrency={formatCurrency}
+              getWalletIcon={(type: string) => {
+                switch (type.toUpperCase()) {
+                  case 'BANK':
+                  case 'CREDIT_CARD':
+                    return 'card';
+                  case 'CASH':
+                    return 'cash';
+                  case 'SAVINGS':
+                  case 'INVESTMENT':
+                    return 'wallet';
+                  default:
+                    return 'wallet';
+                }
+              }}
+            />
+            
             {/* Balance Card */}
             <View style={styles.balanceSection}>
-              <Text style={[styles.balanceLabel, { color: theme.colors.headerTextSecondary }]}>{t('available_on_card') || 'Available on card'}</Text>
-              <TouchableOpacity onPress={toggleBalanceVisibility} style={styles.balanceRow}>
-                <Text style={[styles.balanceAmount, { color: theme.colors.headerText }]}>
-                  {isBalanceVisible ? formatCurrency(totalBalance) : '••••••'}
-                </Text>
-              </TouchableOpacity>
-              
               <View style={[styles.limitRow, { borderTopColor: theme.colors.headerBorder }]}>
                 <Text style={[styles.limitLabel, { color: theme.colors.headerTextSecondary }]}>{t('monthly_limit') || 'Monthly Limit'}</Text>
                 <TouchableOpacity onPress={() => setShowMonthlyLimitModal(true)}>
