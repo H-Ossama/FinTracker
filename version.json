@@ -1,5 +1,8 @@
+ 
 {
-  "version": "2.5.7",
+  "_comment": "To use: Edit the \"version\" field below, then run 'npm run update-version' to sync version across all files.",
+  "comment": "This field specifies the current version of the FinTracker application. Update the 'version' value following semantic versioning (MAJOR.MINOR.PATCH) whenever you release a new version. This helps in tracking changes and ensuring users are aware of the latest updates. To use this script, modify the 'version' string before each release to reflect the new version number.",
+  "version": "2.6.0",
   "description": "Edit the version above and run 'npm run update-version' to automatically update all files",
   "lastUpdated": "2025-11-07",
   "instructions": {

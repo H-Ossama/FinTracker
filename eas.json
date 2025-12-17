@@ -23,6 +23,10 @@
       "android": {
         "buildType": "apk",
         "gradleCommand": ":app:assembleRelease"
+      },
+      "env": {
+        "EXPO_PUBLIC_BACKEND_URL": "https://finex-production.up.railway.app",
+        "NODE_ENV": "production"
       }
     },
     "production": {
@@ -35,6 +39,7 @@
         "gradleCommand": ":app:bundleRelease"
       },
       "env": {
+        "EXPO_PUBLIC_BACKEND_URL": "https://finex-production.up.railway.app",
         "NODE_ENV": "production"
       }
     }

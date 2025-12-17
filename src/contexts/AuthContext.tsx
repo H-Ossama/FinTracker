@@ -177,11 +177,11 @@ const mockAuthAPI = {
     
     try {
       // Check for demo account credentials
-      if (email.toLowerCase() === 'demo@fintracker.app' && password === 'Demo123!') {
+      if ((email.toLowerCase() === 'demo@fintracker.app' || email.toLowerCase() === 'demo@finex.app') && password === 'Demo123!') {
         // Handle demo account login
         const demoUser = {
           id: 'demo_user',
-          email: 'demo@fintracker.app',
+          email: email.toLowerCase(),
           name: 'Demo User',
           createdAt: new Date().toISOString(),
           lastLogin: new Date().toISOString(),
@@ -324,7 +324,19 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       
       if (rememberMe === 'true') {
         // Try to get stored token
-        const token = await SecureStore.getItemAsync(STORAGE_KEYS.USER_TOKEN);
+        let token = await SecureStore.getItemAsync(STORAGE_KEYS.USER_TOKEN).catch((e) => {
+          console.error('SecureStore read failed:', e);
+          return null;
+        });
+        
+        // If SecureStore failed or returned null, try backups
+        if (!token) {
+          token = await AsyncStorage.getItem('demo_token_backup');
+        }
+        if (!token) {
+          token = await AsyncStorage.getItem('auth_token_backup');
+        }
+
         const userData = await AsyncStorage.getItem(STORAGE_KEYS.USER_DATA);
         
         if (token && userData) {
@@ -405,7 +417,10 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     return { firstName, lastName };
   };
 
-  const isDemoEmail = (value: string): boolean => value.trim().toLowerCase() === 'demo@fintracker.app';
+  const isDemoEmail = (value: string): boolean => {
+    const email = value.trim().toLowerCase();
+    return email === 'demo@fintracker.app' || email === 'demo@finex.app';
+  };
 
   const isMockAccountEmail = (value: string): boolean => {
     const email = value.trim().toLowerCase();
@@ -450,23 +465,40 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     remember: boolean,
     options: { isGoogleUser?: boolean } = {}
   ): Promise<void> => {
-    await SecureStore.setItemAsync(STORAGE_KEYS.USER_TOKEN, token);
-    await AsyncStorage.setItem(STORAGE_KEYS.USER_DATA, JSON.stringify(user));
-    await AsyncStorage.setItem(STORAGE_KEYS.REMEMBER_ME, remember.toString());
-    await AsyncStorage.setItem(STORAGE_KEYS.HAS_LOGGED_IN_BEFORE, 'true');
-
-    if (options.isGoogleUser) {
-      await AsyncStorage.setItem(STORAGE_KEYS.GOOGLE_USER, 'true');
-    } else {
-      await AsyncStorage.removeItem(STORAGE_KEYS.GOOGLE_USER);
-    }
-
-    if (user.isBackendUser) {
-      try {
-        await cloudSyncService.setAuthToken(token);
-      } catch (error) {
-        console.warn('⚠️ Unable to sync auth token with cloud service:', error);
+    try {
+      // For demo account, always use AsyncStorage to avoid SecureStore issues
+      if (user.email === 'demo@fintracker.app') {
+        await AsyncStorage.setItem('demo_token_backup', token);
+      } else {
+        try {
+          await SecureStore.setItemAsync(STORAGE_KEYS.USER_TOKEN, token);
+        } catch (secureStoreError) {
+          console.error('SecureStore failed, falling back to AsyncStorage:', secureStoreError);
+          // Fallback to AsyncStorage if SecureStore fails
+          await AsyncStorage.setItem('auth_token_backup', token);
+        }
       }
+
+      await AsyncStorage.setItem(STORAGE_KEYS.USER_DATA, JSON.stringify(user));
+      await AsyncStorage.setItem(STORAGE_KEYS.REMEMBER_ME, remember.toString());
+      await AsyncStorage.setItem(STORAGE_KEYS.HAS_LOGGED_IN_BEFORE, 'true');
+
+      if (options.isGoogleUser) {
+        await AsyncStorage.setItem(STORAGE_KEYS.GOOGLE_USER, 'true');
+      } else {
+        await AsyncStorage.removeItem(STORAGE_KEYS.GOOGLE_USER);
+      }
+
+      if (user.isBackendUser) {
+        try {
+          await cloudSyncService.setAuthToken(token);
+        } catch (error) {
+          console.warn('⚠️ Unable to sync auth token with cloud service:', error);
+        }
+      }
+    } catch (error) {
+      console.error('Error persisting auth session:', error);
+      throw error;
     }
   };
 
@@ -615,6 +647,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       let fallbackToMock = usingMockAccount;
 
       if (!usingMockAccount) {
+        console.log('🔐 Email/password login attempt for:', normalizedEmail);
         const backendResult = await backendAuthService.login({
           email: normalizedEmail,
           password,
@@ -624,20 +657,25 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
           user = normalizeBackendUser(backendResult.user, { email: normalizedEmail });
           user.lastLogin = new Date().toISOString();
           token = backendResult.token;
+          console.log('✅ Backend login succeeded');
         } else {
+          console.error('❌ Backend login failed:', backendResult.error);
           const localUserExists = await hasLocalRegisteredUser(normalizedEmail);
+          console.log('📝 Local user exists:', localUserExists);
 
           if (backendResult.networkError) {
             if (localUserExists) {
-              console.warn('⚠️ Backend login unavailable, attempting local mock login');
+              console.warn('⚠️ Backend unreachable (network error), attempting local mock login');
               fallbackToMock = true;
             } else {
+              console.error('❌ No backend and no local user registered');
               throw new Error('Unable to reach the server. Please try again.');
             }
           } else if ((backendResult.status === 401 || backendResult.status === 404) && localUserExists) {
-            console.warn('⚠️ Backend credentials rejected, using local mock login');
+            console.warn('⚠️ Backend credentials rejected (status', backendResult.status, '), using local mock login');
             fallbackToMock = true;
           } else {
+            console.error('❌ Backend error - no fallback available');
             throw new Error(backendResult.error || 'Login failed');
           }
         }
@@ -659,7 +697,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       if (isDemoAccount) {
         await AsyncStorage.setItem('is_demo_account', 'true');
         await AsyncStorage.setItem('seed_demo_data', 'true');
-        console.log('✅ Demo account login - session will persist');
+        console.log('✅ Demo account login - session will persist (email:', user.email, ')');
       } else {
         await AsyncStorage.removeItem('is_demo_account');
         await AsyncStorage.removeItem('seed_demo_data');
@@ -939,10 +977,20 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
   const validateUserSession = async (user: User, token: string): Promise<{ valid: boolean; reason?: string }> => {
     try {
-      if (user.email === 'demo@fintracker.app' && token.startsWith('demo_token_')) {
-        console.log('✅ Demo account session validated');
+      if (!user || !token) {
+        console.error('❌ validateUserSession: Missing user or token');
+        return { valid: false, reason: 'Missing user or token' };
+      }
+
+      if ((user.email === 'demo@fintracker.app' || user.email === 'demo@finex.app') && token.startsWith('demo_token_')) {
+        console.log('✅ Demo account session validated (email:', user.email, ')');
         return { valid: true };
       }
+
+      if (user.email === 'demo@fintracker.app' || user.email === 'demo@finex.app') {
+        console.error('❌ Demo account token mismatch:', token);
+      }
+
 
       if (user.isGoogleUser || token.startsWith('google_token_')) {
         console.log('✅ Google user session validated:', user.email);

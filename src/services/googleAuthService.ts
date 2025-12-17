@@ -51,17 +51,21 @@ class GoogleAuthService {
         return;
       }
 
-      const webClientId = process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID || '123456789-abcdefg.apps.googleusercontent.com';
+      const webClientId = process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID || '1034435232632-cfdpko20rk29mphsbo1o7i5pvk9lq1dq.apps.googleusercontent.com';
       const iosClientId = process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID;
       
       console.log('🔧 Configuring Google Sign-In...');
-      console.log('📱 Web Client ID:', webClientId.substring(0, 20) + '...');
+      console.log('📱 Web Client ID:', webClientId.substring(0, 30) + '...');
       console.log('📦 Expected package: com.oussamaaaaa.finex');
       console.log('🔑 Expected SHA-1: 5E:8F:16:06:2E:A3:CD:2C:4A:0D:54:78:76:BA:A6:F3:8C:AB:F6:25');
       
       // Validate configuration before proceeding
-      if (!webClientId || webClientId.includes('abcdefg')) {
-        throw new Error('Invalid or missing Web Client ID in environment variables');
+      if (!webClientId) {
+        throw new Error('Invalid or missing Web Client ID');
+      }
+      
+      if (webClientId.includes('123456789') || webClientId.includes('abcdefg')) {
+        console.warn('⚠️ Using placeholder Web Client ID - this will not work for production');
       }
       
       if (iosClientId) {

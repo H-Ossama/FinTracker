@@ -51,14 +51,6 @@
       },
       "oauth_client": [
         {
-          "client_id": "1034435232632-069rmajge1p5rcibc89qhd8s1e19tl91.apps.googleusercontent.com",
-          "client_type": 1,
-          "android_info": {
-            "package_name": "com.oussamaaaaa.finex",
-            "certificate_hash": "04d1e2df06d3f1b99f2536aa3dbc5f78afaf3f93"
-          }
-        },
-        {
           "client_id": "1034435232632-shgb0h76pesd2aisvvdcu6rrupvmdsgm.apps.googleusercontent.com",
           "client_type": 1,
           "android_info": {

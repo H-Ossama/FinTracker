@@ -118,6 +118,9 @@ export const backendAuthService = {
 
   async login(params: { email: string; password: string }): Promise<BackendAuthResult> {
     try {
+      console.log('🔐 Attempting backend login for:', params.email);
+      console.log('📍 Backend URL:', AUTH_URL);
+      
       const response = await fetch(`${AUTH_URL}/login`, {
         method: 'POST',
         headers: {
@@ -128,6 +131,7 @@ export const backendAuthService = {
 
       if (!response.ok) {
         const errorMessage = await parseErrorMessage(response);
+        console.error('❌ Backend login failed with status', response.status, ':', errorMessage);
         return {
           success: false,
           error: errorMessage,
@@ -137,6 +141,7 @@ export const backendAuthService = {
 
       const data = await response.json();
       if (!data?.success || !data?.data?.user || !data?.data?.token) {
+        console.error('❌ Invalid response format from backend:', data);
         return {
           success: false,
           error: 'Invalid response from server',
@@ -144,6 +149,7 @@ export const backendAuthService = {
         };
       }
 
+      console.log('✅ Backend login successful for:', params.email);
       return {
         success: true,
         user: data.data.user as BackendUser,
@@ -151,6 +157,7 @@ export const backendAuthService = {
         status: response.status,
       };
     } catch (error) {
+      console.error('🌐 Backend login network error:', error);
       return handleNetworkError(error);
     }
   },
