@@ -13,6 +13,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { hybridDataService } from '../services/hybridDataService';
+import { syncProgressService } from '../services/syncProgressService';
 import { useTheme } from '../contexts/ThemeContext';
 import { useAuth } from '../contexts/AuthContext';
 
@@ -112,6 +113,13 @@ export const SyncReminderBanner: React.FC<SyncReminderProps> = React.memo(({ onS
     };
   }, [fadeAnim, isAuthenticated, authLoading]);
 
+  // Mounted ref to avoid state updates after unmount
+  const mountedRef = React.useRef(true);
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => { mountedRef.current = false; };
+  }, []);
+
   const handleDismiss = useCallback(async () => {
     try {
       await hybridDataService.markSyncReminderShown();
@@ -122,7 +130,7 @@ export const SyncReminderBanner: React.FC<SyncReminderProps> = React.memo(({ onS
         duration: 300,
         useNativeDriver: true,
       }).start(() => {
-        setVisible(false);
+        if (mountedRef.current) setVisible(false);
       });
     } catch (error) {
       console.error('Error dismissing reminder:', error);
@@ -130,17 +138,33 @@ export const SyncReminderBanner: React.FC<SyncReminderProps> = React.memo(({ onS
   }, [fadeAnim]);
 
   const handleSyncNow = useCallback(async () => {
-    setIsLoading(true);
+    if (mountedRef.current) setIsLoading(true);
     try {
-      const result = await hybridDataService.performManualSync();
+      // clear any previous cancel state
+      try { syncProgressService.clearCancel(); } catch {}
+      const result = await hybridDataService.performManualSync((p: any) => {
+        try { syncProgressService.setProgress(p); } catch {}
+      });
       if (result.success) {
-        handleDismiss();
+        try {
+          const status = await hybridDataService.getSyncStatus();
+          if (mountedRef.current) setUnsyncedItems(status.unsyncedItems || 0);
+          // If nothing left to sync, dismiss the banner
+          if (!status.unsyncedItems) {
+            handleDismiss();
+          }
+        } catch (err) {
+          // Fallback: dismiss if sync reported success but status check failed
+          console.warn('Could not refresh sync status after sync:', err);
+          handleDismiss();
+        }
+
         onSyncComplete?.();
       }
     } catch (error) {
       console.error('Sync failed:', error);
     } finally {
-      setIsLoading(false);
+      if (mountedRef.current) setIsLoading(false);
     }
   }, [onSyncComplete, handleDismiss]);
 

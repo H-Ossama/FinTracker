@@ -109,11 +109,26 @@ class RealCloudSyncService {
       return response.data;
     } catch (error) {
       const errorMessage = this.extractErrorMessage(error);
-      console.error('❌ Cloud backup failed:', errorMessage);
+      // Detailed diagnostic logging to help trace "Application not found" issues
+      if (axios.isAxiosError(error)) {
+        try {
+          console.error('--- Cloud backup axios error details ---');
+          console.error('Request URL:', error.config?.url);
+          console.error('Request method:', error.config?.method);
+          console.error('Status:', error.response?.status);
+          console.error('Response data:', JSON.stringify(error.response?.data));
+        } catch (logErr) {
+          console.error('Error logging axios details:', logErr);
+        }
+      } else {
+        console.error('❌ Cloud backup failed:', errorMessage);
+      }
 
       return {
         success: false,
         error: errorMessage,
+        // include raw debug info in dev mode only
+        ...(process.env.NODE_ENV !== 'production' && axios.isAxiosError(error) ? { debug: { url: error.config?.url, status: error.response?.status, response: error.response?.data } } : {}),
       };
     }
   }
@@ -144,11 +159,24 @@ class RealCloudSyncService {
       return response.data;
     } catch (error) {
       const errorMessage = this.extractErrorMessage(error);
-      console.error('❌ Cloud restore failed:', errorMessage);
+      if (axios.isAxiosError(error)) {
+        try {
+          console.error('--- Cloud restore axios error details ---');
+          console.error('Request URL:', error.config?.url);
+          console.error('Request method:', error.config?.method);
+          console.error('Status:', error.response?.status);
+          console.error('Response data:', JSON.stringify(error.response?.data));
+        } catch (logErr) {
+          console.error('Error logging axios details:', logErr);
+        }
+      } else {
+        console.error('❌ Cloud restore failed:', errorMessage);
+      }
 
       return {
         success: false,
         error: errorMessage,
+        ...(process.env.NODE_ENV !== 'production' && axios.isAxiosError(error) ? { debug: { url: error.config?.url, status: error.response?.status, response: error.response?.data } } : {}),
       };
     }
   }
@@ -184,11 +212,24 @@ class RealCloudSyncService {
       return response.data;
     } catch (error) {
       const errorMessage = this.extractErrorMessage(error);
-      console.error('❌ Merge failed:', errorMessage);
+      if (axios.isAxiosError(error)) {
+        try {
+          console.error('--- Cloud merge axios error details ---');
+          console.error('Request URL:', error.config?.url);
+          console.error('Request method:', error.config?.method);
+          console.error('Status:', error.response?.status);
+          console.error('Response data:', JSON.stringify(error.response?.data));
+        } catch (logErr) {
+          console.error('Error logging axios details:', logErr);
+        }
+      } else {
+        console.error('❌ Merge failed:', errorMessage);
+      }
 
       return {
         success: false,
         error: errorMessage,
+        ...(process.env.NODE_ENV !== 'production' && axios.isAxiosError(error) ? { debug: { url: error.config?.url, status: error.response?.status, response: error.response?.data } } : {}),
       };
     }
   }
@@ -216,11 +257,24 @@ class RealCloudSyncService {
       return response.data;
     } catch (error) {
       const errorMessage = this.extractErrorMessage(error);
-      console.error('❌ Backup deletion failed:', errorMessage);
+      if (axios.isAxiosError(error)) {
+        try {
+          console.error('--- Cloud delete axios error details ---');
+          console.error('Request URL:', error.config?.url);
+          console.error('Request method:', error.config?.method);
+          console.error('Status:', error.response?.status);
+          console.error('Response data:', JSON.stringify(error.response?.data));
+        } catch (logErr) {
+          console.error('Error logging axios details:', logErr);
+        }
+      } else {
+        console.error('❌ Backup deletion failed:', errorMessage);
+      }
 
       return {
         success: false,
         error: errorMessage,
+        ...(process.env.NODE_ENV !== 'production' && axios.isAxiosError(error) ? { debug: { url: error.config?.url, status: error.response?.status, response: error.response?.data } } : {}),
       };
     }
   }

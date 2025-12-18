@@ -169,6 +169,18 @@ class FirebaseAuthService {
   getUserDisplayName(): string | null {
     return this.currentUser?.displayName || null;
   }
+
+  // Get Firebase ID token for current user
+  async getIdToken(forceRefresh: boolean = false): Promise<string | null> {
+    try {
+      if (!this.currentUser) return null;
+      const token = await this.currentUser.getIdToken(forceRefresh);
+      return token || null;
+    } catch (error) {
+      console.error('❌ Error getting Firebase ID token:', error);
+      return null;
+    }
+  }
 }
 
 export const firebaseAuthService = new FirebaseAuthService();

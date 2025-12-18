@@ -5,6 +5,8 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Buffer } from 'buffer';
 import { googleAuthService, GoogleUser } from '../services/googleAuthService';
 import { cloudSyncService } from '../services/cloudSyncService';
+import { firebaseAuthService } from '../services/firebaseAuthService';
+import { syncProgressService } from '../services/syncProgressService';
 import { backendAuthService, BackendUser } from '../services/backendAuthService';
 
 // Types
@@ -346,14 +348,8 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
           const sessionValidation = await validateUserSession(user, token);
           
           if (sessionValidation.valid) {
-            const looksLikeJwt = token.includes('.') && token.split('.').length === 3;
-            if (user.isBackendUser || looksLikeJwt) {
-              try {
-                await cloudSyncService.setAuthToken(token);
-              } catch (syncError) {
-                console.warn('⚠️ Unable to sync auth token with cloud service during init:', syncError);
-              }
-            }
+            // Do NOT set cloud sync auth token automatically during init.
+            // Cloud sync requires an explicit Firebase ID token and must be set via `setAuthToken()`.
             setState(prev => ({
               ...prev,
               user,
@@ -489,13 +485,8 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         await AsyncStorage.removeItem(STORAGE_KEYS.GOOGLE_USER);
       }
 
-      if (user.isBackendUser) {
-        try {
-          await cloudSyncService.setAuthToken(token);
-        } catch (error) {
-          console.warn('⚠️ Unable to sync auth token with cloud service:', error);
-        }
-      }
+      // Do not automatically set cloud sync auth token here.
+      // Cloud sync must be explicitly initialized with a Firebase ID token.
     } catch (error) {
       console.error('Error persisting auth session:', error);
       throw error;
@@ -886,6 +877,13 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         isLoading: false,
         biometricEnabled: false,
         rememberMe: false,
+        isGoogleAuthenticated: false,
+        cloudSyncEnabled: false,
+        accessDenied: {
+          isDenied: false,
+          reason: '',
+          details: '',
+        },
       });
       
       return { success: true };
@@ -992,7 +990,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       }
 
 
-      if (user.isGoogleUser || token.startsWith('google_token_')) {
+      if (user.isGoogleUser) {
         console.log('✅ Google user session validated:', user.email);
         return { valid: true };
       }
@@ -1137,26 +1135,39 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         isBackendUser: false,
       };
 
-      // Store user data
-      const token = 'google_token_' + user.id;
-      await SecureStore.setItemAsync(STORAGE_KEYS.USER_TOKEN, token);
-      await AsyncStorage.setItem(STORAGE_KEYS.USER_DATA, JSON.stringify(user));
-      await AsyncStorage.setItem(STORAGE_KEYS.REMEMBER_ME, 'true');
-      await AsyncStorage.setItem(STORAGE_KEYS.GOOGLE_USER, 'true');
-      await AsyncStorage.setItem(STORAGE_KEYS.HAS_LOGGED_IN_BEFORE, 'true');
-
-      // Check for existing cloud backup and sync
-      const hasBackup = await cloudSyncService.hasCloudBackup(googleUser);
-      let cloudSyncEnabled = false;
-
-      if (hasBackup) {
-        // Sync existing data
-        const syncResult = await cloudSyncService.downloadUserData(googleUser);
-        if (syncResult.success) {
-          cloudSyncEnabled = true;
-          await AsyncStorage.setItem(STORAGE_KEYS.CLOUD_SYNC_ENABLED, 'true');
-        }
+      // Store user data and persist Firebase ID Token (used for cloud sync)
+      const firebaseIdToken = await firebaseAuthService.getIdToken(true);
+      if (!firebaseIdToken) {
+        throw new Error('Failed to obtain Firebase ID token for cloud sync');
       }
+
+      await persistAuthSession(user, firebaseIdToken, true, { isGoogleUser: true });
+      await cloudSyncService.setAuthToken(firebaseIdToken);
+
+      // Check for existing cloud backup and sync (with progress UI)
+      try {
+        syncProgressService.clear();
+        syncProgressService.setProgress({ stage: 'checking', progress: 5, message: 'Checking for cloud backup...' });
+        const hasBackup = await cloudSyncService.hasCloudBackup(googleUser);
+        let cloudSyncEnabled = false;
+
+        if (hasBackup) {
+          // Download and restore with progress
+          const downloadResult = await cloudSyncService.downloadUserData(googleUser, (p) => {
+            try { syncProgressService.setProgress(p); } catch {}
+          });
+
+          if (downloadResult.success) {
+            cloudSyncEnabled = true;
+            await AsyncStorage.setItem(STORAGE_KEYS.CLOUD_SYNC_ENABLED, 'true');
+          }
+        }
+      } catch (err) {
+        console.warn('Cloud restore failed during sign-in:', err);
+      }
+
+      // Read cloud sync setting before updating state (avoid await inside updater)
+      const cloudSyncEnabledFlag = (await AsyncStorage.getItem(STORAGE_KEYS.CLOUD_SYNC_ENABLED)) === 'true';
 
       setState(prev => ({
         ...prev,
@@ -1165,7 +1176,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         isLoading: false,
         rememberMe: true,
         isGoogleAuthenticated: true,
-        cloudSyncEnabled,
+        cloudSyncEnabled: cloudSyncEnabledFlag,
       }));
       
       return { success: true };
@@ -1211,19 +1222,27 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       await AsyncStorage.removeItem('is_demo_account');
       await AsyncStorage.removeItem('seed_demo_data');
 
-      // Store user data
-      const token = 'google_token_' + user.id;
-      await SecureStore.setItemAsync(STORAGE_KEYS.USER_TOKEN, token);
-      await AsyncStorage.setItem(STORAGE_KEYS.USER_DATA, JSON.stringify(user));
-      await AsyncStorage.setItem(STORAGE_KEYS.REMEMBER_ME, 'true');
-      await AsyncStorage.setItem(STORAGE_KEYS.GOOGLE_USER, 'true');
-      await AsyncStorage.setItem(STORAGE_KEYS.HAS_LOGGED_IN_BEFORE, 'true');
+      // Persist Firebase ID Token only (used for cloud sync)
+      const firebaseIdToken = await firebaseAuthService.getIdToken(true);
+      if (!firebaseIdToken) {
+        throw new Error('Failed to obtain Firebase ID token for cloud sync');
+      }
+
+      await persistAuthSession(user, firebaseIdToken, true, { isGoogleUser: true });
+      await cloudSyncService.setAuthToken(firebaseIdToken);
 
       // Enable cloud sync for new Google users by default
       await AsyncStorage.setItem(STORAGE_KEYS.CLOUD_SYNC_ENABLED, 'true');
       
-      // Upload initial data to cloud
-      await cloudSyncService.uploadUserData(googleUser);
+      // Upload initial data to cloud with progress UI
+      try {
+        syncProgressService.setProgress({ stage: 'uploading', progress: 5, message: 'Uploading initial backup...' });
+        await cloudSyncService.uploadUserData(googleUser, (p) => {
+          try { syncProgressService.setProgress(p); } catch {}
+        });
+      } catch (err) {
+        console.warn('Initial cloud upload failed during Google sign-up:', err);
+      }
 
       setState(prev => ({
         ...prev,

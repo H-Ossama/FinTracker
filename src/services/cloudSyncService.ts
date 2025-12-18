@@ -1,9 +1,12 @@
 import * as SecureStore from 'expo-secure-store';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { GoogleUser } from './googleAuthService';
+import { syncProgressService } from './syncProgressService';
+import { notificationService } from './notificationService';
 import { hybridDataService } from './hybridDataService';
 import { getBackendApiBaseUrl, getBackendApiRoot } from '../config/apiConfig';
 import { backendAuthService } from './backendAuthService';
+import { firebaseAuthService } from './firebaseAuthService';
 
 export interface UserDataBackup {
   user: {
@@ -64,6 +67,7 @@ class CloudSyncService {
   private readonly AUTH_TOKEN_KEY = 'auth_token';
   private readonly apiBaseUrl: string;
   private readonly syncEndpoint: string;
+  private authToken: string | null = null;
 
   constructor() {
     this.apiBaseUrl = getBackendApiBaseUrl();
@@ -82,14 +86,13 @@ class CloudSyncService {
   }
   
   async isAuthenticated(): Promise<boolean> {
-    const token = await this.getAuthToken();
-    return !!token;
+    return !!this.authToken;
   }
 
   /**
    * Upload user data to secure cloud storage
    */
-  async uploadUserData(googleUser: GoogleUser): Promise<SyncResult> {
+  async uploadUserData(googleUser: GoogleUser, onProgress?: (p: any) => void): Promise<SyncResult> {
     try {
       const userData = await this.collectUserData();
 
@@ -105,6 +108,12 @@ class CloudSyncService {
         version: userData.metadata.version,
       };
 
+      if (onProgress) onProgress({ stage: 'uploading', progress: 40, message: 'Uploading backup to cloud...' });
+      // Check for cancellation before network request
+      try { if (syncProgressService.isCancelRequested && syncProgressService.isCancelRequested()) {
+        syncProgressService.setProgress({ stage: 'cancelled', progress: 0, message: 'Upload cancelled', cancelled: true });
+        return { success: false, error: 'Cancelled by user' };
+      }} catch {}
       const responseData = await this.requestWithAuth('/backup', {
         method: 'POST',
         headers: {
@@ -122,12 +131,15 @@ class CloudSyncService {
       }
 
       console.log('✅ User data uploaded to cloud successfully');
+      if (onProgress) onProgress({ stage: 'complete', progress: 100, message: 'Upload complete', lastSync });
       return {
         success: true,
         lastSync,
       };
     } catch (error) {
-      console.error('❌ Error uploading user data to cloud:', error);
+      const dbg = (error as any)?.debug;
+      console.error('❌ Error uploading user data to cloud:', error instanceof Error ? error.message : error, dbg ? { debug: dbg } : '');
+      try { syncProgressService.setProgress({ stage: 'error', progress: 0, message: 'Cloud upload failed', failed: true, error: error instanceof Error ? error.message : String(error) }); } catch {}
       return {
         success: false,
         error: error instanceof Error ? error.message : 'Upload failed',
@@ -138,8 +150,10 @@ class CloudSyncService {
   /**
    * Download and restore user data from secure cloud storage
    */
-  async downloadUserData(googleUser: GoogleUser): Promise<SyncResult> {
+  async downloadUserData(googleUser: GoogleUser, onProgress?: (p: any) => void): Promise<SyncResult> {
     try {
+      if (onProgress) onProgress({ stage: 'downloading', progress: 5, message: 'Checking cloud backup...' });
+      syncProgressService.setProgress({ stage: 'downloading', progress: 5, message: 'Checking cloud backup...' });
       const responseData = await this.requestWithAuth('/restore');
 
       if (!responseData?.data) {
@@ -186,7 +200,19 @@ class CloudSyncService {
         },
       };
 
-      await this.restoreUserData(backupData);
+      // Provide progress callbacks during restore
+      try {
+        await this.restoreUserData(backupData, (stage: string, progress?: number, message?: string) => {
+          if (onProgress) onProgress({ stage, progress, message });
+          try { syncProgressService.setProgress({ stage, progress: progress ?? 0, message: message ?? '' }); } catch {}
+        });
+      } catch (err: any) {
+        if (err && err.message && err.message.includes('Cancelled')) {
+          console.log('ℹ️  Restore cancelled by user');
+          return { success: false, error: 'Cancelled by user' };
+        }
+        throw err;
+      }
 
       await AsyncStorage.setItem('last_cloud_sync', lastSync);
       const syncUserId = googleUser?.id || backupData.user.id;
@@ -200,7 +226,9 @@ class CloudSyncService {
         lastSync,
       };
     } catch (error) {
-      console.error('❌ Error downloading user data from cloud:', error);
+      const dbg = (error as any)?.debug;
+      console.error('❌ Error downloading user data from cloud:', error instanceof Error ? error.message : error, dbg ? { debug: dbg } : '');
+      try { syncProgressService.setProgress({ stage: 'error', progress: 0, message: 'Cloud download failed', failed: true, error: error instanceof Error ? error.message : String(error) }); } catch {}
       return {
         success: false,
         error: error instanceof Error ? error.message : 'Download failed',
@@ -211,7 +239,7 @@ class CloudSyncService {
   /**
    * Sync user data bidirectionally
    */
-  async syncUserData(googleUser: GoogleUser): Promise<SyncResult> {
+  async syncUserData(googleUser: GoogleUser, onProgress?: (p: any) => void): Promise<SyncResult> {
     try {
       const downloadResult = await this.downloadUserData(googleUser);
 
@@ -220,7 +248,7 @@ class CloudSyncService {
       }
 
       if (downloadResult.error === 'No cloud backup found') {
-        return await this.uploadUserData(googleUser);
+        return await this.uploadUserData(googleUser, onProgress);
       }
 
       return downloadResult;
@@ -246,7 +274,8 @@ class CloudSyncService {
       console.log('✅ User data deleted from cloud successfully');
       return { success: true };
     } catch (error) {
-      console.error('❌ Error deleting user data from cloud:', error);
+      const dbg = (error as any)?.debug;
+      console.error('❌ Error deleting user data from cloud:', error instanceof Error ? error.message : error, dbg ? { debug: dbg } : '');
       return {
         success: false,
         error: error instanceof Error ? error.message : 'Delete failed',
@@ -262,12 +291,15 @@ class CloudSyncService {
       const responseData = await this.requestWithAuth('/restore');
       return !!responseData?.data;
     } catch (error) {
-      // Silently handle backend unavailability (expected when backend is not running)
+      // Handle backend unavailability by notifying progress listeners
       const errorMsg = error instanceof Error ? error.message : String(error);
+      const dbg = (error as any)?.debug;
       if (errorMsg.includes('Application not found') || errorMsg.includes('Failed to fetch') || errorMsg.includes('Network')) {
-        console.log('ℹ️  Cloud sync backend not available - using local storage only');
+        console.log('ℹ️  Cloud sync backend not available - using local storage only', dbg ? { debug: dbg } : '');
+        try { syncProgressService.setProgress({ stage: 'error', progress: 0, message: 'Cloud backend unavailable', failed: true, error: errorMsg }); } catch {}
       } else {
-        console.warn('⚠️ Cloud backup check failed:', errorMsg);
+        console.warn('⚠️ Cloud backup check failed:', errorMsg, dbg ? { debug: dbg } : '');
+        try { syncProgressService.setProgress({ stage: 'error', progress: 0, message: 'Cloud backup check failed', failed: true, error: errorMsg }); } catch {}
       }
       return false;
     }
@@ -286,11 +318,10 @@ class CloudSyncService {
   }
 
   private async getAuthTokenOrThrow(): Promise<string> {
-    const token = await this.getAuthToken();
-    if (!token) {
-      throw new Error('Cloud sync requires authentication. Please sign in again.');
+    if (!this.authToken) {
+      throw new Error('No Firebase auth token set');
     }
-    return token;
+    return this.authToken;
   }
 
   private async requestWithAuth(path: string, options: RequestInit = {}): Promise<any> {
@@ -317,13 +348,44 @@ class CloudSyncService {
       data = null;
     }
 
+    if (response.status === 401) {
+      const message = data?.error?.message || data?.error || 'Authentication failed. Please sign in again.';
+      const err = new Error(message);
+      (err as any).debug = {
+        url: `${this.syncEndpoint}${path}`,
+        method: options.method || 'GET',
+        status: response.status,
+        statusText: response.statusText,
+        responseBody: data,
+        usedTokenPreview: token ? `${token.substring(0,6)}...${token.substring(token.length-4)}` : '',
+      };
+      throw err;
+    }
+
     if (!response.ok) {
+      // Build debug info and throw with details attached
+      const debug = {
+        url: `${this.syncEndpoint}${path}`,
+        method: options.method || 'GET',
+        status: response.status,
+        statusText: response.statusText,
+        responseBody: data,
+        usedTokenPreview: maskToken(token),
+      };
+      try {
+        console.error('Cloud request failed:', debug);
+      } catch (logErr) {
+        console.error('Error logging failed cloud request details:', logErr);
+      }
+
       const message =
         data?.error?.message ||
         data?.error ||
         data?.message ||
         response.statusText;
-      throw new Error(message || 'Request failed');
+      const err = new Error(message || `Request failed: ${response.status} ${response.statusText}`);
+      (err as any).debug = debug;
+      throw err;
     }
 
     if (data && typeof data === 'object' && 'success' in data && data.success === false) {
@@ -411,9 +473,10 @@ class CloudSyncService {
     }
   }
 
-  private async restoreUserData(backup: UserDataBackup): Promise<void> {
+  private async restoreUserData(backup: UserDataBackup, onProgress?: (stage: string, progress?: number, message?: string) => void): Promise<void> {
     try {
       // Restore user data to various storage locations
+      if (onProgress) onProgress('restoring', 5, 'Restoring basic settings');
       await AsyncStorage.setItem('user_data', JSON.stringify(backup.user));
       
       if (backup.user.preferences.settings) {
@@ -444,24 +507,42 @@ class CloudSyncService {
         await AsyncStorage.setItem('goals_data', JSON.stringify(backup.appData.goals));
       }
 
-      // Restore hybrid data service data
+      // Restore hybrid data service data with progress
       try {
-        // Clear existing data first
-        await hybridDataService.clearAllData();
-        
-        // Restore wallets with original IDs
-        console.log(`🏦 Restoring ${backup.appData.wallets.length} wallets...`);
-        for (const wallet of backup.appData.wallets) {
-          await hybridDataService.restoreWallet(wallet);
-        }
-        console.log('✅ Wallets restored successfully');
-        
-        // Restore transactions with original IDs
-        console.log(`💰 Restoring ${backup.appData.transactions.length} transactions...`);
-        for (const transaction of backup.appData.transactions) {
-          await hybridDataService.restoreTransaction(transaction);
-        }
-        console.log('✅ Transactions restored successfully');
+          await hybridDataService.clearAllData();
+
+          // Restore wallets with original IDs
+          const totalWallets = backup.appData.wallets.length || 0;
+          console.log(`🏦 Restoring ${totalWallets} wallets...`);
+          for (let i = 0; i < totalWallets; i++) {
+            // allow cancellation
+            if (syncProgressService.isCancelRequested && syncProgressService.isCancelRequested()) {
+              throw new Error('Cancelled by user');
+            }
+            const wallet = backup.appData.wallets[i];
+            await hybridDataService.restoreWallet(wallet);
+            const pct = Math.round(((i + 1) / Math.max(1, totalWallets)) * 40);
+            const msg = `Restored ${i + 1} of ${totalWallets} wallets`;
+            if (onProgress) onProgress('restoring_wallets', pct, msg);
+            try { syncProgressService.setProgress({ stage: 'restoring_wallets', progress: pct, message: msg }); } catch {}
+          }
+          console.log('✅ Wallets restored successfully');
+
+          // Restore transactions with original IDs
+          const totalTx = backup.appData.transactions.length || 0;
+          console.log(`💰 Restoring ${totalTx} transactions...`);
+          for (let i = 0; i < totalTx; i++) {
+            if (syncProgressService.isCancelRequested && syncProgressService.isCancelRequested()) {
+              throw new Error('Cancelled by user');
+            }
+            const transaction = backup.appData.transactions[i];
+            await hybridDataService.restoreTransaction(transaction);
+            const pct = 40 + Math.round(((i + 1) / Math.max(1, totalTx)) * 50);
+            const msg = `Restored ${i + 1} of ${totalTx} transactions`;
+            if (onProgress) onProgress('restoring_transactions', pct, msg);
+            try { syncProgressService.setProgress({ stage: 'restoring_transactions', progress: pct, message: msg }); } catch {}
+          }
+          console.log('✅ Transactions restored successfully');
       } catch (error) {
         console.error('❌ Could not restore hybrid data service data:', error);
         console.error('Error details:', error instanceof Error ? error.message : 'Unknown error');
@@ -469,6 +550,12 @@ class CloudSyncService {
       }
 
       console.log('✅ User data restored successfully');
+      try {
+        syncProgressService.setProgress({ stage: 'complete', progress: 100, message: 'Restore complete', complete: true });
+      } catch {}
+      try {
+        notificationService.scheduleLocalNotification('Data Restored', 'Your cloud backup has been downloaded to this device.').catch(() => {});
+      } catch {}
     } catch (error) {
       console.error('❌ Error restoring user data:', error);
       throw error;
@@ -529,51 +616,17 @@ class CloudSyncService {
 
   // Authentication
   async getAuthToken(): Promise<string | null> {
-    try {
-      const storedToken = await AsyncStorage.getItem(this.AUTH_TOKEN_KEY);
-      if (storedToken) {
-        return storedToken;
-      }
-
-      const secureToken = await SecureStore.getItemAsync('user_token');
-      if (secureToken) {
-        return secureToken;
-      }
-
-      const googleIdToken = await SecureStore.getItemAsync('google_id_token');
-      if (googleIdToken) {
-        return googleIdToken;
-      }
-
-      const googleAccessToken = await SecureStore.getItemAsync('google_access_token');
-      if (googleAccessToken) {
-        return googleAccessToken;
-      }
-
-      return null;
-    } catch (error) {
-      console.error('Error getting auth token:', error);
-      return null;
-    }
+    return this.authToken;
   }
 
   async setAuthToken(token: string): Promise<void> {
-    try {
-      await AsyncStorage.setItem(this.AUTH_TOKEN_KEY, token);
-      await SecureStore.setItemAsync('user_token', token);
-    } catch (error) {
-      console.error('Error setting auth token:', error);
-      throw error;
-    }
+    // Only store the token in memory. The app must explicitly pass a Firebase ID Token.
+    this.authToken = token;
   }
 
   async clearAuthToken(): Promise<void> {
-    try {
-      await AsyncStorage.removeItem(this.AUTH_TOKEN_KEY);
-      await SecureStore.deleteItemAsync('user_token');
-    } catch (error) {
-      console.error('Error clearing auth token:', error);
-    }
+    // Clear only the in-memory token. Do not modify the app's main stored auth token.
+    this.authToken = null;
   }
 
   // Clear sync data (for account deletion)
@@ -727,6 +780,11 @@ class CloudSyncService {
 
       // Sync wallets
       for (const wallet of wallets) {
+        if (syncProgressService.isCancelRequested && syncProgressService.isCancelRequested()) {
+          if (onProgress) onProgress({ stage: 'cancelled', progress: 0, message: 'Sync cancelled by user' });
+          syncProgressService.setProgress({ stage: 'cancelled', progress: 0, message: 'Sync cancelled by user', cancelled: true });
+          return { success: false, error: 'Cancelled by user' };
+        }
         try {
           // Mark as synced (in real app, this would upload to cloud)
           await localStorageService.updateWallet(wallet.id, { 
@@ -747,6 +805,11 @@ class CloudSyncService {
 
       // Sync transactions
       for (const transaction of transactions) {
+        if (syncProgressService.isCancelRequested && syncProgressService.isCancelRequested()) {
+          if (onProgress) onProgress({ stage: 'cancelled', progress: 0, message: 'Sync cancelled by user' });
+          syncProgressService.setProgress({ stage: 'cancelled', progress: 0, message: 'Sync cancelled by user', cancelled: true });
+          return { success: false, error: 'Cancelled by user' };
+        }
         try {
           // Mark as synced (in real app, this would upload to cloud)
           await localStorageService.updateTransaction(transaction.id, { 
@@ -769,6 +832,11 @@ class CloudSyncService {
 
       // Sync categories
       for (const category of categories) {
+        if (syncProgressService.isCancelRequested && syncProgressService.isCancelRequested()) {
+          if (onProgress) onProgress({ stage: 'cancelled', progress: 0, message: 'Sync cancelled by user' });
+          syncProgressService.setProgress({ stage: 'cancelled', progress: 0, message: 'Sync cancelled by user', cancelled: true });
+          return { success: false, error: 'Cancelled by user' };
+        }
         try {
           // Mark as synced (in real app, this would upload to cloud)
           await localStorageService.updateCategory(category.id, { 
@@ -784,9 +852,43 @@ class CloudSyncService {
         }
       }
 
-      // Update last sync time
+      // Update last sync time (local)
       await AsyncStorage.setItem('last_cloud_sync', new Date().toISOString());
       await AsyncStorage.setItem('last_sync_result', JSON.stringify(syncedData));
+
+      // If authenticated, attempt a real cloud upload (if backend reachable)
+      if (isAuth) {
+        try {
+          // Try to construct a GoogleUser from stored tokens
+          const storedUser = await AsyncStorage.getItem('google_user_info');
+          let googleUser: any = null;
+          if (storedUser) {
+            const info = JSON.parse(storedUser);
+            googleUser = {
+              id: info.id || info.email,
+              email: info.email,
+              name: info.name,
+              photo: info.photo,
+              user: info,
+            } as any;
+          }
+
+          if (googleUser) {
+            if (syncProgressService.isCancelRequested && syncProgressService.isCancelRequested()) {
+              if (onProgress) onProgress({ stage: 'cancelled', progress: 0, message: 'Cancelled before cloud upload' });
+              syncProgressService.setProgress({ stage: 'cancelled', progress: 0, message: 'Cancelled before cloud upload', cancelled: true });
+              return { success: false, error: 'Cancelled by user' };
+            }
+            if (onProgress) onProgress({ stage: 'uploading', progress: 20, message: 'Uploading synced data to cloud...' });
+            const uploadResult = await this.uploadUserData(googleUser, onProgress);
+            if (uploadResult.success) {
+              if (onProgress) onProgress({ stage: 'complete', progress: 100, message: 'Cloud upload complete', syncedData });
+            }
+          }
+        } catch (err) {
+          console.warn('Could not perform cloud upload after local sync:', err);
+        }
+      }
 
       // Report completion
       if (onProgress) {
@@ -823,7 +925,6 @@ class CloudSyncService {
       });
 
       if (backendResult.success) {
-        await this.setAuthToken(backendResult.token);
         await AsyncStorage.setItem('user_email', normalizedEmail);
         if (name.length > 0) {
           await AsyncStorage.setItem('user_name', name);
@@ -858,8 +959,6 @@ class CloudSyncService {
       if (backendResult.success) {
         const backendUser = backendResult.user;
         const name = `${backendUser.firstName ?? ''} ${backendUser.lastName ?? ''}`.trim();
-
-        await this.setAuthToken(backendResult.token);
         await AsyncStorage.setItem('user_email', normalizedEmail);
         if (name.length > 0) {
           await AsyncStorage.setItem('user_name', name);
@@ -913,7 +1012,6 @@ class CloudSyncService {
 
   private async createMockSession(email: string, name?: string): Promise<void> {
     const mockToken = `auth_token_${Date.now()}`;
-    await this.setAuthToken(mockToken);
     await AsyncStorage.setItem('user_email', email);
     if (name && name.length > 0) {
       await AsyncStorage.setItem('user_name', name);

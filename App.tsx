@@ -50,6 +50,7 @@ import AppLockService from './src/services/appLockService';
 import BatteryOptimizer from './src/utils/batteryOptimizer';
 // import { initializeAppOptimizations } from './src/utils/optimizations';
 const SyncReminderBanner = lazy(() => import('./src/components/SyncReminderBanner'));
+const SyncProgressModal = lazy(() => import('./src/components/SyncProgressModal'));
 import { navigationRef, onNavigationReady } from './src/navigation/navigationService';
 import { FullScreenLoader } from './src/components/ScreenLoadingIndicator';
 
@@ -677,6 +678,9 @@ export default function App() {
                   {/* Lazy load sync reminder banner - positioned after navigator to overlay properly */}
                   <Suspense fallback={null}>
                     <SyncReminderBanner onSyncComplete={handleSyncComplete} />
+                  </Suspense>
+                  <Suspense fallback={null}>
+                    <SyncProgressModal />
                   </Suspense>
                 </View>
               </QuickActionsProvider>
