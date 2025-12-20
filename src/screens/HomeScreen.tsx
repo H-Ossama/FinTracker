@@ -17,7 +17,6 @@ import {
   TextInput,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
-import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { BorrowedMoney } from '../types';
@@ -26,7 +25,6 @@ import AddIncomeModal from '../components/AddIncomeModal';
 import TransferModal from '../components/TransferModal';
 import BorrowedMoneyDetailsModal from '../components/BorrowedMoneyDetailsModal';
 import AddBorrowedMoneyModal from '../components/AddBorrowedMoneyModal';
-import SwipeableWalletDisplay from '../components/SwipeableWalletDisplay';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useTheme } from '../contexts/ThemeContext';
 import { useLocalization } from '../contexts/LocalizationContext';
@@ -37,17 +35,17 @@ import { useScreenPerformance } from '../hooks/usePerformance';
 import borrowedMoneyService from '../services/borrowedMoneyService';
 import { useWalletVisibility } from '../hooks/useWalletVisibility';
 import { hybridDataService, HybridWallet, HybridTransaction } from '../services/hybridDataService';
-import { useOptimizedCallback, useOptimizedMemo, withOptimizedMemo } from '../utils/componentOptimization';
-import { quickActionsService, QuickAction } from '../services/quickActionsService';
+import { QuickAction } from '../services/quickActionsService';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 const SAMPLE_NOTIFICATIONS_FLAG = 'sample_notifications_seeded';
 const NOTIFICATION_STORAGE_KEY = 'notification_state';
+const PREFERRED_WALLET_KEY = 'preferredWalletId';
 
 const HomeScreen = () => {
   const navigation = useNavigation();
-  const { theme } = useTheme();
+  const { theme, isDark } = useTheme();
   const { t, formatCurrency: formatCurrencyLoc } = useLocalization();
   const { state: notificationState, addNotification } = useNotification();
   const quickActions = useQuickActions();
@@ -65,7 +63,6 @@ const HomeScreen = () => {
   const [showAddBorrowedMoneyModal, setShowAddBorrowedMoneyModal] = useState(false);
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [selectedBorrowedMoneyForPayment, setSelectedBorrowedMoneyForPayment] = useState<BorrowedMoney | null>(null);
-  const [enabledQuickActions, setEnabledQuickActions] = useState<QuickAction[]>([]);
   const [selectedWallet, setSelectedWallet] = useState<string>('');
   const [selectedBorrowedMoney, setSelectedBorrowedMoney] = useState<BorrowedMoney | null>(null);
   const [refreshing, setRefreshing] = useState(false);
@@ -75,11 +72,31 @@ const HomeScreen = () => {
   const [wallets, setWallets] = useState<HybridWallet[]>([]);
   const [totalBalance, setTotalBalance] = useState(0);
   const [recentTransactions, setRecentTransactions] = useState<HybridTransaction[]>([]);
+  const [monthlySpent, setMonthlySpent] = useState(0);
   const [loadingData, setLoadingData] = useState(true);
+  const [preferredWalletId, setPreferredWalletId] = useState<string | null>(null);
+  const [isSwipingWallet, setIsSwipingWallet] = useState(false);
   
   // Animation values for swipeable balance
   const scaleAnim = useRef(new Animated.Value(1)).current;
   const hasAttemptedSampleSeed = useRef(false);
+
+  useEffect(() => {
+    let mounted = true;
+    const loadPreferred = async () => {
+      try {
+        const preferredId = await AsyncStorage.getItem(PREFERRED_WALLET_KEY);
+        if (mounted) setPreferredWalletId(preferredId);
+      } catch {
+        if (mounted) setPreferredWalletId(null);
+      }
+    };
+
+    void loadPreferred();
+    return () => {
+      mounted = false;
+    };
+  }, [wallets.length]);
 
   // Load all data
   useEffect(() => {
@@ -120,6 +137,14 @@ const HomeScreen = () => {
       const loadData = async () => {
         if (isMounted) {
           await loadAllData();
+
+          // Refresh preferred wallet on focus (so Dashboard updates after changing it in Wallet).
+          try {
+            const preferredId = await AsyncStorage.getItem(PREFERRED_WALLET_KEY);
+            if (isMounted) setPreferredWalletId(preferredId);
+          } catch {
+            if (isMounted) setPreferredWalletId(null);
+          }
         }
       };
       
@@ -128,21 +153,6 @@ const HomeScreen = () => {
       return () => {
         isMounted = false;
       };
-    }, [])
-  );
-
-  // Load enabled quick actions from settings
-  useFocusEffect(
-    useCallback(() => {
-      const loadQuickActions = async () => {
-        try {
-          const actions = await quickActionsService.getEnabledQuickActions();
-          setEnabledQuickActions(actions);
-        } catch (error) {
-          console.error('Error loading quick actions:', error);
-        }
-      };
-      loadQuickActions();
     }, [])
   );
 
@@ -215,12 +225,23 @@ const HomeScreen = () => {
       await Promise.all([
         loadWalletData(),
         loadTransactionData(),
-        loadBorrowedMoneyData()
+        loadBorrowedMoneyData(),
+        loadMonthlySpendingData(),
       ]);
     } catch (error) {
       console.error('Error loading data:', error);
     } finally {
       setLoadingData(false);
+    }
+  };
+
+  const loadMonthlySpendingData = async () => {
+    try {
+      const monthly = await hybridDataService.getMonthlySpending();
+      setMonthlySpent(monthly.totalExpenses || 0);
+    } catch (error) {
+      console.error('Error loading monthly spending data:', error);
+      setMonthlySpent(0);
     }
   };
 
@@ -258,12 +279,22 @@ const HomeScreen = () => {
     }
   };
   
-  // Get the three main wallets: cash, bank, savings - convert types to lowercase for compatibility
-  const walletTypes = ['CASH', 'BANK', 'SAVINGS'] as const;
-  const sortedWallets = walletTypes.map(type => 
-    wallets.find(wallet => wallet.type === type)
-  ).filter(Boolean);
+  const displayWallets = useMemo(() => {
+    const active = (wallets || []).filter((w: any) => w?.isActive !== false);
+    if (!preferredWalletId) return active;
+    const preferred = active.find((w: any) => w.id === preferredWalletId);
+    const rest = active.filter((w: any) => w.id !== preferredWalletId);
+    return preferred ? [preferred, ...rest] : active;
+  }, [preferredWalletId, wallets]);
   
+  const WALLET_ICON_URIS: Record<string, string> = {
+    CASH: 'https://img.icons8.com/ios-filled/64/ffffff/money-bag.png',
+    BANK: 'https://img.icons8.com/ios-filled/64/ffffff/visa.png',
+    SAVINGS: 'https://img.icons8.com/ios-filled/64/ffffff/safe.png',
+    INVESTMENT: 'https://img.icons8.com/ios-filled/64/ffffff/stock.png',
+    CREDIT_CARD: 'https://img.icons8.com/ios-filled/64/ffffff/mastercard.png',
+  };
+
   const getWalletDisplayName = (type: string) => {
     switch (type.toUpperCase()) {
       case 'CASH': return t('pocket_money');
@@ -280,6 +311,11 @@ const HomeScreen = () => {
       case 'SAVINGS': return 'shield-checkmark-outline';
       default: return 'cash-outline';
     }
+  };
+
+  const getWalletIconUri = (type?: string) => {
+    if (!type) return undefined;
+    return WALLET_ICON_URIS[type.toUpperCase()] || WALLET_ICON_URIS['BANK'];
   };
 
   const toggleBalanceVisibility = () => {
@@ -313,12 +349,16 @@ const HomeScreen = () => {
     }).start();
   };
   
-  // PanResponder for handling swipe gestures
+  // PanResponder for handling horizontal swipe gestures
   const panResponder = PanResponder.create({
     onStartShouldSetPanResponder: () => true,
+    onStartShouldSetPanResponderCapture: () => true,
     onMoveShouldSetPanResponder: (_, gestureState) => {
       // Only respond to horizontal swipes
       return Math.abs(gestureState.dx) > Math.abs(gestureState.dy);
+    },
+    onPanResponderGrant: () => {
+      setIsSwipingWallet(true);
     },
     onPanResponderMove: (_, gestureState) => {
       // Scale down slightly during gesture
@@ -331,14 +371,14 @@ const HomeScreen = () => {
       const velocityThreshold = 0.5;
       
       if (Math.abs(dx) > swipeThreshold || Math.abs(vx) > velocityThreshold) {
-        if (dx > 0 || vx > velocityThreshold) {
-          // Swipe right - previous wallet
-          const prevIndex = Math.max(currentWalletIndex - 1, 0);
-          switchToWallet(prevIndex);
-        } else if (dx < 0 || vx < -velocityThreshold) {
+        if (dx < 0 || vx < -velocityThreshold) {
           // Swipe left - next wallet
           const nextIndex = Math.min(currentWalletIndex + 1, displayWallets.length - 1);
           switchToWallet(nextIndex);
+        } else if (dx > 0 || vx > velocityThreshold) {
+          // Swipe right - previous wallet
+          const prevIndex = Math.max(currentWalletIndex - 1, 0);
+          switchToWallet(prevIndex);
         }
       } else {
         // Return to normal scale if no swipe detected
@@ -349,11 +389,19 @@ const HomeScreen = () => {
           friction: 8,
         }).start();
       }
+      setIsSwipingWallet(false);
+    },
+    onPanResponderTerminate: () => {
+      setIsSwipingWallet(false);
     },
   });
 
-  // Ensure we have at least one wallet to display
-  const displayWallets = sortedWallets.length > 0 ? sortedWallets : wallets.slice(0, 3);
+  useEffect(() => {
+    if (currentWalletIndex >= displayWallets.length) {
+      setCurrentWalletIndex(0);
+    }
+  }, [currentWalletIndex, displayWallets.length]);
+
   const currentWallet = displayWallets[currentWalletIndex] || displayWallets[0];
 
   const handleAddExpense = async (expense: any) => {
@@ -575,119 +623,6 @@ const HomeScreen = () => {
     return new Date(dueDate) < new Date();
   };
 
-  // Handle quick action press based on action type
-  const handleQuickActionPress = (action: QuickAction) => {
-    // Handle modal-based actions
-    if (action.isModal) {
-      switch (action.action) {
-        case 'addExpense':
-          setShowAddExpenseModal(true);
-          break;
-        case 'addIncome':
-          setShowAddIncomeModal(true);
-          break;
-        case 'transfer':
-          setShowTransferModal(true);
-          break;
-        case 'addWallet':
-          // Navigate to wallet tab
-          (navigation as any).navigate('TabNavigator', { screen: 'wallet' });
-          break;
-        case 'addBorrowedMoney':
-          setShowAddBorrowedMoneyModal(true);
-          break;
-        default:
-          // For other modal actions with navigateTo, navigate to the screen
-          if (action.navigateTo) {
-            (navigation as any).navigate(action.navigateTo, action.navigateParams);
-          }
-      }
-    } else {
-      // Navigate to the specified screen
-      if (action.navigateTo) {
-        (navigation as any).navigate(action.navigateTo, action.navigateParams);
-      }
-    }
-  };
-
-  // Get the icon background color (lighter version)
-  const getQuickActionBgColor = (color: string) => {
-    // Create a lighter background version of the color
-    const colorMap: Record<string, string> = {
-      '#FF6B6B': '#FFE8E8',
-      '#51CF66': '#E8FFE8',
-      '#4A90E2': '#E8F4FF',
-      '#9013FE': '#F3E8FF',
-      '#7ED321': '#EEFFD8',
-      '#FF9500': '#FFF5E8',
-      '#FF3B30': '#FFE8E8',
-      '#007AFF': '#E8F4FF',
-      '#5856D6': '#EFEDFF',
-      '#34C759': '#E8FFE8',
-      '#AF52DE': '#F9E8FF',
-      '#FF2D55': '#FFE8ED',
-      '#FFD60A': '#FFFBE8',
-      '#8E8E93': '#F5F5F5',
-      '#30D158': '#E8FFE8',
-      '#5AC8FA': '#E8F8FF',
-      '#20C6F7': '#E8FBFF',
-    };
-    return colorMap[color] || '#F5F5F5';
-  };
-
-  const renderBorrowedMoneyCard = (item: BorrowedMoney) => {
-    const overdue = isOverdue(item.dueDate);
-    
-    return (
-      <TouchableOpacity 
-        key={item.id} 
-        style={[styles.walletCard, { backgroundColor: theme.colors.surface }]}
-        onPress={() => handleBorrowedMoneyPress(item)}
-      >
-        <View style={styles.walletHeader}>
-          <View style={[styles.walletIcon, { backgroundColor: overdue ? '#FF3B30' : '#FF9500' }]}>
-            <Ionicons 
-              name={overdue ? 'warning' : 'person'} 
-              size={20} 
-              color="white" 
-            />
-          </View>
-          <Text style={[styles.walletName, { color: theme.colors.textSecondary }]} numberOfLines={1}>
-            {item.personName}
-          </Text>
-        </View>
-        <Text style={[styles.walletBalance, { color: theme.colors.text }]}>
-          {formatCurrency(item.amount)}
-        </Text>
-        <View style={styles.borrowedMoneyInfo}>
-          <Text style={[styles.borrowedReason, { color: theme.colors.textSecondary }]} numberOfLines={1}>
-            {item.reason}
-          </Text>
-          <Text style={[
-            styles.borrowedDueDate, 
-            { color: overdue ? '#FF3B30' : theme.colors.textSecondary }
-          ]}>
-            {t('due')}: {formatDate(item.dueDate)}
-          </Text>
-        </View>
-        <TouchableOpacity 
-          style={[
-            styles.transferButton, 
-            { backgroundColor: overdue ? '#FF3B30' : theme.isDark ? theme.colors.border : '#F2F2F7' }
-          ]}
-          onPress={() => handleBorrowedMoneyPress(item)}
-        >
-          <Text style={[
-            styles.transferButtonText, 
-            { color: overdue ? 'white' : theme.colors.primary }
-          ]}>
-            {overdue ? t('overdue') : t('details')}
-          </Text>
-        </TouchableOpacity>
-      </TouchableOpacity>
-    );
-  };
-
   const renderTransactionItem = (transaction: HybridTransaction, index: number) => {
     // Get transaction icon/logo based on type or description
     const getTransactionIcon = (type: string, description?: string) => {
@@ -710,7 +645,7 @@ const HomeScreen = () => {
     return (
       <TouchableOpacity 
         key={transaction.id} 
-        style={styles.operationItem}
+        style={[styles.operationItem, { backgroundColor: theme.colors.surface }]}
         onPress={() => (navigation as any).navigate('TransactionsHistory')}
         activeOpacity={0.7}
       >
@@ -849,9 +784,15 @@ const HomeScreen = () => {
     );
   };
 
+  const transferProgress = monthlyLimit > 0 ? Math.min((monthlySpent / monthlyLimit) * 100, 100) : 0;
+
   return (
-    <View style={[styles.container, { backgroundColor: theme.colors.headerBackground }]}>
-      <StatusBar barStyle="light-content" backgroundColor={theme.colors.headerBackground} />
+    <SafeAreaView style={[styles.safe, { backgroundColor: theme.colors.background }]}>
+      <StatusBar
+        barStyle={theme.isDark ? 'light-content' : 'dark-content'}
+        backgroundColor="transparent"
+        translucent
+      />
       
       {loadingData ? (
         <View style={[styles.loadingContainer, { backgroundColor: theme.colors.background }]}>
@@ -859,232 +800,166 @@ const HomeScreen = () => {
           <Text style={[styles.loadingText, { color: theme.colors.text }]}>{t('loading_data')}</Text>
         </View>
       ) : (
-        <>
-          {/* Dark Header Section */}
-          <View style={[styles.darkHeader, { backgroundColor: theme.colors.headerBackground, paddingTop: insets.top }]}>
-            {/* Top Header Row */}
-            <View style={styles.headerRow}>
-              <TouchableOpacity 
-                style={styles.userInfo}
-                onPress={() => (navigation as any).navigate('UserProfile')}
-                activeOpacity={0.7}
-              >
-                <View style={styles.avatarContainer}>
-                  {user?.avatar ? (
-                    <Image source={{ uri: user.avatar }} style={styles.avatar} />
-                  ) : (
-                    <View style={[styles.avatarPlaceholder, { backgroundColor: theme.colors.headerSurface }]}>
-                      <Text style={[styles.avatarInitial, { color: theme.colors.headerText }]}>
-                        {user?.name?.charAt(0)?.toUpperCase() || 'U'}
-                      </Text>
-                    </View>
-                  )}
-                </View>
-                <Text style={[styles.userName, { color: theme.colors.headerText }]}>{user?.name || t('user')}</Text>
-                <Ionicons name="chevron-forward" size={16} color={theme.colors.headerTextSecondary} style={{ marginLeft: 4 }} />
-              </TouchableOpacity>
-              <View style={styles.headerActions}>
-                <TouchableOpacity 
-                  style={[styles.headerIconButton, { backgroundColor: theme.colors.headerSurface }]}
-                  onPress={() => (navigation as any).navigate('QuickSettings')}
-                >
-                  <Ionicons name="settings-outline" size={22} color={theme.colors.headerText} />
-                </TouchableOpacity>
-                <TouchableOpacity 
-                  style={[styles.headerIconButton, { backgroundColor: theme.colors.headerSurface }]}
-                  onPress={() => (navigation as any).navigate('NotificationCenter')}
-                >
-                  <Ionicons name="notifications-outline" size={22} color={theme.colors.headerText} />
-                  {notificationState.unreadCount > 0 && (
-                    <View style={[styles.notificationBadge, { borderColor: theme.colors.headerBackground }]}>
-                      <Text style={styles.notificationBadgeText}>
-                        {notificationState.unreadCount > 99 ? '99+' : notificationState.unreadCount}
-                      </Text>
-                    </View>
-                  )}
-                </TouchableOpacity>
-              </View>
-            </View>
-
-            {/* Swipeable Wallet Display */}
-            <SwipeableWalletDisplay
-              wallets={wallets}
-              onWalletChange={(wallet: any, index: number) => {
-                setCurrentWalletIndex(index);
-                setSelectedWallet(wallet.id);
-              }}
-              currentWalletIndex={currentWalletIndex}
-              isBalanceVisible={isBalanceVisible}
-              formatCurrency={formatCurrency}
-              getWalletIcon={(type: string) => {
-                switch (type.toUpperCase()) {
-                  case 'BANK':
-                  case 'CREDIT_CARD':
-                    return 'card';
-                  case 'CASH':
-                    return 'cash';
-                  case 'SAVINGS':
-                  case 'INVESTMENT':
-                    return 'wallet';
-                  default:
-                    return 'wallet';
-                }
-              }}
+        <ScrollView
+          style={styles.scroll}
+          contentContainerStyle={styles.scrollContent}
+          showsVerticalScrollIndicator={false}
+          scrollEnabled={!isSwipingWallet}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              colors={[theme.colors.primary]}
+              tintColor={theme.colors.primary}
             />
-            
-            {/* Balance Card */}
-            <View style={styles.balanceSection}>
-              <View style={[styles.limitRow, { borderTopColor: theme.colors.headerBorder }]}>
-                <Text style={[styles.limitLabel, { color: theme.colors.headerTextSecondary }]}>{t('monthly_limit') || 'Monthly Limit'}</Text>
-                <TouchableOpacity onPress={() => setShowMonthlyLimitModal(true)}>
-                  <Text style={[styles.limitValue, { color: theme.colors.headerText }]}>{formatCurrency(monthlyLimit)}</Text>
-                </TouchableOpacity>
-              </View>
-              
-              <View style={styles.spentContainer}>
-                <View style={styles.spentProgressBar}>
-                  <View style={[styles.spentProgressFill, { width: `${Math.min((totalBalance * 0.1) / monthlyLimit * 100, 100)}%` }]} />
-                </View>
-                <Text style={[styles.spentText, { color: theme.colors.headerTextSecondary }]}>{formatCurrency(totalBalance * 0.1)} {t('spent_this_month') || 'spent this month'}</Text>
-              </View>
-              
-              {/* Action Buttons */}
-              <View style={styles.actionButtonsRow}>
-                <TouchableOpacity 
-                  style={styles.payButton}
-                  onPress={() => setShowAddExpenseModal(true)}
-                >
-                  <Text style={[styles.payButtonText, { color: theme.colors.headerBackground }]}>{t('pay') || 'Pay'}</Text>
-                  <View style={[styles.payButtonIcon, { backgroundColor: theme.colors.headerBackground }]}>
-                    <Text style={[styles.payButtonIconText, { color: theme.colors.headerText }]}>$</Text>
+          }
+        >
+          {/* Header */}
+          <View style={styles.headerRow}>
+            <TouchableOpacity
+              style={styles.userInfo}
+              onPress={() => (navigation as any).navigate('UserProfile')}
+              activeOpacity={0.7}
+            >
+              <View style={styles.avatarContainer}>
+                {user?.avatar ? (
+                  <Image source={{ uri: user.avatar }} style={styles.avatar} />
+                ) : (
+                  <View style={[styles.avatarPlaceholder, { backgroundColor: theme.colors.surface }]}>
+                    <Text style={[styles.avatarInitial, { color: theme.colors.text }]}>
+                      {user?.name?.charAt(0)?.toUpperCase() || 'U'}
+                    </Text>
                   </View>
-                </TouchableOpacity>
-                <TouchableOpacity 
-                  style={[styles.depositButton, { backgroundColor: theme.colors.headerSurface }]}
-                  onPress={() => (navigation as any).navigate('AddIncome')}
-                >
-                  <Text style={[styles.depositButtonText, { color: theme.colors.headerText }]}>{t('deposit') || 'Deposit'}</Text>
-                  <View style={styles.depositButtonIcon}>
-                    <Ionicons name="add" size={14} color={theme.colors.headerText} />
-                  </View>
-                </TouchableOpacity>
+                )}
               </View>
+              <Text style={[styles.userName, { color: theme.colors.text }]} numberOfLines={1}>
+                {user?.name || t('user')}
+              </Text>
+            </TouchableOpacity>
+
+            <View style={styles.headerActions}>
+              <TouchableOpacity
+                  style={[styles.headerIconButton, { backgroundColor: '#000000' }]}
+                onPress={() => (navigation as any).navigate('QuickSettings')}
+              >
+                  <Ionicons name="settings-outline" size={20} color="#FFFFFF" />
+              </TouchableOpacity>
+              <TouchableOpacity
+                  style={[styles.headerIconButton, { backgroundColor: '#000000' }]}
+                onPress={() => (navigation as any).navigate('NotificationCenter')}
+              >
+                  <Ionicons name="notifications-outline" size={20} color="#FFFFFF" />
+                {notificationState.unreadCount > 0 && (
+                  <View style={[styles.notificationBadge, { borderColor: theme.colors.background }]}>
+                    <Text style={styles.notificationBadgeText}>
+                      {notificationState.unreadCount > 99 ? '99+' : notificationState.unreadCount}
+                    </Text>
+                  </View>
+                )}
+              </TouchableOpacity>
             </View>
           </View>
 
-          {/* White Operations Section */}
-          <View style={[styles.operationsContainer, { backgroundColor: theme.colors.background }]}>
-            <ScrollView 
-              style={styles.operationsScroll}
-              showsVerticalScrollIndicator={false}
-              refreshControl={
-                <RefreshControl
-                  refreshing={refreshing}
-                  onRefresh={onRefresh}
-                  colors={[theme.colors.primary]}
-                  tintColor={theme.colors.primary}
-                />
-              }
+          {/* Balance */}
+          <View style={styles.balanceBlock}>
+            <Animated.View
+              style={[styles.balanceSwipeArea, { transform: [{ scale: scaleAnim }] }]}
+              {...panResponder.panHandlers}
             >
-              {/* Operations Header */}
-              <View style={styles.operationsHeader}>
-                <Text style={[styles.operationsTitle, { color: theme.colors.text }]}>
-                  {t('operations') || 'Operations'}
-                </Text>
-                <TouchableOpacity onPress={() => (navigation as any).navigate('TransactionsHistory')}>
-                  <Text style={styles.viewAllText}>{t('view_all') || 'View All'}</Text>
-                </TouchableOpacity>
-              </View>
+              <Text style={[styles.balanceLabel, { color: theme.colors.textSecondary }]}> 
+                {currentWallet?.name ? `Available on card • ${currentWallet.name}` : 'Available on card'}
+              </Text>
+              <Text style={[styles.balanceAmount, { color: theme.colors.text }]}> 
+                {formatWalletBalance(currentWallet?.balance || 0, currentWallet?.id)}
+              </Text>
+              <Text style={[styles.balanceHint, { color: theme.colors.textSecondary }]}>Swipe Right/left to change card</Text>
+            </Animated.View>
 
-              {/* Grouped Transactions */}
-              {Object.entries(groupTransactionsByDate(recentTransactions)).map(([date, transactions]) => (
-                <View key={date} style={styles.transactionGroup}>
-                  <Text style={[styles.groupDateLabel, { color: theme.colors.textSecondary }]}>{date}</Text>
-                  {transactions.map((transaction, index) => renderTransactionItem(transaction, index))}
+            <View style={styles.transferRow}>
+              <Text style={[styles.transferLabel, { color: theme.colors.text }]}>Transfer Limit</Text>
+              <TouchableOpacity onPress={() => setShowMonthlyLimitModal(true)}>
+                <Text style={[styles.transferValue, { color: theme.colors.text }]}>{formatCurrency(monthlyLimit)}</Text>
+              </TouchableOpacity>
+            </View>
+
+            <Text style={[styles.spentTextLight, { color: theme.colors.textSecondary }]}>
+              Spent {formatCurrency(monthlySpent)}
+            </Text>
+
+            <View style={[styles.progressTrack, { backgroundColor: theme.isDark ? 'rgba(255,255,255,0.12)' : 'rgba(0,0,0,0.08)' }]}>
+              <View
+                style={[
+                  styles.progressFill,
+                  {
+                    width: `${transferProgress}%`,
+                    backgroundColor: theme.isDark ? '#10B981' : '#111827',
+                  },
+                ]}
+              />
+            </View>
+
+            <View style={styles.actionButtonsRowLight}>
+              <TouchableOpacity style={styles.primaryActionButton} onPress={() => setShowAddExpenseModal(true)}>
+                <Text style={styles.primaryActionText}>{t('pay') || 'Pay'}</Text>
+                <View style={styles.primaryActionIcon}>
+                  <Text style={styles.primaryActionIconText}>$</Text>
                 </View>
-              ))}
+              </TouchableOpacity>
 
-              {recentTransactions.length === 0 && (
-                <View style={styles.emptyTransactions}>
-                  <Ionicons name="receipt-outline" size={48} color={theme.colors.textSecondary} />
-                  <Text style={[styles.emptyText, { color: theme.colors.textSecondary }]}>
-                    {t('no_transactions') || 'No transactions yet'}
-                  </Text>
+              <TouchableOpacity
+                style={styles.primaryActionButton}
+                onPress={() => (navigation as any).navigate('AddIncome')}
+              >
+                <Text style={styles.primaryActionText}>{t('deposit') || 'Deposit'}</Text>
+                <View style={styles.primaryActionIcon}>
+                  <Ionicons name="add" size={14} color="#111827" />
                 </View>
-              )}
-
-              {/* Quick Actions Section */}
-              <View style={styles.quickActionsSection}>
-                <View style={styles.quickActionsSectionHeader}>
-                  <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>{t('quick_actions')}</Text>
-                  <TouchableOpacity 
-                    onPress={() => (navigation as any).navigate('QuickActionsSettings')}
-                    hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                  >
-                    <Ionicons name="settings-outline" size={20} color={theme.colors.textSecondary} />
-                  </TouchableOpacity>
-                </View>
-                <View style={styles.quickActionsGrid}>
-                  {enabledQuickActions.length > 0 ? (
-                    enabledQuickActions.map((action) => (
-                      <TouchableOpacity 
-                        key={action.id}
-                        style={[styles.quickActionCard, { backgroundColor: theme.colors.surface }]}
-                        onPress={() => handleQuickActionPress(action)}
-                      >
-                        <View style={[styles.quickActionIcon, { backgroundColor: getQuickActionBgColor(action.color) }]}>
-                          <Ionicons name={action.icon as any} size={24} color={action.color} />
-                        </View>
-                        <Text style={[styles.quickActionText, { color: theme.colors.text }]} numberOfLines={1}>
-                          {t(action.action) || action.label}
-                        </Text>
-                      </TouchableOpacity>
-                    ))
-                  ) : (
-                    <View style={styles.emptyQuickActions}>
-                      <Text style={[styles.emptyQuickActionsText, { color: theme.colors.textSecondary }]}>
-                        {t('no_quick_actions') || 'No quick actions configured'}
-                      </Text>
-                      <TouchableOpacity 
-                        style={[styles.configureButton, { backgroundColor: theme.colors.primary }]}
-                        onPress={() => (navigation as any).navigate('QuickActionsSettings')}
-                      >
-                        <Text style={styles.configureButtonText}>{t('configure') || 'Configure'}</Text>
-                      </TouchableOpacity>
-                    </View>
-                  )}
-                </View>
-              </View>
-
-              {/* Borrowed Money Summary */}
-              {borrowedMoneyList.length > 0 && (
-                <TouchableOpacity 
-                  style={[styles.borrowedSummaryCard, { backgroundColor: theme.colors.surface }]}
-                  onPress={() => (navigation as any).navigate('BorrowedMoneyHistory')}
-                >
-                  <View style={styles.borrowedSummaryLeft}>
-                    <View style={[styles.borrowedIcon, { backgroundColor: '#FFF5E8' }]}>
-                      <Ionicons name="people" size={20} color="#FF9500" />
-                    </View>
-                    <View>
-                      <Text style={[styles.borrowedSummaryTitle, { color: theme.colors.text }]}>
-                        {t('borrowed_money')}
-                      </Text>
-                      <Text style={[styles.borrowedSummarySubtitle, { color: theme.colors.textSecondary }]}>
-                        {borrowedMoneyList.length} {t('pending') || 'pending'}
-                      </Text>
-                    </View>
-                  </View>
-                  <Text style={[styles.borrowedSummaryAmount, { color: '#FF9500' }]}>
-                    {formatCurrency(totalBorrowedAmount)}
-                  </Text>
-                </TouchableOpacity>
-              )}
-
-              <View style={{ height: 100 }} />
-            </ScrollView>
+              </TouchableOpacity>
+            </View>
           </View>
-        </>
+
+          {/* Operations (full-width sheet like the reference image) */}
+          <View style={[styles.operationsSheet, { backgroundColor: theme.colors.surface }]}>
+            <View
+              style={[
+                styles.topDivider,
+                { backgroundColor: theme.isDark ? 'rgba(255,255,255,0.12)' : 'rgba(0,0,0,0.06)' },
+              ]}
+            />
+            <View style={styles.sheetHandleWrap}>
+              <View style={styles.separatorHandle} />
+            </View>
+
+            <View style={styles.operationsInner}>
+            <View style={styles.operationsHeader}>
+              <Text style={[styles.operationsTitle, { color: theme.colors.text }]}>
+                {t('operations') || 'Operations'}
+              </Text>
+              <TouchableOpacity onPress={() => (navigation as any).navigate('TransactionsHistory')}>
+                <Text style={styles.viewAllText}>{t('view all') || 'View All'}</Text>
+              </TouchableOpacity>
+            </View>
+
+            {Object.entries(groupTransactionsByDate(recentTransactions)).map(([date, transactions]) => (
+              <View key={date} style={styles.transactionGroup}>
+                <Text style={[styles.groupDateLabel, { color: theme.colors.textSecondary }]}>{date}</Text>
+                {transactions.map((transaction, index) => renderTransactionItem(transaction, index))}
+              </View>
+            ))}
+
+            {recentTransactions.length === 0 && (
+              <View style={styles.emptyTransactions}>
+                <Ionicons name="receipt-outline" size={48} color={theme.colors.textSecondary} />
+                <Text style={[styles.emptyText, { color: theme.colors.textSecondary }]}>
+                  {t('no_transactions') || 'No transactions yet'}
+                </Text>
+              </View>
+            )}
+
+            <View style={{ height: 110 }} />
+            </View>
+          </View>
+        </ScrollView>
       )}
 
       {/* Modals */}
@@ -1129,7 +1004,7 @@ const HomeScreen = () => {
         <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', paddingHorizontal: 20 }}>
           <View style={{ backgroundColor: theme.colors.surface, borderRadius: 12, padding: 20 }}>
             <Text style={{ fontSize: 18, fontWeight: '600', color: theme.colors.text, marginBottom: 12 }}>
-              {t('monthly_limit') || 'Set Monthly Spending Limit'}
+              {t('monthly limit') || 'Set Monthly Spending Limit'}
             </Text>
             <TextInput
               value={monthlyLimitInput}
@@ -1164,30 +1039,33 @@ const HomeScreen = () => {
           </View>
         </View>
       </Modal>
-    </View>
+    </SafeAreaView>
   );
 };
 
 const styles = StyleSheet.create({
-  container: {
+  safe: {
     flex: 1,
-    backgroundColor: '#1C1C1E',
   },
-  
-  // Dark Header Section
-  darkHeader: {
+  scroll: {
+    flex: 1,
+  },
+  scrollContent: {
     paddingHorizontal: 20,
-    paddingBottom: 24,
+    paddingTop: 8,
   },
+
+  // Header
   headerRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingVertical: 16,
+    paddingVertical: 12,
   },
   userInfo: {
     flexDirection: 'row',
     alignItems: 'center',
+    flex: 1,
   },
   avatarContainer: {
     marginRight: 12,
@@ -1211,142 +1089,135 @@ const styles = StyleSheet.create({
   userName: {
     fontSize: 16,
     fontWeight: '600',
+    maxWidth: 180,
   },
   headerActions: {
     flexDirection: 'row',
     alignItems: 'center',
   },
   headerIconButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: 38,
+    height: 38,
+    borderRadius: 19,
     justifyContent: 'center',
     alignItems: 'center',
     marginLeft: 8,
   },
-  
-  // Balance Section
-  balanceSection: {
-    marginTop: 8,
-  },
+
+  // Balance section (light like screenshot)
   balanceLabel: {
     fontSize: 14,
     marginBottom: 4,
-  },
-  balanceRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
   },
   balanceAmount: {
     fontSize: 36,
     fontWeight: '700',
     letterSpacing: -1,
   },
-  limitRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginTop: 16,
-    paddingTop: 16,
-    borderTopWidth: 1,
+  balanceBlock: {
+    paddingTop: 6,
+    paddingBottom: 16,
   },
-  limitLabel: {
-    fontSize: 14,
+  balanceSwipeArea: {
+    paddingVertical: 12,
   },
-  limitValue: {
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  spentText: {
-    fontSize: 13,
-    marginTop: 4,
-  },
-  spentContainer: {
-    marginTop: 12,
-  },
-  spentProgressBar: {
-    height: 6,
-    backgroundColor: 'rgba(255, 255, 255, 0.15)',
-    borderRadius: 3,
-    marginBottom: 6,
-    overflow: 'hidden',
-  },
-  spentProgressFill: {
-    height: '100%',
-    backgroundColor: '#10B981',
-    borderRadius: 3,
-  },
-  
-  // Action Buttons
-  actionButtonsRow: {
-    flexDirection: 'row',
-    marginTop: 20,
-    gap: 12,
-  },
-  payButton: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#FFFFFF',
-    paddingVertical: 14,
-    borderRadius: 25,
-  },
-  payButtonText: {
-    fontSize: 16,
-    fontWeight: '600',
-    marginRight: 8,
-  },
-  payButtonIcon: {
-    width: 22,
-    height: 22,
-    borderRadius: 11,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  payButtonIconText: {
+  balanceHint: {
     fontSize: 12,
-    fontWeight: '700',
+    marginTop: 6,
   },
-  depositButton: {
+  transferRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: 14,
+  },
+  transferLabel: {
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  transferValue: {
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  spentTextLight: {
+    fontSize: 12,
+    marginTop: 6,
+  },
+  progressTrack: {
+    height: 6,
+    borderRadius: 3,
+    overflow: 'hidden',
+    marginTop: 8,
+  },
+  progressFill: {
+    height: '100%',
+    borderRadius: 3,
+  },
+  actionButtonsRowLight: {
+    flexDirection: 'row',
+    gap: 12,
+    marginTop: 16,
+  },
+  primaryActionButton: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
+    backgroundColor: '#111827',
     paddingVertical: 14,
-    borderRadius: 25,
+    borderRadius: 999,
   },
-  depositButtonText: {
-    fontSize: 16,
-    fontWeight: '600',
+  primaryActionText: {
+    color: '#FFFFFF',
+    fontSize: 15,
+    fontWeight: '700',
     marginRight: 8,
   },
-  depositButtonIcon: {
+  primaryActionIcon: {
     width: 22,
     height: 22,
     borderRadius: 11,
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
-    justifyContent: 'center',
+    backgroundColor: '#FFFFFF',
     alignItems: 'center',
+    justifyContent: 'center',
   },
-  
-  // Operations Section
-  operationsContainer: {
-    flex: 1,
+  primaryActionIconText: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#111827',
+  },
+
+  operationsSheet: {
+    marginTop: 10,
+    marginHorizontal: -20,
     borderTopLeftRadius: 28,
     borderTopRightRadius: 28,
-    marginTop: -4,
     overflow: 'hidden',
   },
-  operationsScroll: {
-    flex: 1,
-    paddingTop: 24,
+  topDivider: {
+    width: '100%',
+    height: 1,
+  },
+  sheetHandleWrap: {
+    alignItems: 'center',
+    paddingTop: 10,
+    paddingBottom: 6,
+  },
+  separatorHandle: {
+    width: 46,
+    height: 5,
+    borderRadius: 999,
+    backgroundColor: 'rgba(0,0,0,0.14)',
+  },
+  operationsInner: {
+    paddingHorizontal: 20,
+    paddingTop: 8,
   },
   operationsHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: 20,
+    paddingHorizontal: 0,
     marginBottom: 16,
   },
   operationsTitle: {
@@ -1362,7 +1233,7 @@ const styles = StyleSheet.create({
   // Transaction Groups
   transactionGroup: {
     marginBottom: 16,
-    paddingHorizontal: 20,
+    paddingHorizontal: 0,
   },
   groupDateLabel: {
     fontSize: 13,
@@ -1376,7 +1247,14 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     paddingVertical: 14,
-    borderBottomWidth: 0,
+    paddingHorizontal: 14,
+    borderRadius: 18,
+    marginBottom: 10,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 10,
+    elevation: 2,
   },
   operationIconContainer: {
     width: 48,
@@ -1403,109 +1281,6 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   
-  // Quick Actions
-  quickActionsSection: {
-    paddingHorizontal: 20,
-    marginTop: 8,
-  },
-  quickActionsSectionHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  quickActionsGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 12,
-    marginTop: 12,
-  },
-  quickActionCard: {
-    minWidth: '30%',
-    maxWidth: '32%',
-    flex: 1,
-    alignItems: 'center',
-    paddingVertical: 16,
-    paddingHorizontal: 8,
-    borderRadius: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 8,
-    elevation: 2,
-  },
-  quickActionIcon: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 8,
-  },
-  quickActionText: {
-    fontSize: 12,
-    fontWeight: '500',
-    textAlign: 'center',
-  },
-  emptyQuickActions: {
-    flex: 1,
-    alignItems: 'center',
-    paddingVertical: 24,
-  },
-  emptyQuickActionsText: {
-    fontSize: 14,
-    marginBottom: 12,
-  },
-  configureButton: {
-    paddingHorizontal: 20,
-    paddingVertical: 10,
-    borderRadius: 20,
-  },
-  configureButtonText: {
-    color: '#FFFFFF',
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  
-  // Borrowed Summary
-  borrowedSummaryCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginHorizontal: 20,
-    marginTop: 16,
-    padding: 16,
-    borderRadius: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 8,
-    elevation: 2,
-  },
-  borrowedSummaryLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  borrowedIcon: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 12,
-  },
-  borrowedSummaryTitle: {
-    fontSize: 15,
-    fontWeight: '600',
-  },
-  borrowedSummarySubtitle: {
-    fontSize: 13,
-    marginTop: 2,
-  },
-  borrowedSummaryAmount: {
-    fontSize: 18,
-    fontWeight: '700',
-  },
-  
   // Empty State
   emptyTransactions: {
     alignItems: 'center',
@@ -1515,12 +1290,6 @@ const styles = StyleSheet.create({
   emptyText: {
     fontSize: 15,
     marginTop: 12,
-  },
-  
-  // Section Title
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: '700',
   },
   
   // Notification Badge

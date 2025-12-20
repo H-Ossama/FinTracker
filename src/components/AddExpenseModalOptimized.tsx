@@ -25,6 +25,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { useTheme } from '../contexts/ThemeContext';
 import { useLocalization } from '../contexts/LocalizationContext';
+import { useWalletVisibility } from '../hooks/useWalletVisibility';
 import { hybridDataService, HybridWallet } from '../services/hybridDataService';
 import { LocalCategory } from '../services/localStorageService';
 import { 
@@ -95,6 +96,7 @@ const WalletItem = memo<{
   onPress: (id: string) => void;
   theme: any;
 }>(({ wallet, isSelected, onPress, theme }) => {
+  const { formatWalletBalance } = useWalletVisibility();
   const handlePress = useCallback(() => {
     onPress(wallet.id);
   }, [wallet.id, onPress]);
@@ -117,7 +119,7 @@ const WalletItem = memo<{
         <View>
           <Text style={[styles.walletName, { color: theme.colors.text }]}>{wallet.name}</Text>
           <Text style={[styles.walletBalance, { color: theme.colors.textSecondary }]}>
-            ${wallet.balance.toFixed(2)}
+            {formatWalletBalance(wallet.balance, wallet.id)}
           </Text>
         </View>
       </View>

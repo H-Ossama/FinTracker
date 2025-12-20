@@ -29,11 +29,13 @@ import { withOptimizedMemo } from '../utils/componentOptimization';
 const WalletScreen = () => {
   const { theme } = useTheme();
   const { formatCurrency, t } = useLocalization();
-  const { formatWalletBalance, shouldShowBalance, getTotalVisibleBalance } = useWalletVisibility();
+  const { formatWalletBalance, getTotalVisibleBalance, isWalletHidden, toggleWalletHidden } = useWalletVisibility();
   const quickActions = useQuickActions();
   const navigation = useNavigation();
   const { user } = useAuth();
   const insets = useSafeAreaInsets();
+
+  const PREFERRED_WALLET_KEY = 'preferredWalletId';
   
   const [wallets, setWallets] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -58,7 +60,13 @@ const WalletScreen = () => {
     try {
       setLoading(true);
       const fetchedWallets = await hybridDataService.getWallets();
-      setWallets(fetchedWallets);
+      const preferredId = await (await import('@react-native-async-storage/async-storage')).default.getItem(PREFERRED_WALLET_KEY);
+      setWallets(
+        fetchedWallets.map((w: any) => ({
+          ...w,
+          isPreferred: preferredId ? w.id === preferredId : false,
+        }))
+      );
       await calculateMonthlySpending();
     } catch (error) {
       console.error('Error loading wallets:', error);
@@ -182,6 +190,7 @@ const WalletScreen = () => {
   };
 
   const handleDeleteWallet = async (walletId: string, walletName: string, walletBalance: number) => {
+    const preferredWalletId = wallets.find((w: any) => w.isPreferred)?.id;
     // Check if wallet has balance
     const hasBalance = walletBalance !== 0;
     const confirmationMessage = hasBalance 
@@ -207,6 +216,12 @@ const WalletScreen = () => {
               console.log('Deleting wallet:', walletId);
               await hybridDataService.deleteWallet(walletId);
               console.log('Wallet deleted successfully');
+
+              // If deleted wallet was preferred, clear preference.
+              if (preferredWalletId && preferredWalletId === walletId) {
+                const AsyncStorage = (await import('@react-native-async-storage/async-storage')).default;
+                await AsyncStorage.removeItem(PREFERRED_WALLET_KEY);
+              }
               
               // Refresh the wallet list
               await loadWallets();
@@ -234,14 +249,9 @@ const WalletScreen = () => {
 
   const handleSetPreferredWallet = async (walletId: string) => {
     try {
-      // Update all wallets: set the selected one as preferred, others as not preferred
-      const updatedWallets = wallets.map(w => ({
-        ...w,
-        isPreferred: w.id === walletId
-      }));
-      
-      setWallets(updatedWallets);
-      // In a real app, you would save this to storage/backend
+      const AsyncStorage = (await import('@react-native-async-storage/async-storage')).default;
+      await AsyncStorage.setItem(PREFERRED_WALLET_KEY, walletId);
+      setWallets(prev => prev.map(w => ({ ...w, isPreferred: w.id === walletId })));
       Alert.alert(t('success'), t('wallet set as preferred, this is the default wallet that will be displayed first in Dashboard'));
     } catch (error) {
       console.error('Error setting preferred wallet:', error);
@@ -279,11 +289,11 @@ const WalletScreen = () => {
                   color={wallet.isPreferred ? '#FFD700' : 'white'}
                 />
               </TouchableOpacity>
-              <TouchableOpacity onPress={() => setIsBalanceVisible(!isBalanceVisible)}>
-                <Ionicons 
-                  name={isBalanceVisible ? 'eye-outline' : 'eye-off-outline'} 
-                  size={20} 
-                  color="white" 
+              <TouchableOpacity onPress={() => void toggleWalletHidden(wallet.id)}>
+                <Ionicons
+                  name={isWalletHidden(wallet.id) ? 'eye-off-outline' : 'eye-outline'}
+                  size={20}
+                  color="white"
                 />
               </TouchableOpacity>
               <TouchableOpacity 
@@ -300,9 +310,7 @@ const WalletScreen = () => {
           </View>
           
           <Text style={styles.walletBalance}>
-            {(isBalanceVisible && shouldShowBalance(wallet.id)) 
-              ? formatWalletBalance(wallet.balance, wallet.id) 
-              : '••••••'}
+            {formatWalletBalance(wallet.balance, wallet.id)}
           </Text>
           
           <View style={styles.walletActions}>

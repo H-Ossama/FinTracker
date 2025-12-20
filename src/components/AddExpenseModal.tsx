@@ -19,6 +19,7 @@ import { Ionicons } from '@expo/vector-icons';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { useTheme } from '../contexts/ThemeContext';
 import { useLocalization } from '../contexts/LocalizationContext';
+import { useWalletVisibility } from '../hooks/useWalletVisibility';
 import { hybridDataService, HybridWallet } from '../services/hybridDataService';
 import { LocalCategory } from '../services/localStorageService';
 
@@ -55,6 +56,7 @@ const AddExpenseModal: React.FC<AddExpenseModalProps> = ({
 }) => {
   const { theme } = useTheme();
   const { t } = useLocalization();
+  const { formatWalletBalance } = useWalletVisibility();
   const insets = useSafeAreaInsets();
   const [title, setTitle] = useState('');
   const [amount, setAmount] = useState('');
@@ -342,7 +344,9 @@ const AddExpenseModal: React.FC<AddExpenseModalProps> = ({
                     </View>
                     <View>
                       <Text style={[styles.walletName, { color: theme.colors.text }]}>{wallet.name}</Text>
-                      <Text style={[styles.walletBalance, { color: theme.colors.textSecondary }]}>${wallet.balance.toFixed(2)}</Text>
+                      <Text style={[styles.walletBalance, { color: theme.colors.textSecondary }]}>
+                        {formatWalletBalance(wallet.balance, wallet.id)}
+                      </Text>
                     </View>
                   </View>
                   {selectedWallet === wallet.id && (

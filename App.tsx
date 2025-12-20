@@ -201,21 +201,29 @@ const AppNavigator = React.memo(() => {
     const currentRouteName = navigationRef.getCurrentRoute()?.name;
     const isNewScreen = currentRouteName && !visitedScreens.current.has(currentRouteName);
 
-    // Only show loader for new screens, not for cached/visited ones
+    // Only show loader for new screens if the transition is actually slow.
     if (isNewScreen) {
-      setIsNavigating(true);
-
       if (navigationTransitionTimeout.current) {
         clearTimeout(navigationTransitionTimeout.current);
       }
 
+      // Delay showing the loader to avoid adding perceived lag on fast transitions.
       navigationTransitionTimeout.current = setTimeout(() => {
-        InteractionManager.runAfterInteractions(() => {
-          if (isMounted.current) {
-            setIsNavigating(false);
-          }
-        });
-      }, 500);
+        if (isMounted.current) {
+          setIsNavigating(true);
+        }
+      }, 150);
+
+      InteractionManager.runAfterInteractions(() => {
+        if (!isMounted.current) {
+          return;
+        }
+        if (navigationTransitionTimeout.current) {
+          clearTimeout(navigationTransitionTimeout.current);
+          navigationTransitionTimeout.current = null;
+        }
+        setIsNavigating(false);
+      });
     }
 
     // Mark screen as visited for future navigation

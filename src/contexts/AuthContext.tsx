@@ -349,7 +349,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
           
           if (sessionValidation.valid) {
             // Do NOT set cloud sync auth token automatically during init.
-            // Cloud sync requires an explicit Firebase ID token and must be set via `setAuthToken()`.
+            // Cloud sync requires an explicit backend session JWT and must be set via `setAuthToken()`.
             setState(prev => ({
               ...prev,
               user,
@@ -486,7 +486,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       }
 
       // Do not automatically set cloud sync auth token here.
-      // Cloud sync must be explicitly initialized with a Firebase ID token.
+      // Cloud sync must be explicitly initialized with a backend session JWT.
     } catch (error) {
       console.error('Error persisting auth session:', error);
       throw error;
@@ -1135,31 +1135,36 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         isBackendUser: false,
       };
 
-      // Store user data and persist Firebase ID Token (used for cloud sync)
-      const firebaseIdToken = await firebaseAuthService.getIdToken(true);
-      if (!firebaseIdToken) {
-        throw new Error('Failed to obtain Firebase ID token for cloud sync');
-      }
+      // Persist app session (Google users don't need token validation)
+      await persistAuthSession(user, 'google_session', true, { isGoogleUser: true });
 
-      await persistAuthSession(user, firebaseIdToken, true, { isGoogleUser: true });
-      await cloudSyncService.setAuthToken(firebaseIdToken);
+      // Exchange Google ID token for backend session JWT (required by /api/sync/*)
+      const backendLogin = await backendAuthService.loginWithGoogle(googleUser.idToken);
+      if (backendLogin.success) {
+        await cloudSyncService.setAuthToken(backendLogin.token);
+        await AsyncStorage.setItem('auth_token', backendLogin.token);
+        await AsyncStorage.setItem(STORAGE_KEYS.CLOUD_SYNC_ENABLED, 'true');
+      } else {
+        await AsyncStorage.setItem(STORAGE_KEYS.CLOUD_SYNC_ENABLED, 'false');
+        console.warn('Backend Google login failed during sign-in:', backendLogin.error);
+      }
 
       // Check for existing cloud backup and sync (with progress UI)
       try {
+        if (!backendLogin.success) {
+          throw new Error(backendLogin.error || 'Backend cloud session unavailable');
+        }
         syncProgressService.clear();
         syncProgressService.setProgress({ stage: 'checking', progress: 5, message: 'Checking for cloud backup...' });
         const hasBackup = await cloudSyncService.hasCloudBackup(googleUser);
-        let cloudSyncEnabled = false;
-
         if (hasBackup) {
           // Download and restore with progress
           const downloadResult = await cloudSyncService.downloadUserData(googleUser, (p) => {
             try { syncProgressService.setProgress(p); } catch {}
           });
 
-          if (downloadResult.success) {
-            cloudSyncEnabled = true;
-            await AsyncStorage.setItem(STORAGE_KEYS.CLOUD_SYNC_ENABLED, 'true');
+          if (!downloadResult.success) {
+            throw new Error(downloadResult.error || 'Cloud restore failed');
           }
         }
       } catch (err) {
@@ -1222,26 +1227,28 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       await AsyncStorage.removeItem('is_demo_account');
       await AsyncStorage.removeItem('seed_demo_data');
 
-      // Persist Firebase ID Token only (used for cloud sync)
-      const firebaseIdToken = await firebaseAuthService.getIdToken(true);
-      if (!firebaseIdToken) {
-        throw new Error('Failed to obtain Firebase ID token for cloud sync');
-      }
+      // Persist app session (Google users don't need token validation)
+      await persistAuthSession(user, 'google_session', true, { isGoogleUser: true });
 
-      await persistAuthSession(user, firebaseIdToken, true, { isGoogleUser: true });
-      await cloudSyncService.setAuthToken(firebaseIdToken);
+      // Exchange Google ID token for backend JWT (required by /api/sync/* middleware)
+      const backendLogin = await backendAuthService.loginWithGoogle(googleUser.idToken);
+      if (backendLogin.success) {
+        await cloudSyncService.setAuthToken(backendLogin.token);
+        await AsyncStorage.setItem('auth_token', backendLogin.token);
+        await AsyncStorage.setItem(STORAGE_KEYS.CLOUD_SYNC_ENABLED, 'true');
 
-      // Enable cloud sync for new Google users by default
-      await AsyncStorage.setItem(STORAGE_KEYS.CLOUD_SYNC_ENABLED, 'true');
-      
-      // Upload initial data to cloud with progress UI
-      try {
-        syncProgressService.setProgress({ stage: 'uploading', progress: 5, message: 'Uploading initial backup...' });
-        await cloudSyncService.uploadUserData(googleUser, (p) => {
-          try { syncProgressService.setProgress(p); } catch {}
-        });
-      } catch (err) {
-        console.warn('Initial cloud upload failed during Google sign-up:', err);
+        // Upload initial data to cloud with progress UI
+        try {
+          syncProgressService.setProgress({ stage: 'uploading', progress: 5, message: 'Uploading initial backup...' });
+          await cloudSyncService.uploadUserData(googleUser, (p) => {
+            try { syncProgressService.setProgress(p); } catch {}
+          });
+        } catch (err) {
+          console.warn('Initial cloud upload failed during Google sign-up:', err);
+        }
+      } else {
+        await AsyncStorage.setItem(STORAGE_KEYS.CLOUD_SYNC_ENABLED, 'false');
+        console.warn('Backend Google login failed during sign-up:', backendLogin.error);
       }
 
       setState(prev => ({
@@ -1251,7 +1258,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         isLoading: false,
         rememberMe: true,
         isGoogleAuthenticated: true,
-        cloudSyncEnabled: true,
+        cloudSyncEnabled: backendLogin.success,
       }));
       
       return { success: true };

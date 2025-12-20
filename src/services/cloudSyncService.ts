@@ -6,7 +6,7 @@ import { notificationService } from './notificationService';
 import { hybridDataService } from './hybridDataService';
 import { getBackendApiBaseUrl, getBackendApiRoot } from '../config/apiConfig';
 import { backendAuthService } from './backendAuthService';
-import { firebaseAuthService } from './firebaseAuthService';
+
 
 export interface UserDataBackup {
   user: {
@@ -62,12 +62,141 @@ interface SyncProgress {
   message: string;
 }
 
+type CloudOperation = 'sync' | 'backup' | 'restore';
+
+const maskToken = (token: string): string => {
+  if (!token) return '';
+  if (token.length <= 12) return `${token.slice(0, 3)}…`;
+  return `${token.slice(0, 6)}…${token.slice(-4)}`;
+};
+
 class CloudSyncService {
   private readonly SYNC_CONFIG_KEY = 'sync_config';
   private readonly AUTH_TOKEN_KEY = 'auth_token';
   private readonly apiBaseUrl: string;
   private readonly syncEndpoint: string;
   private authToken: string | null = null;
+
+  private async ensureBackendSessionToken(onProgress?: (p: any) => void): Promise<boolean> {
+    // Backend expects its own session JWT stored in `auth_token`.
+    try {
+      if (this.authToken) return true;
+      const stored = await AsyncStorage.getItem(this.AUTH_TOKEN_KEY);
+      if (stored) {
+        this.authToken = stored;
+        return true;
+      }
+    } catch {}
+
+    // If user signed in with Google, we can exchange the stored Google ID token for a backend JWT.
+    try {
+      const googleIdToken = await SecureStore.getItemAsync('google_id_token');
+      if (!googleIdToken) {
+        return false;
+      }
+
+      onProgress?.({ operation: 'sync', stage: 'connecting', progress: 8, message: 'Signing in to cloud…' });
+      try { syncProgressService.setProgress({ operation: 'sync', stage: 'connecting', progress: 8, message: 'Signing in to cloud…' }); } catch {}
+
+      const backendLogin = await backendAuthService.loginWithGoogle(googleIdToken);
+      if (backendLogin.success) {
+        await this.setAuthToken(backendLogin.token);
+        return true;
+      }
+    } catch {
+      // ignore
+    }
+
+    return false;
+  }
+
+  private async handleUnauthorized(debug?: any): Promise<void> {
+    // If backend rejects our token, stop trying in background.
+    // This avoids repeated heavy collect+upload cycles that can lag the UI.
+    try {
+      this.authToken = null;
+    } catch {}
+
+    try {
+      await AsyncStorage.removeItem(this.STORAGE_KEYS.CLOUD_SYNC_ENABLED);
+    } catch {}
+
+    try {
+      await AsyncStorage.setItem('cloud_sync_last_auth_error', new Date().toISOString());
+    } catch {}
+
+    try {
+      if (debug) {
+        console.warn('⚠️ Cloud sync disabled due to auth error', debug);
+      } else {
+        console.warn('⚠️ Cloud sync disabled due to auth error');
+      }
+    } catch {}
+  }
+
+  private async sleep(ms: number): Promise<void> {
+    await new Promise((resolve) => setTimeout(resolve, ms));
+  }
+
+  private isRetryableNetworkError(error: any): boolean {
+    const message = (error instanceof Error ? error.message : String(error)).toLowerCase();
+    if (error?.name === 'AbortError') return true;
+    if (message.includes('network request failed')) return true;
+    if (message.includes('failed to fetch')) return true;
+    if (message.includes('timeout')) return true;
+    const status = error?.debug?.status ?? error?.status;
+    if (typeof status === 'number' && [408, 429, 502, 503, 504].includes(status)) return true;
+    return false;
+  }
+
+  private async ensureBackendAwake(operation: CloudOperation, onProgress?: (p: any) => void): Promise<void> {
+    const healthUrl = `${this.apiBaseUrl}/health`;
+
+    const maxAttempts = 3;
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+      if (syncProgressService.isCancelRequested && syncProgressService.isCancelRequested()) {
+        throw new Error('Cancelled by user');
+      }
+
+      const message =
+        attempt === 1
+          ? 'Waking cloud server…'
+          : `Cloud server waking… (retry ${attempt}/${maxAttempts})`;
+
+      try {
+        onProgress?.({ operation, stage: 'waking_server', progress: 8, message });
+        try { syncProgressService.setProgress({ operation, stage: 'waking_server', progress: 8, message }); } catch {}
+
+        const controller = new AbortController();
+        const timeoutMs = 25000;
+        const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+        try {
+          syncProgressService.setAbortHandler(() => controller.abort());
+        } catch {}
+
+        const res = await fetch(healthUrl, { method: 'GET', signal: controller.signal });
+        clearTimeout(timeoutId);
+
+        if (!res.ok) {
+          const err: any = new Error(`Health check failed: ${res.status}`);
+          err.debug = { url: healthUrl, method: 'GET', status: res.status, statusText: res.statusText };
+          throw err;
+        }
+
+        return;
+      } catch (e) {
+        try { syncProgressService.clearAbortHandler(); } catch {}
+        if (attempt >= maxAttempts || !this.isRetryableNetworkError(e)) {
+          const err = new Error('Cloud server is unavailable (possibly sleeping). Please try again in a moment.');
+          (err as any).cause = e;
+          throw err;
+        }
+        await this.sleep(1000 * attempt);
+      } finally {
+        try { syncProgressService.clearAbortHandler(); } catch {}
+      }
+    }
+  }
 
   constructor() {
     this.apiBaseUrl = getBackendApiBaseUrl();
@@ -86,7 +215,15 @@ class CloudSyncService {
   }
   
   async isAuthenticated(): Promise<boolean> {
-    return !!this.authToken;
+    if (this.authToken) return true;
+    try {
+      const token = await AsyncStorage.getItem(this.AUTH_TOKEN_KEY);
+      if (token) {
+        this.authToken = token;
+        return true;
+      }
+    } catch {}
+    return false;
   }
 
   /**
@@ -94,6 +231,7 @@ class CloudSyncService {
    */
   async uploadUserData(googleUser: GoogleUser, onProgress?: (p: any) => void): Promise<SyncResult> {
     try {
+      await this.ensureBackendAwake('backup', onProgress);
       const userData = await this.collectUserData();
 
       const payload = {
@@ -108,7 +246,7 @@ class CloudSyncService {
         version: userData.metadata.version,
       };
 
-      if (onProgress) onProgress({ stage: 'uploading', progress: 40, message: 'Uploading backup to cloud...' });
+      if (onProgress) onProgress({ operation: 'backup', stage: 'uploading', progress: 40, message: 'Uploading backup to cloud...' });
       // Check for cancellation before network request
       try { if (syncProgressService.isCancelRequested && syncProgressService.isCancelRequested()) {
         syncProgressService.setProgress({ stage: 'cancelled', progress: 0, message: 'Upload cancelled', cancelled: true });
@@ -120,7 +258,7 @@ class CloudSyncService {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify(payload),
-      });
+      }, onProgress, 'backup');
 
       const lastSync = responseData?.backup?.timestamp || new Date().toISOString();
 
@@ -131,7 +269,7 @@ class CloudSyncService {
       }
 
       console.log('✅ User data uploaded to cloud successfully');
-      if (onProgress) onProgress({ stage: 'complete', progress: 100, message: 'Upload complete', lastSync });
+      if (onProgress) onProgress({ operation: 'backup', stage: 'complete', progress: 100, message: 'Upload complete', lastSync });
       return {
         success: true,
         lastSync,
@@ -152,9 +290,10 @@ class CloudSyncService {
    */
   async downloadUserData(googleUser: GoogleUser, onProgress?: (p: any) => void): Promise<SyncResult> {
     try {
-      if (onProgress) onProgress({ stage: 'downloading', progress: 5, message: 'Checking cloud backup...' });
-      syncProgressService.setProgress({ stage: 'downloading', progress: 5, message: 'Checking cloud backup...' });
-      const responseData = await this.requestWithAuth('/restore');
+      await this.ensureBackendAwake('restore', onProgress);
+      if (onProgress) onProgress({ operation: 'restore', stage: 'downloading', progress: 5, message: 'Checking cloud backup...' });
+      syncProgressService.setProgress({ operation: 'restore', stage: 'downloading', progress: 5, message: 'Checking cloud backup...' });
+      const responseData = await this.requestWithAuth('/restore', undefined, onProgress, 'restore');
 
       if (!responseData?.data) {
         console.log('ℹ️ No cloud backup found for user');
@@ -266,7 +405,8 @@ class CloudSyncService {
    */
   async deleteCloudData(_googleUser: GoogleUser): Promise<SyncResult> {
     try {
-      await this.requestWithAuth('/backup', { method: 'DELETE' });
+      await this.ensureBackendAwake('backup');
+      await this.requestWithAuth('/backup', { method: 'DELETE' }, undefined, 'backup');
 
       await AsyncStorage.removeItem('last_cloud_sync');
       await AsyncStorage.removeItem('cloud_sync_user_id');
@@ -288,7 +428,8 @@ class CloudSyncService {
    */
   async hasCloudBackup(_googleUser: GoogleUser): Promise<boolean> {
     try {
-      const responseData = await this.requestWithAuth('/restore');
+      await this.ensureBackendAwake('restore');
+      const responseData = await this.requestWithAuth('/restore', undefined, undefined, 'restore');
       return !!responseData?.data;
     } catch (error) {
       // Handle backend unavailability by notifying progress listeners
@@ -318,82 +459,161 @@ class CloudSyncService {
   }
 
   private async getAuthTokenOrThrow(): Promise<string> {
-    if (!this.authToken) {
-      throw new Error('No Firebase auth token set');
+    if (this.authToken) {
+      return this.authToken;
     }
-    return this.authToken;
+
+    // Attempt to obtain/restore a backend session token.
+    const ok = await this.ensureBackendSessionToken();
+    if (ok && this.authToken) {
+      return this.authToken;
+    }
+
+    throw new Error('No backend session token set');
   }
 
-  private async requestWithAuth(path: string, options: RequestInit = {}): Promise<any> {
-    const token = await this.getAuthTokenOrThrow();
+  private async requestWithAuth(
+    path: string,
+    options: RequestInit = {},
+    onProgress?: (p: any) => void,
+    operation: CloudOperation = 'sync'
+  ): Promise<any> {
+    const url = `${this.syncEndpoint}${path}`;
+    const maxAttempts = 3;
+    const timeoutMs = 30000;
 
-    const headers: Record<string, string> = {
-      ...(options.headers ? (options.headers as Record<string, string>) : {}),
-      Authorization: `Bearer ${token}`,
-    };
+    let didReloadAfter401 = false;
 
-    if (options.body && !headers['Content-Type']) {
-      headers['Content-Type'] = 'application/json';
-    }
+    let lastError: any = null;
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+      const token = await this.getAuthTokenOrThrow();
 
-    const response = await fetch(`${this.syncEndpoint}${path}`, {
-      ...options,
-      headers,
-    });
-
-    let data: any = null;
-    try {
-      data = await response.json();
-    } catch (_error) {
-      data = null;
-    }
-
-    if (response.status === 401) {
-      const message = data?.error?.message || data?.error || 'Authentication failed. Please sign in again.';
-      const err = new Error(message);
-      (err as any).debug = {
-        url: `${this.syncEndpoint}${path}`,
-        method: options.method || 'GET',
-        status: response.status,
-        statusText: response.statusText,
-        responseBody: data,
-        usedTokenPreview: token ? `${token.substring(0,6)}...${token.substring(token.length-4)}` : '',
+      const headers: Record<string, string> = {
+        ...(options.headers ? (options.headers as Record<string, string>) : {}),
+        Authorization: `Bearer ${token}`,
       };
-      throw err;
-    }
 
-    if (!response.ok) {
-      // Build debug info and throw with details attached
-      const debug = {
-        url: `${this.syncEndpoint}${path}`,
-        method: options.method || 'GET',
-        status: response.status,
-        statusText: response.statusText,
-        responseBody: data,
-        usedTokenPreview: maskToken(token),
-      };
-      try {
-        console.error('Cloud request failed:', debug);
-      } catch (logErr) {
-        console.error('Error logging failed cloud request details:', logErr);
+      if (options.body && !headers['Content-Type']) {
+        headers['Content-Type'] = 'application/json';
       }
 
-      const message =
-        data?.error?.message ||
-        data?.error ||
-        data?.message ||
-        response.statusText;
-      const err = new Error(message || `Request failed: ${response.status} ${response.statusText}`);
-      (err as any).debug = debug;
-      throw err;
+      if (syncProgressService.isCancelRequested && syncProgressService.isCancelRequested()) {
+        const err = new Error('Cancelled by user');
+        (err as any).cancelled = true;
+        throw err;
+      }
+
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+      try {
+        try {
+          syncProgressService.setAbortHandler(() => controller.abort());
+        } catch {}
+
+        if (attempt > 1) {
+          const msg = `Retrying cloud request… (${attempt}/${maxAttempts})`;
+          onProgress?.({ operation, stage: 'connecting', progress: 15, message: msg });
+          try { syncProgressService.setProgress({ operation, stage: 'connecting', progress: 15, message: msg }); } catch {}
+        }
+
+        const response = await fetch(url, {
+          ...options,
+          headers,
+          signal: controller.signal,
+        });
+
+        clearTimeout(timeoutId);
+
+        let data: any = null;
+        try {
+          data = await response.json();
+        } catch (_error) {
+          data = null;
+        }
+
+        if (response.status === 401) {
+          const message = data?.error?.message || data?.error || 'Authentication failed. Please sign in again.';
+
+          // Backend tokens can be rotated by login; re-load once and retry.
+          if (!didReloadAfter401) {
+            didReloadAfter401 = true;
+            try {
+              const stored = await AsyncStorage.getItem(this.AUTH_TOKEN_KEY);
+              if (stored && stored !== this.authToken) {
+                this.authToken = stored;
+                const msg = 'Retrying with updated session…';
+                onProgress?.({ operation, stage: 'connecting', progress: 12, message: msg });
+                try { syncProgressService.setProgress({ operation, stage: 'connecting', progress: 12, message: msg }); } catch {}
+                await this.sleep(200);
+                continue;
+              }
+            } catch {
+              // ignore
+            }
+          }
+
+          const err = new Error(message);
+          (err as any).debug = {
+            url,
+            method: options.method || 'GET',
+            status: response.status,
+            statusText: response.statusText,
+            responseBody: data,
+            usedTokenPreview: token ? `${token.substring(0, 6)}...${token.substring(token.length - 4)}` : '',
+          };
+
+          // Disable cloud sync so we don't keep retrying and lagging the UI.
+          await this.handleUnauthorized((err as any).debug);
+          throw err;
+        }
+
+        if (!response.ok) {
+          const debug = {
+            url,
+            method: options.method || 'GET',
+            status: response.status,
+            statusText: response.statusText,
+            responseBody: data,
+            usedTokenPreview: maskToken(token),
+          };
+          try {
+            console.error('Cloud request failed:', debug);
+          } catch (logErr) {
+            console.error('Error logging failed cloud request details:', logErr);
+          }
+
+          const message = data?.error?.message || data?.error || data?.message || response.statusText;
+          const err: any = new Error(message || `Request failed: ${response.status} ${response.statusText}`);
+          err.debug = debug;
+          throw err;
+        }
+
+        if (data && typeof data === 'object' && 'success' in data && data.success === false) {
+          const message = data.error || data.message || 'Request failed';
+          throw new Error(message);
+        }
+
+        return data;
+      } catch (error: any) {
+        clearTimeout(timeoutId);
+        lastError = error;
+        if (syncProgressService.isCancelRequested && syncProgressService.isCancelRequested()) {
+          const err = new Error('Cancelled by user');
+          (err as any).cancelled = true;
+          throw err;
+        }
+
+        if (attempt >= maxAttempts || !this.isRetryableNetworkError(error)) {
+          throw error;
+        }
+
+        await this.sleep(700 * attempt);
+      } finally {
+        try { syncProgressService.clearAbortHandler(); } catch {}
+      }
     }
 
-    if (data && typeof data === 'object' && 'success' in data && data.success === false) {
-      const message = data.error || data.message || 'Request failed';
-      throw new Error(message);
-    }
-
-    return data;
+    throw lastError || new Error('Cloud request failed');
   }
 
   private async collectUserData(): Promise<UserDataBackup> {
@@ -620,13 +840,18 @@ class CloudSyncService {
   }
 
   async setAuthToken(token: string): Promise<void> {
-    // Only store the token in memory. The app must explicitly pass a Firebase ID Token.
+    // Backend session JWT used for /api/sync/* routes.
     this.authToken = token;
+    try {
+      await AsyncStorage.setItem(this.AUTH_TOKEN_KEY, token);
+    } catch {}
   }
 
   async clearAuthToken(): Promise<void> {
-    // Clear only the in-memory token. Do not modify the app's main stored auth token.
     this.authToken = null;
+    try {
+      await AsyncStorage.removeItem(this.AUTH_TOKEN_KEY);
+    } catch {}
   }
 
   // Clear sync data (for account deletion)
@@ -737,20 +962,22 @@ class CloudSyncService {
     await this.setSyncConfig(config);
   }
 
-  async performFullSync(onProgress?: (progress: any) => void): Promise<{ success: boolean; error?: string }> {
+  async performFullSync(
+    onProgress?: (progress: any) => void
+  ): Promise<{ success: boolean; error?: string; syncedData?: any }> {
     try {
       // Report progress if callback provided
       if (onProgress) {
-        onProgress({ stage: 'uploading', progress: 0, message: 'Starting sync...' });
+        onProgress({ operation: 'sync', stage: 'uploading', progress: 0, message: 'Starting sync...' });
       }
 
-      // Check if we're authenticated
-      const isAuth = await this.isAuthenticated();
+      // Ensure backend session exists (JWT checked by backend middleware)
+      const isAuth = await this.ensureBackendSessionToken(onProgress);
       if (!isAuth) {
-        return {
-          success: false,
-          error: 'Not authenticated. Please sign in to sync.',
-        };
+        const msg = 'Cloud sync requires a backend session. Please sign in again.';
+        onProgress?.({ operation: 'sync', stage: 'error', progress: 0, message: msg, failed: true, error: msg });
+        try { syncProgressService.setProgress({ operation: 'sync', stage: 'error', progress: 0, message: msg, failed: true, error: msg }); } catch {}
+        return { success: false, error: msg };
       }
 
       // Get local data that needs syncing
@@ -758,7 +985,7 @@ class CloudSyncService {
       
       // Report progress
       if (onProgress) {
-        onProgress({ stage: 'uploading', progress: 15, message: 'Gathering local data...' });
+        onProgress({ operation: 'sync', stage: 'uploading', progress: 15, message: 'Gathering local data...' });
       }
 
       // Get all local data
@@ -775,7 +1002,7 @@ class CloudSyncService {
 
       // Report progress
       if (onProgress) {
-        onProgress({ stage: 'uploading', progress: 25, message: `Syncing ${wallets.length} wallets...` });
+        onProgress({ operation: 'sync', stage: 'uploading', progress: 25, message: `Syncing ${wallets.length} wallets...` });
       }
 
       // Sync wallets
@@ -800,7 +1027,7 @@ class CloudSyncService {
 
       // Report progress
       if (onProgress) {
-        onProgress({ stage: 'processing', progress: 50, message: `Syncing ${transactions.length} transactions...` });
+        onProgress({ operation: 'sync', stage: 'processing', progress: 50, message: `Syncing ${transactions.length} transactions...` });
       }
 
       // Sync transactions
@@ -827,7 +1054,7 @@ class CloudSyncService {
 
       // Report progress
       if (onProgress) {
-        onProgress({ stage: 'downloading', progress: 75, message: `Syncing ${categories.length} categories...` });
+        onProgress({ operation: 'sync', stage: 'downloading', progress: 75, message: `Syncing ${categories.length} categories...` });
       }
 
       // Sync categories
@@ -856,13 +1083,17 @@ class CloudSyncService {
       await AsyncStorage.setItem('last_cloud_sync', new Date().toISOString());
       await AsyncStorage.setItem('last_sync_result', JSON.stringify(syncedData));
 
-      // If authenticated, attempt a real cloud upload (if backend reachable)
+      // Attempt a real cloud upload. If this fails, surface it as a sync failure
+      // so the UI doesn't claim success while backup didn't happen.
       if (isAuth) {
-        try {
-          // Try to construct a GoogleUser from stored tokens
-          const storedUser = await AsyncStorage.getItem('google_user_info');
-          let googleUser: any = null;
-          if (storedUser) {
+        // Build a minimal user-like object for bookkeeping.
+        const storedUser = await AsyncStorage.getItem('google_user_info');
+        const storedUserData = await AsyncStorage.getItem('user_data');
+        const parsedUserData = storedUserData ? JSON.parse(storedUserData) : null;
+
+        let googleUser: any = null;
+        if (storedUser) {
+          try {
             const info = JSON.parse(storedUser);
             googleUser = {
               id: info.id || info.email,
@@ -871,28 +1102,41 @@ class CloudSyncService {
               photo: info.photo,
               user: info,
             } as any;
+          } catch {
+            googleUser = null;
           }
-
-          if (googleUser) {
-            if (syncProgressService.isCancelRequested && syncProgressService.isCancelRequested()) {
-              if (onProgress) onProgress({ stage: 'cancelled', progress: 0, message: 'Cancelled before cloud upload' });
-              syncProgressService.setProgress({ stage: 'cancelled', progress: 0, message: 'Cancelled before cloud upload', cancelled: true });
-              return { success: false, error: 'Cancelled by user' };
-            }
-            if (onProgress) onProgress({ stage: 'uploading', progress: 20, message: 'Uploading synced data to cloud...' });
-            const uploadResult = await this.uploadUserData(googleUser, onProgress);
-            if (uploadResult.success) {
-              if (onProgress) onProgress({ stage: 'complete', progress: 100, message: 'Cloud upload complete', syncedData });
-            }
-          }
-        } catch (err) {
-          console.warn('Could not perform cloud upload after local sync:', err);
         }
+
+        if (!googleUser) {
+          googleUser = {
+            id: parsedUserData?.id || parsedUserData?.email || 'user',
+            email: parsedUserData?.email || '',
+            name: parsedUserData?.name || 'User',
+            photo: parsedUserData?.avatar,
+          } as any;
+        }
+
+        if (syncProgressService.isCancelRequested && syncProgressService.isCancelRequested()) {
+          if (onProgress) onProgress({ stage: 'cancelled', progress: 0, message: 'Cancelled before cloud upload' });
+          syncProgressService.setProgress({ stage: 'cancelled', progress: 0, message: 'Cancelled before cloud upload', cancelled: true });
+          return { success: false, error: 'Cancelled by user' };
+        }
+
+        if (onProgress) onProgress({ operation: 'backup', stage: 'uploading', progress: 20, message: 'Uploading synced data to cloud...' });
+        const uploadResult = await this.uploadUserData(googleUser, onProgress);
+        if (!uploadResult.success) {
+          const msg = uploadResult.error || 'Cloud backup failed';
+          onProgress?.({ operation: 'backup', stage: 'error', progress: 0, message: msg, failed: true, error: msg });
+          try { syncProgressService.setProgress({ operation: 'backup', stage: 'error', progress: 0, message: msg, failed: true, error: msg }); } catch {}
+          return { success: false, error: msg };
+        }
+        if (onProgress) onProgress({ operation: 'backup', stage: 'complete', progress: 100, message: 'Cloud upload complete', syncedData });
       }
 
       // Report completion
       if (onProgress) {
         onProgress({ 
+          operation: 'sync',
           stage: 'complete', 
           progress: 100, 
           message: `Sync complete! ${syncedData.wallets + syncedData.transactions + syncedData.categories} items synced.`,
@@ -906,9 +1150,14 @@ class CloudSyncService {
       };
     } catch (error) {
       console.error('❌ Full sync failed:', error);
+      const msg = error instanceof Error ? error.message : 'Sync failed';
+      try {
+        onProgress?.({ operation: 'sync', stage: 'error', progress: 0, message: msg, failed: true, error: msg });
+        syncProgressService.setProgress({ operation: 'sync', stage: 'error', progress: 0, message: msg, failed: true, error: msg });
+      } catch {}
       return {
         success: false,
-        error: error instanceof Error ? error.message : 'Sync failed',
+        error: msg,
       };
     }
   }

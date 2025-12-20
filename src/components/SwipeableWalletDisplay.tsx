@@ -10,6 +10,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../contexts/ThemeContext';
+import { useWalletVisibility } from '../hooks/useWalletVisibility';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 const SWIPE_THRESHOLD = 50;
@@ -32,6 +33,7 @@ const SwipeableWalletDisplay: React.FC<SwipeableWalletDisplayProps> = ({
   getWalletIcon,
 }) => {
   const { theme } = useTheme();
+  const { formatWalletBalance } = useWalletVisibility();
   const panY = useRef(new Animated.Value(0)).current;
   const [walletIndex, setWalletIndex] = useState(currentWalletIndex);
   const walletIndexRef = useRef(currentWalletIndex);
@@ -139,7 +141,7 @@ const SwipeableWalletDisplay: React.FC<SwipeableWalletDisplayProps> = ({
 
             {/* Wallet Balance */}
             <Text style={[styles.walletBalance, { color: theme.colors.headerText }]}>
-              {isBalanceVisible ? formatCurrency(wallet.balance) : '••••••'}
+              {isBalanceVisible ? formatWalletBalance(wallet.balance, wallet.id) : '••••••'}
             </Text>
           </View>
 

@@ -15,7 +15,6 @@ import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../contexts/ThemeContext';
 import { useLocalization } from '../contexts/LocalizationContext';
 import { useNotification } from '../contexts/NotificationContext';
-import { notificationService } from '../services/notificationService';
 
 export default function NotificationCenterScreen({ navigation }: { navigation: any }) {
   const { isDark, theme } = useTheme();
@@ -47,7 +46,15 @@ export default function NotificationCenterScreen({ navigation }: { navigation: a
   const handleNotificationPress = (notification: typeof notifications[0]) => {
     markAsRead(notification.id);
     if (notification.data) {
-      notificationService.navigateFromNotificationData(notification.data);
+      // Lazy-load notification service to avoid pulling expo-notifications + setup into this screen bundle.
+      void (async () => {
+        try {
+          const { notificationService } = await import('../services/notificationService');
+          notificationService.navigateFromNotificationData(notification.data);
+        } catch (e) {
+          console.error('Failed to load notification service for navigation:', e);
+        }
+      })();
     }
   };
 

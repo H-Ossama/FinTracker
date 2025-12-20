@@ -18,6 +18,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../contexts/ThemeContext';
 import { useLocalization } from '../contexts/LocalizationContext';
+import { useWalletVisibility } from '../hooks/useWalletVisibility';
 import { hybridDataService } from '../services/hybridDataService';
 import { Wallet } from '../types';
 
@@ -47,6 +48,7 @@ const TransferModal: React.FC<TransferModalProps> = ({
 }) => {
   const { theme } = useTheme();
   const { formatCurrency, currency, t } = useLocalization();
+  const { formatWalletBalance } = useWalletVisibility();
   const insets = useSafeAreaInsets();
   
   const getCurrencySymbol = () => {
@@ -205,7 +207,7 @@ const TransferModal: React.FC<TransferModalProps> = ({
             <View style={styles.walletInfo}>
               <Text style={[styles.walletName, { color: theme.colors.text }]}>{selectedWallet.name}</Text>
               <Text style={[styles.walletBalance, { color: theme.colors.textSecondary }]}>
-                {formatCurrency(selectedWallet.balance)}
+                {formatWalletBalance(selectedWallet.balance, selectedWallet.id)}
               </Text>
             </View>
             <Ionicons name="chevron-down" size={20} color={theme.colors.textSecondary} />
@@ -241,7 +243,7 @@ const TransferModal: React.FC<TransferModalProps> = ({
               <View style={styles.walletInfo}>
                 <Text style={[styles.walletName, { color: theme.colors.text }]}>{wallet.name}</Text>
                 <Text style={[styles.walletBalance, { color: theme.colors.textSecondary }]}>
-                  {formatCurrency(wallet.balance)}
+                  {formatWalletBalance(wallet.balance, wallet.id)}
                 </Text>
               </View>
             </TouchableOpacity>
@@ -375,7 +377,7 @@ const TransferModal: React.FC<TransferModalProps> = ({
             </View>
             {fromWallet && (
               <Text style={[styles.balanceHint, { color: theme.colors.textSecondary }]}>
-                Available: {formatCurrency(fromWallet.balance)}
+                Available: {formatWalletBalance(fromWallet.balance, fromWallet.id)}
               </Text>
             )}
           </View>

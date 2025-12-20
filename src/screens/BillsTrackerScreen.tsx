@@ -18,6 +18,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../contexts/ThemeContext';
 import { useLocalization } from '../contexts/LocalizationContext';
+import { useWalletVisibility } from '../hooks/useWalletVisibility';
 import { useAuth } from '../contexts/AuthContext';
 import { billsService } from '../services/billsService';
 import { localStorageService } from '../services/localStorageService';
@@ -27,6 +28,7 @@ import { useFocusEffect } from '@react-navigation/native';
 const BillsTrackerScreen = ({ navigation, route }: any) => {
   const { theme } = useTheme();
   const { t, formatCurrency } = useLocalization();
+  const { formatWalletBalance } = useWalletVisibility();
   const { user } = useAuth();
   const insets = useSafeAreaInsets();
   const [bills, setBills] = useState<Bill[]>([]);
@@ -1153,7 +1155,7 @@ const BillsTrackerScreen = ({ navigation, route }: any) => {
                         {wallet.name}
                       </Text>
                       <Text style={[styles.walletBalance, { color: theme.colors.textSecondary }]}>
-                        {t('payment.balance', { balance: formatCurrency(wallet.balance) })}
+                        {t('payment.balance', { balance: formatWalletBalance(wallet.balance, wallet.id) })}
                       </Text>
                     </View>
                     {selectedWallet === wallet.id && (

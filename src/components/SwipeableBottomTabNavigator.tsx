@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useCallback, lazy, Suspense, useEffect, useRef } from 'react';
-import { View, StyleSheet, Pressable, Dimensions, Text, ActivityIndicator, InteractionManager, Platform } from 'react-native';
+import { View, StyleSheet, Pressable, Dimensions, Text, ActivityIndicator, InteractionManager } from 'react-native';
 import { TabView } from 'react-native-tab-view';
-import { Ionicons, Feather } from '@expo/vector-icons';
+import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 // Lazy load screens for better performance
@@ -17,6 +17,7 @@ const MoreScreen = lazy(loadMoreScreen);
 import { useTheme } from '../contexts/ThemeContext';
 import { useLocalization } from '../contexts/LocalizationContext';
 import { FullScreenLoader } from './ScreenLoadingIndicator';
+import QuickActionsOverlay from './QuickActionsOverlay';
 
 const initialLayout = { width: Dimensions.get('window').width };
 
@@ -58,6 +59,7 @@ const SwipeableBottomTabNavigator = React.memo(() => {
   const insets = useSafeAreaInsets();
   const [index, setIndex] = useState(0);
   const [isSwitching, setIsSwitching] = useState(false);
+  const [quickActionsOpen, setQuickActionsOpen] = useState(false);
   const tabSwitchTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isMounted = useRef(false);
   const visitedTabs = useRef<Set<number>>(new Set([0])); // Home tab is visited on mount
@@ -188,15 +190,16 @@ const SwipeableBottomTabNavigator = React.memo(() => {
   }, []);
 
   const renderTabBar = useCallback((props: any) => (
-    <View style={styles.tabBarWrapper}>
+    <View style={[styles.tabBarWrapper, { paddingBottom: Math.max(insets.bottom, 10) }]} pointerEvents="box-none">
       <View style={styles.tabBarContainer}>
         <View style={styles.tabBar}>
-          {props.navigationState.routes.map((route: any, i: number) => {
+          {/* Left tabs */}
+          {props.navigationState.routes.slice(0, 2).map((route: any, i: number) => {
             const focused = index === i;
             const iconName = getIconName(route.key, focused);
             const activeColor = '#FFFFFF';
             const inactiveColor = '#8E8E93';
-          
+
             return (
               <Pressable
                 key={route.key}
@@ -208,29 +211,76 @@ const SwipeableBottomTabNavigator = React.memo(() => {
                 android_ripple={{ color: 'transparent' }}
               >
                 <View style={styles.tabIconWrapper}>
-                  <Ionicons
-                    name={iconName as any}
-                    size={24}
-                    color={focused ? activeColor : inactiveColor}
-                  />
+                  <Ionicons name={iconName as any} size={24} color={focused ? activeColor : inactiveColor} />
                 </View>
-                <Text style={[
-                  styles.tabLabel,
-                  {
-                    color: focused ? activeColor : inactiveColor,
-                    fontWeight: focused ? '600' : '400',
-                  }
-                ]}>
+                <Text
+                  style={[
+                    styles.tabLabel,
+                    {
+                      color: focused ? activeColor : inactiveColor,
+                      fontWeight: focused ? '600' : '400',
+                    },
+                  ]}
+                >
+                  {route.title}
+                </Text>
+              </Pressable>
+            );
+          })}
+
+          {/* Center Quick Actions button */}
+          <Pressable
+            style={styles.quickSlot}
+            onPress={() => setQuickActionsOpen(true)}
+            android_ripple={{ color: 'transparent' }}
+          >
+            <View style={[styles.quickButton, { backgroundColor: theme.colors.primary }]}>
+              <Ionicons name="apps" size={26} color="#FFFFFF" />
+            </View>
+            <Text style={[styles.tabLabel, { color: '#FFFFFF', fontWeight: '600' }]}>
+              {t('quick') || 'Quick'}
+            </Text>
+          </Pressable>
+
+          {/* Right tabs */}
+          {props.navigationState.routes.slice(2).map((route: any, offset: number) => {
+            const i = offset + 2;
+            const focused = index === i;
+            const iconName = getIconName(route.key, focused);
+            const activeColor = '#FFFFFF';
+            const inactiveColor = '#8E8E93';
+
+            return (
+              <Pressable
+                key={route.key}
+                style={styles.tabItem}
+                onPress={() => {
+                  handleIndexChange(i);
+                  props.jumpTo(route.key);
+                }}
+                android_ripple={{ color: 'transparent' }}
+              >
+                <View style={styles.tabIconWrapper}>
+                  <Ionicons name={iconName as any} size={24} color={focused ? activeColor : inactiveColor} />
+                </View>
+                <Text
+                  style={[
+                    styles.tabLabel,
+                    {
+                      color: focused ? activeColor : inactiveColor,
+                      fontWeight: focused ? '600' : '400',
+                    },
+                  ]}
+                >
                   {route.title}
                 </Text>
               </Pressable>
             );
           })}
         </View>
-        <View style={{ height: insets.bottom, backgroundColor: '#000000' }} />
       </View>
     </View>
-  ), [index, insets.bottom, getIconName]);
+  ), [getIconName, handleIndexChange, index, insets.bottom, t, theme.colors.primary]);
 
   return (
     <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
@@ -250,6 +300,8 @@ const SwipeableBottomTabNavigator = React.memo(() => {
         sceneContainerStyle={{ backgroundColor: 'transparent' }}
       />
 
+      <QuickActionsOverlay visible={quickActionsOpen} onClose={() => setQuickActionsOpen(false)} />
+
       <FullScreenLoader visible={isSwitching} message={t('loading') || 'Loading...'} transparent />
     </View>
   );
@@ -265,28 +317,39 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   tabBarWrapper: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
     backgroundColor: 'transparent',
+    paddingHorizontal: 0,
   },
   tabBarContainer: {
+    marginHorizontal: 18,
+    marginBottom: 12,
     backgroundColor: '#000000',
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
+    borderRadius: 34,
+    paddingBottom: 10,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.10)',
+    overflow: 'visible',
     shadowColor: '#000',
     shadowOffset: {
       width: 0,
-      height: -4,
+      height: 10,
     },
-    shadowOpacity: 0.1,
-    shadowRadius: 12,
-    elevation: 8,
+    shadowOpacity: 0.18,
+    shadowRadius: 18,
+    elevation: 14,
   },
   tabBar: {
     flexDirection: 'row',
-    height: 60,
+    height: 68,
     alignItems: 'center',
     paddingHorizontal: 16,
     justifyContent: 'space-around',
     paddingTop: 8,
+    paddingBottom: 10,
   },
   tabItem: {
     flex: 1,
@@ -304,6 +367,29 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: '500',
     letterSpacing: 0.2,
+  },
+  quickSlot: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    height: '100%',
+    paddingVertical: 4,
+  },
+  quickButton: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 6,
+    transform: [{ translateY: -10 }],
+    borderWidth: 4,
+    borderColor: '#000000',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.25,
+    shadowRadius: 12,
+    elevation: 10,
   },
 });
 

@@ -17,6 +17,7 @@ import { Ionicons } from '@expo/vector-icons';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { hybridDataService, HybridWallet } from '../services/hybridDataService';
 import { useTheme } from '../contexts/ThemeContext';
+import { useWalletVisibility } from '../hooks/useWalletVisibility';
 
 interface AddIncomeModalProps {
   visible: boolean;
@@ -50,6 +51,7 @@ const AddIncomeModal: React.FC<AddIncomeModalProps> = ({
   onAddIncome,
 }) => {
   const { theme } = useTheme();
+  const { formatWalletBalance } = useWalletVisibility();
   const insets = useSafeAreaInsets();
   const [title, setTitle] = useState('');
   const [amount, setAmount] = useState('');
@@ -283,7 +285,9 @@ const AddIncomeModal: React.FC<AddIncomeModalProps> = ({
                     </View>
                     <View>
                       <Text style={[styles.walletName, { color: theme.colors.text }]}>{wallet.name}</Text>
-                      <Text style={[styles.walletBalance, { color: theme.colors.textSecondary }]}>${wallet.balance.toFixed(2)}</Text>
+                      <Text style={[styles.walletBalance, { color: theme.colors.textSecondary }]}>
+                        {formatWalletBalance(wallet.balance, wallet.id)}
+                      </Text>
                     </View>
                   </View>
                   {selectedWallet?.id === wallet.id && (

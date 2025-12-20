@@ -17,7 +17,10 @@ export const useWalletVisibility = () => {
     try {
       const hidden = await AsyncStorage.getItem(HIDDEN_WALLETS_KEY);
       if (hidden) {
-        setHiddenWallets(JSON.parse(hidden));
+        const parsed = JSON.parse(hidden);
+        if (Array.isArray(parsed)) {
+          setHiddenWallets(Array.from(new Set(parsed.filter((x) => typeof x === 'string'))));
+        }
       }
     } catch (error) {
       console.error('Error loading hidden wallets:', error);
@@ -26,8 +29,29 @@ export const useWalletVisibility = () => {
     }
   };
 
+  const saveHiddenWallets = async (nextHidden: string[]) => {
+    try {
+      await AsyncStorage.setItem(HIDDEN_WALLETS_KEY, JSON.stringify(nextHidden));
+      setHiddenWallets(nextHidden);
+    } catch (error) {
+      console.error('Error saving hidden wallets:', error);
+    }
+  };
+
   const isWalletHidden = (walletId: string): boolean => {
     return hiddenWallets.includes(walletId);
+  };
+
+  const setWalletHidden = async (walletId: string, hidden: boolean) => {
+    if (!walletId) return;
+    const next = hidden
+      ? Array.from(new Set([...hiddenWallets, walletId]))
+      : hiddenWallets.filter((id) => id !== walletId);
+    await saveHiddenWallets(next);
+  };
+
+  const toggleWalletHidden = async (walletId: string) => {
+    await setWalletHidden(walletId, !isWalletHidden(walletId));
   };
 
   const formatWalletBalance = (balance: number, walletId?: string): string => {
@@ -54,6 +78,8 @@ export const useWalletVisibility = () => {
   return {
     hiddenWallets,
     isWalletHidden,
+    setWalletHidden,
+    toggleWalletHidden,
     formatWalletBalance,
     getVisibleWallets,
     getTotalVisibleBalance,

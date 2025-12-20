@@ -1,4 +1,5 @@
 type ProgressPayload = {
+  operation?: string;
   stage?: string;
   progress?: number; // 0-100
   message?: string;
@@ -12,6 +13,7 @@ type ProgressPayload = {
 const listeners: Array<(p: ProgressPayload) => void> = [];
 let lastValue: ProgressPayload | null = null;
 let cancelRequested = false;
+let abortHandler: (() => void) | null = null;
 
 export const syncProgressService = {
   subscribe(cb: (p: ProgressPayload) => void) {
@@ -41,11 +43,22 @@ export const syncProgressService = {
   },
   requestCancel() {
     cancelRequested = true;
+    try {
+      abortHandler?.();
+    } catch {
+      // ignore abort handler errors
+    }
     const payload: ProgressPayload = { stage: 'cancelling', progress: 0, message: 'Cancelling...', cancelled: true };
     lastValue = payload;
     for (const cb of listeners.slice()) {
       try { cb(payload); } catch { }
     }
+  },
+  setAbortHandler(handler: (() => void) | null) {
+    abortHandler = handler;
+  },
+  clearAbortHandler() {
+    abortHandler = null;
   },
   clearCancel() {
     cancelRequested = false;

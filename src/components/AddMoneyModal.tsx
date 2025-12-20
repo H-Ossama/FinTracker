@@ -18,6 +18,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { useTheme } from '../contexts/ThemeContext';
 import { useLocalization } from '../contexts/LocalizationContext';
+import { useWalletVisibility } from '../hooks/useWalletVisibility';
 
 interface Wallet {
   id: string;
@@ -55,6 +56,7 @@ const AddMoneyModal: React.FC<AddMoneyModalProps> = ({
 }) => {
   const { theme } = useTheme();
   const { formatCurrency, t } = useLocalization();
+  const { formatWalletBalance } = useWalletVisibility();
   const insets = useSafeAreaInsets();
   
   const [title, setTitle] = useState('');
@@ -216,7 +218,7 @@ const AddMoneyModal: React.FC<AddMoneyModalProps> = ({
                 {t('add_money_adding_to')}<Text style={{ fontWeight: '600' }}>{currentSelectedWallet.name}</Text>
               </Text>
               <Text style={[styles.walletBalance, { color: theme.colors.textSecondary }]}>
-                {t('add_money_current_balance', { balance: formatCurrency(currentSelectedWallet.balance) })}
+                {t('add_money_current_balance', { balance: formatWalletBalance(currentSelectedWallet.balance, currentSelectedWallet.id) })}
               </Text>
             </View>
           )}
@@ -313,7 +315,7 @@ const AddMoneyModal: React.FC<AddMoneyModalProps> = ({
                           {wallet.name}
                         </Text>
                         <Text style={[styles.walletBalanceSmall, { color: theme.colors.textSecondary }]}>
-                          {formatCurrency(wallet.balance)}
+                          {formatWalletBalance(wallet.balance, wallet.id)}
                         </Text>
                       </View>
                     </View>

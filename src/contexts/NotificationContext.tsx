@@ -1,9 +1,16 @@
 import React, { createContext, useContext, useReducer, useEffect, useState, ReactNode, useRef, useCallback } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Alert, Linking, Platform } from 'react-native';
+import { Alert, Linking, Platform, InteractionManager } from 'react-native';
 import Constants from 'expo-constants';
-import { NotificationService } from '../services/notificationService';
-import { hybridDataService } from '../services/hybridDataService';
+
+let notificationServiceModulePromise: Promise<typeof import('../services/notificationService')> | null = null;
+const getNotificationService = async () => {
+  if (!notificationServiceModulePromise) {
+    notificationServiceModulePromise = import('../services/notificationService');
+  }
+  const mod = await notificationServiceModulePromise;
+  return mod.NotificationService;
+};
 
 export interface InAppNotification {
   id: string;
@@ -241,67 +248,94 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
 
   // Initialize notifications on app start - load saved state first
   useEffect(() => {
-    NotificationService.setNotificationReceivedCallback((notification) => {
-      console.log('📩 Processing received notification for in-app list');
-      
-      // Add to in-app notification list
-      const { title, body, data } = notification.request.content;
-      addNotification({
-        title: title || 'Reminder',
-        message: body || '',
-        type: data?.type === 'reminder' ? 'info' : 'info',
-        read: false,
-        data: data || undefined,
-      });
-    });
+    let cancelled = false;
+    let interactionHandle: { cancel: () => void } | null = null;
 
-    NotificationService.setNotificationDelayCallback((info) => {
-      if (Platform.OS !== 'android') {
-        return;
-      }
-
-      if (info.delayMs < 60000) {
-        return;
-      }
-
-      if (!hasShownExactAlarmWarning.current) {
-        hasShownExactAlarmWarning.current = true;
-
-        console.warn('⚠️  Reminder notification fired late. Suggesting exact alarm permission.', info);
-
-        addNotification({
-          title: 'Allow Exact Alarms',
-          message: 'Android delayed a reminder notification. Enable "Alarms & reminders" access so reminders fire exactly on time.',
-          type: 'warning',
-          read: false,
-          data: info,
-        });
-
-        Alert.alert(
-          'Allow Exact Alarms',
-          'Android delayed a reminder notification. Enable "Alarms & reminders" access in system settings so reminders trigger exactly on time.',
-          [
-            { text: 'Later', style: 'cancel' },
-            {
-              text: 'Open Settings',
-              onPress: openExactAlarmSettings,
-            },
-          ]
-        );
-      }
-    });
-
-    const initializeApp = async () => {
+    (async () => {
       await loadStateFromStorage();
-      await initializeNotifications();
-      await loadPreferences();
-      setIsInitialized(true);
-    };
-    initializeApp();
+
+      const NotificationService = await getNotificationService();
+      if (cancelled) return;
+
+      NotificationService.setNotificationReceivedCallback((notification) => {
+        console.log('📩 Processing received notification for in-app list');
+
+        // Add to in-app notification list
+        const { title, body, data } = notification.request.content;
+        addNotification({
+          title: title || 'Reminder',
+          message: body || '',
+          type: data?.type === 'reminder' ? 'info' : 'info',
+          read: false,
+          data: data || undefined,
+        });
+      });
+
+      NotificationService.setNotificationDelayCallback((info) => {
+        if (Platform.OS !== 'android') {
+          return;
+        }
+
+        if (info.delayMs < 60000) {
+          return;
+        }
+
+        if (!hasShownExactAlarmWarning.current) {
+          hasShownExactAlarmWarning.current = true;
+
+          console.warn('⚠️  Reminder notification fired late. Suggesting exact alarm permission.', info);
+
+          addNotification({
+            title: 'Allow Exact Alarms',
+            message: 'Android delayed a reminder notification. Enable "Alarms & reminders" access so reminders fire exactly on time.',
+            type: 'warning',
+            read: false,
+            data: info,
+          });
+
+          Alert.alert(
+            'Allow Exact Alarms',
+            'Android delayed a reminder notification. Enable "Alarms & reminders" access in system settings so reminders trigger exactly on time.',
+            [
+              { text: 'Later', style: 'cancel' },
+              {
+                text: 'Open Settings',
+                onPress: openExactAlarmSettings,
+              },
+            ]
+          );
+        }
+      });
+
+      // Defer heavier initialization until after UI is interactive.
+      interactionHandle = InteractionManager.runAfterInteractions(() => {
+        void (async () => {
+          if (cancelled) return;
+          await initializeNotifications();
+          if (cancelled) return;
+          await loadPreferences();
+          if (cancelled) return;
+          setIsInitialized(true);
+        })();
+      });
+    })();
 
     return () => {
-      NotificationService.setNotificationReceivedCallback(() => undefined);
-      NotificationService.setNotificationDelayCallback(null);
+      cancelled = true;
+      try {
+        interactionHandle?.cancel();
+      } catch {
+        // ignore
+      }
+      void (async () => {
+        try {
+          const NotificationService = await getNotificationService();
+          NotificationService.setNotificationReceivedCallback(() => undefined);
+          NotificationService.setNotificationDelayCallback(null);
+        } catch {
+          // ignore
+        }
+      })();
     };
   }, [openExactAlarmSettings]);
 
@@ -366,6 +400,7 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
       dispatch({ type: 'SET_LOADING', payload: true });
       
       // Initialize notification service
+      const NotificationService = await getNotificationService();
       await NotificationService.initialize();
       
       // Get current permissions
@@ -390,6 +425,7 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
 
   const requestPermissions = async () => {
     try {
+      const NotificationService = await getNotificationService();
       const permissions = await NotificationService.requestPermissions();
       dispatch({ type: 'SET_PERMISSIONS', payload: permissions });
       
@@ -403,6 +439,7 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
 
   const registerPushToken = async () => {
     try {
+      const NotificationService = await getNotificationService();
       const token = await NotificationService.registerForPushNotifications();
       dispatch({ type: 'SET_PUSH_TOKEN', payload: token });
       
@@ -417,6 +454,7 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
   const registerPushTokenWithBackend = async (token: string) => {
     try {
       // Register token with backend via hybrid service
+      const { hybridDataService } = await import('../services/hybridDataService');
       await hybridDataService.registerPushToken({
         token,
         deviceId: 'device-id', // You might want to get actual device ID

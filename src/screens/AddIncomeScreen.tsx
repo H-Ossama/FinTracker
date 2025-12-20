@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, Suspense, lazy } from 'react';
 import {
   View,
   Text,
@@ -14,11 +14,22 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
-import DateTimePicker from '@react-native-community/datetimepicker';
+
+type LazyDateTimePickerProps = {
+  value: Date;
+  mode?: 'date' | 'time' | 'datetime';
+  display?: string;
+  onChange: (event: any, selectedDate?: Date) => void;
+};
+const DateTimePicker = lazy(async () => {
+  const mod: any = await import('@react-native-community/datetimepicker');
+  return { default: mod?.default ?? mod?.DateTimePicker ?? mod };
+}) as unknown as React.ComponentType<LazyDateTimePickerProps>;
 import { hybridDataService, HybridWallet } from '../services/hybridDataService';
 import { LocalCategory } from '../services/localStorageService';
 import { useTheme } from '../contexts/ThemeContext';
 import { useLocalization } from '../contexts/LocalizationContext';
+import { useWalletVisibility } from '../hooks/useWalletVisibility';
 
 interface AddIncomeScreenProps {
   navigation: any;
@@ -48,6 +59,7 @@ const defaultIncomeCategories: ExtendedIncomeCategory[] = [
 const AddIncomeScreen: React.FC<AddIncomeScreenProps> = ({ navigation }) => {
   const { theme } = useTheme();
   const { t, formatCurrency } = useLocalization();
+  const { formatWalletBalance } = useWalletVisibility();
   const [title, setTitle] = useState('');
   const [amount, setAmount] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<LocalCategory | null>(null);
@@ -405,7 +417,7 @@ const AddIncomeScreen: React.FC<AddIncomeScreenProps> = ({ navigation }) => {
                           {wallet.name}
                         </Text>
                         <Text style={[styles.walletBalance, { color: theme.colors.textSecondary }]}>
-                          {formatCurrency(wallet.balance)}
+                          {formatWalletBalance(wallet.balance, wallet.id)}
                         </Text>
                       </View>
                     </View>
@@ -486,12 +498,14 @@ const AddIncomeScreen: React.FC<AddIncomeScreenProps> = ({ navigation }) => {
         </KeyboardAvoidingView>
 
         {showDatePicker && (
-          <DateTimePicker
-            value={date}
-            mode="date"
-            display="default"
-            onChange={onDateChange}
-          />
+          <Suspense fallback={null}>
+            <DateTimePicker
+              value={date}
+              mode="date"
+              display="default"
+              onChange={onDateChange}
+            />
+          </Suspense>
         )}
       </LinearGradient>
     </SafeAreaView>

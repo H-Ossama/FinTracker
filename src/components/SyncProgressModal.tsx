@@ -4,6 +4,7 @@ import { syncProgressService } from '../services/syncProgressService';
 import CustomAlert from './CustomAlert';
 import { useTheme } from '../contexts/ThemeContext';
 import { notificationService } from '../services/notificationService';
+import { hybridDataService } from '../services/hybridDataService';
 
 const SyncProgressModal: React.FC = () => {
   const { theme } = useTheme();
@@ -11,6 +12,8 @@ const SyncProgressModal: React.FC = () => {
   const [payload, setPayload] = useState<any>({ progress: 0, message: '' });
   const [showCompleteAlert, setShowCompleteAlert] = useState(false);
   const [cancelRequestedState, setCancelRequested] = useState(false);
+  const [completeAlertTitle, setCompleteAlertTitle] = useState('Sync Complete');
+  const [completeAlertMessage, setCompleteAlertMessage] = useState('Your data is synced successfully.');
 
   const mountedRef = useRef(false);
   const clearTimerRef = useRef<number | null>(null);
@@ -33,12 +36,23 @@ const SyncProgressModal: React.FC = () => {
       setVisible((!p.complete && !p.cancelled) || !!p.failed);
 
       if (p.complete) {
+        const op = p.operation as string | undefined;
+        const isRestore = op === 'restore' || String(p.stage || '').includes('restore') || String(p.stage || '').includes('downloading');
+
+        if (isRestore) {
+          setCompleteAlertTitle('Data Restored');
+          setCompleteAlertMessage('Your cloud backup was downloaded and applied to this device.');
+        } else {
+          setCompleteAlertTitle('Sync Complete');
+          setCompleteAlertMessage('Your cloud backup is up to date.');
+        }
+
         // schedule a local notification announcing completion
         try {
           notificationService.scheduleLocalNotification(
-            'Data Restored',
-            'Your cloud backup has been downloaded to this device.',
-            { type: 'sync_restore' }
+            isRestore ? 'Data Restored' : 'Sync Complete',
+            isRestore ? 'Your cloud backup has been downloaded to this device.' : 'Your cloud backup is up to date.',
+            { type: isRestore ? 'sync_restore' : 'sync_complete' }
           ).catch(() => {});
         } catch (_) {}
 
@@ -75,6 +89,35 @@ const SyncProgressModal: React.FC = () => {
     try { syncProgressService.requestCancel(); } catch {}
   };
 
+  const handleRetry = async () => {
+    setCancelRequested(false);
+    try { syncProgressService.clearCancel(); } catch {}
+
+    try {
+      const result = await hybridDataService.performManualSync((p: any) => {
+        try { syncProgressService.setProgress(p); } catch {}
+      });
+      if (!result.success) {
+        try {
+          syncProgressService.setProgress({ stage: 'error', progress: 0, message: result.error || 'Sync failed', failed: true });
+        } catch {}
+      }
+    } catch (err: any) {
+      try {
+        syncProgressService.setProgress({ stage: 'error', progress: 0, message: err?.message || 'Sync failed', failed: true });
+      } catch {}
+    }
+  };
+
+  const stage = String(payload?.stage || '');
+  const operation = payload?.operation as string | undefined;
+  const title =
+    stage === 'waking_server'
+      ? 'Waking Cloud Server'
+      : operation === 'restore' || stage.includes('restor') || stage.includes('downloading')
+        ? 'Restoring Data'
+        : 'Syncing Data';
+
   const progress = typeof payload.progress === 'number' ? Math.max(0, Math.min(100, payload.progress)) : 0;
 
   return (
@@ -82,8 +125,10 @@ const SyncProgressModal: React.FC = () => {
       <Modal visible={visible} transparent animationType="fade" statusBarTranslucent>
         <View style={styles.overlay}>
           <View style={[styles.card, { backgroundColor: theme.colors.surface }]}> 
-            <Text style={[styles.title, { color: theme.colors.text }]}>Syncing Data</Text>
-            <Text style={[styles.message, { color: theme.colors.textSecondary }]}>{payload.message || (payload.stage === 'uploading' ? 'Uploading your backup…' : 'Downloading your backup…')}</Text>
+            <Text style={[styles.title, { color: theme.colors.text }]}>{title}</Text>
+            <Text style={[styles.message, { color: payload.failed ? '#FF6B6B' : theme.colors.textSecondary }]}>
+              {payload.message || (payload.stage === 'uploading' ? 'Uploading your backup…' : 'Downloading your backup…')}
+            </Text>
             <View style={styles.progressRow}>
               {Platform.OS === 'android' ? (
                 <View style={[styles.track, { backgroundColor: theme.colors.border }]}> 
@@ -106,9 +151,20 @@ const SyncProgressModal: React.FC = () => {
                   </View>
                 )
               ) : (
-                <TouchableOpacity onPress={() => { setVisible(false); syncProgressService.clear(); }} style={{ padding: 10, alignItems: 'center', borderRadius: 8, backgroundColor: theme.colors.primary }}>
-                  <Text style={{ color: 'white', fontWeight: '600' }}>OK</Text>
-                </TouchableOpacity>
+                <View style={{ flexDirection: 'row' }}>
+                  <TouchableOpacity
+                    onPress={() => { setVisible(false); syncProgressService.clear(); }}
+                    style={{ flex: 1, padding: 10, alignItems: 'center', borderRadius: 8, backgroundColor: theme.colors.border, marginRight: 8 }}
+                  >
+                    <Text style={{ color: theme.colors.text, fontWeight: '700' }}>Close</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    onPress={handleRetry}
+                    style={{ flex: 1, padding: 10, alignItems: 'center', borderRadius: 8, backgroundColor: theme.colors.primary, marginLeft: 8 }}
+                  >
+                    <Text style={{ color: 'white', fontWeight: '700' }}>Retry</Text>
+                  </TouchableOpacity>
+                </View>
               )}
             </View>
           </View>
@@ -117,8 +173,8 @@ const SyncProgressModal: React.FC = () => {
 
       <CustomAlert
         visible={showCompleteAlert}
-        title="Data Restored"
-        message="Your cloud backup was downloaded and applied to this device."
+        title={completeAlertTitle}
+        message={completeAlertMessage}
         icon="cloud-done"
         iconColor="#4CAF50"
         buttons={[{ text: 'OK' }]}

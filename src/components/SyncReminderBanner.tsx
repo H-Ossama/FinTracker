@@ -160,9 +160,18 @@ export const SyncReminderBanner: React.FC<SyncReminderProps> = React.memo(({ onS
         }
 
         onSyncComplete?.();
+      } else {
+        const msg = result.error || 'Sync failed';
+        try {
+          syncProgressService.setProgress({ operation: 'sync', stage: 'error', progress: 0, message: msg, failed: true, error: msg });
+        } catch {}
       }
     } catch (error) {
       console.error('Sync failed:', error);
+      const msg = error instanceof Error ? error.message : 'Sync failed';
+      try {
+        syncProgressService.setProgress({ operation: 'sync', stage: 'error', progress: 0, message: msg, failed: true, error: msg });
+      } catch {}
     } finally {
       if (mountedRef.current) setIsLoading(false);
     }

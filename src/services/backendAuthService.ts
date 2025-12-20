@@ -162,6 +162,45 @@ export const backendAuthService = {
     }
   },
 
+  async loginWithGoogle(idToken: string): Promise<BackendAuthResult> {
+    try {
+      const response = await fetch(`${AUTH_URL}/google`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ idToken }),
+      });
+
+      if (!response.ok) {
+        const errorMessage = await parseErrorMessage(response);
+        return {
+          success: false,
+          error: errorMessage,
+          status: response.status,
+        };
+      }
+
+      const data = await response.json();
+      if (!data?.success || !data?.data?.user || !data?.data?.token) {
+        return {
+          success: false,
+          error: 'Invalid response from server',
+          status: response.status,
+        };
+      }
+
+      return {
+        success: true,
+        user: data.data.user as BackendUser,
+        token: data.data.token as string,
+        status: response.status,
+      };
+    } catch (error) {
+      return handleNetworkError(error);
+    }
+  },
+
   async logout(token: string | null | undefined): Promise<{
     success: boolean;
     error?: string;

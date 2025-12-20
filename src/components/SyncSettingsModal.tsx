@@ -17,11 +17,13 @@ import { Ionicons } from '@expo/vector-icons';
 import { hybridDataService } from '../services/hybridDataService';
 import { useTheme } from '../contexts/ThemeContext';
 import { useAuth } from '../contexts/AuthContext';
+import { syncProgressService } from '../services/syncProgressService';
 
 interface SyncProgress {
-  stage: 'uploading' | 'downloading' | 'processing' | 'complete';
+  stage: 'uploading' | 'downloading' | 'processing' | 'complete' | string;
   progress: number;
   message: string;
+  operation?: 'sync' | 'backup' | 'restore';
 }
 
 interface SyncSettingsProps {
@@ -57,6 +59,9 @@ export const SyncSettingsModal: React.FC<SyncSettingsProps> = ({
   const [isLoading, setIsLoading] = useState(false);
   const [showProgress, setShowProgress] = useState(false);
   const [syncProgress, setSyncProgress] = useState<SyncProgress | null>(null);
+  const [progressError, setProgressError] = useState<string | null>(null);
+  const [lastAction, setLastAction] = useState<'sync' | 'restore'>('sync');
+  const [cancelRequested, setCancelRequested] = useState(false);
   const [syncOverview, setSyncOverview] = useState<{
     wallets: number;
     transactions: number;
@@ -177,6 +182,10 @@ export const SyncSettingsModal: React.FC<SyncSettingsProps> = ({
         console.log('🔄 Starting manual sync...');
         // Now perform the sync
         setShowProgress(true);
+        setProgressError(null);
+        setCancelRequested(false);
+        setLastAction('sync');
+        try { syncProgressService.clearCancel(); } catch {}
         const syncResult = await hybridDataService.performManualSync((progress) => {
           console.log('📊 Sync progress:', progress);
           setSyncProgress(progress);
@@ -210,7 +219,7 @@ export const SyncSettingsModal: React.FC<SyncSettingsProps> = ({
           await loadSyncStatus();
           onSyncComplete?.();
         } else {
-          Alert.alert('Sync Failed', syncResult.error || 'Sync failed after enabling cloud sync');
+          setProgressError(syncResult.error || 'Sync failed after enabling cloud sync');
         }
       } else {
         console.log('❌ Enable sync failed:', enableResult.error);
@@ -221,8 +230,10 @@ export const SyncSettingsModal: React.FC<SyncSettingsProps> = ({
       Alert.alert('Error', `Failed to enable sync and sync data: ${error.message || 'Unknown error'}`);
     } finally {
       setIsLoading(false);
-      setShowProgress(false);
-      setSyncProgress(null);
+      if (!progressError) {
+        setShowProgress(false);
+        setSyncProgress(null);
+      }
     }
   };
 
@@ -233,6 +244,10 @@ export const SyncSettingsModal: React.FC<SyncSettingsProps> = ({
     }
 
     setShowProgress(true);
+    setProgressError(null);
+    setCancelRequested(false);
+    setLastAction('sync');
+    try { syncProgressService.clearCancel(); } catch {}
     try {
       const result = await hybridDataService.performManualSync((progress) => {
         setSyncProgress(progress);
@@ -268,7 +283,7 @@ export const SyncSettingsModal: React.FC<SyncSettingsProps> = ({
         await loadSyncStatus();
         onSyncComplete?.();
       } else {
-        Alert.alert('Sync Failed', result.error || 'Unknown sync error');
+        setProgressError(result.error || 'Unknown sync error');
       }
     } catch (error) {
       console.error('Manual sync error:', error);
@@ -286,12 +301,98 @@ export const SyncSettingsModal: React.FC<SyncSettingsProps> = ({
           ]
         );
       } else {
-        Alert.alert('Error', 'Sync failed. Please try again.');
+        setProgressError('Sync failed. Please try again.');
       }
     } finally {
+      if (!progressError) {
+        setShowProgress(false);
+        setSyncProgress(null);
+      }
+    }
+  };
+
+  const handleRestoreFromCloud = async () => {
+    if (!user) {
+      Alert.alert('Error', 'Please sign in to restore your data');
+      return;
+    }
+
+    Alert.alert(
+      'Restore from Cloud',
+      'This will replace local data on this device with your latest cloud backup. Continue?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Restore',
+          style: 'destructive',
+          onPress: async () => {
+            setShowProgress(true);
+            setProgressError(null);
+            setCancelRequested(false);
+            setLastAction('restore');
+            try { syncProgressService.clearCancel(); } catch {}
+
+            const result = await hybridDataService.restoreFromCloud(user, (progress) => {
+              setSyncProgress(progress);
+            });
+
+            if (result.success) {
+              setShowProgress(false);
+              setSyncProgress(null);
+              await loadSyncStatus();
+              Alert.alert('Restore Complete', 'Your cloud backup has been restored on this device.');
+              onSyncComplete?.();
+            } else {
+              setProgressError(result.error || 'Restore failed');
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  const handleCancelProgress = () => {
+    setCancelRequested(true);
+    try { syncProgressService.requestCancel(); } catch {}
+  };
+
+  const handleCloseProgress = () => {
+    setShowProgress(false);
+    setSyncProgress(null);
+    setProgressError(null);
+    setCancelRequested(false);
+    try { syncProgressService.clear(); } catch {}
+  };
+
+  const handleRetry = async () => {
+    setProgressError(null);
+    setCancelRequested(false);
+    try { syncProgressService.clearCancel(); } catch {}
+
+    if (lastAction === 'restore') {
+      const result = await hybridDataService.restoreFromCloud(user, (progress) => setSyncProgress(progress));
+      if (!result.success) {
+        setProgressError(result.error || 'Restore failed');
+        return;
+      }
       setShowProgress(false);
       setSyncProgress(null);
+      await loadSyncStatus();
+      Alert.alert('Restore Complete', 'Your cloud backup has been restored on this device.');
+      onSyncComplete?.();
+      return;
     }
+
+    const result = await hybridDataService.performManualSync((progress) => setSyncProgress(progress));
+    if (!result.success) {
+      setProgressError(result.error || 'Sync failed');
+      return;
+    }
+
+    setShowProgress(false);
+    setSyncProgress(null);
+    await loadSyncStatus();
+    onSyncComplete?.();
   };
 
   const handleToggleSync = async (enabled: boolean) => {
@@ -460,21 +561,61 @@ export const SyncSettingsModal: React.FC<SyncSettingsProps> = ({
       <View style={styles.progressOverlay}>
         <View style={[styles.progressContainer, { backgroundColor: theme.colors.surface }]}>
           <ActivityIndicator size="large" color={theme.colors.primary} />
-          <Text style={[styles.progressTitle, { color: theme.colors.text }]}>Syncing...</Text>
-          {syncProgress && (
+          <Text style={[styles.progressTitle, { color: theme.colors.text }]}>
+            {lastAction === 'restore' ? 'Restoring…' : 'Syncing…'}
+          </Text>
+
+          {!!progressError ? (
             <>
-              <Text style={[styles.progressMessage, { color: theme.colors.textSecondary }]}>{syncProgress.message}</Text>
+              <Text style={[styles.progressMessage, { color: '#FF6B6B' }]}>{progressError}</Text>
+              <View style={styles.progressActionsRow}>
+                <TouchableOpacity
+                  style={[styles.progressActionButton, { borderColor: theme.colors.border, marginRight: 8 }]}
+                  onPress={handleCloseProgress}
+                >
+                  <Text style={[styles.progressActionText, { color: theme.colors.text }]}>Close</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.progressActionButton, { backgroundColor: theme.colors.primary, borderColor: theme.colors.primary, marginLeft: 8 }]}
+                  onPress={handleRetry}
+                >
+                  <Text style={[styles.progressActionText, { color: '#FFFFFF' }]}>Retry</Text>
+                </TouchableOpacity>
+              </View>
+            </>
+          ) : syncProgress ? (
+            <>
+              <Text style={[styles.progressMessage, { color: theme.colors.textSecondary }]}>
+                {syncProgress.message || (syncProgress.stage === 'waking_server' ? 'Waking cloud server…' : '')}
+              </Text>
               <View style={[styles.progressBar, { backgroundColor: theme.colors.border }]}>
                 <View
                   style={[
                     styles.progressFill,
-                    { width: `${syncProgress.progress}%`, backgroundColor: theme.colors.primary },
+                    { width: `${Math.max(0, Math.min(100, syncProgress.progress || 0))}%`, backgroundColor: theme.colors.primary },
                   ]}
                 />
               </View>
-              <Text style={[styles.progressPercent, { color: theme.colors.textSecondary }]}>{syncProgress.progress}%</Text>
+              <Text style={[styles.progressPercent, { color: theme.colors.textSecondary }]}>
+                {Math.max(0, Math.min(100, syncProgress.progress || 0))}%
+              </Text>
+
+              <View style={styles.progressActionsRow}>
+                {!cancelRequested ? (
+                  <TouchableOpacity
+                    style={[styles.progressActionButton, { backgroundColor: '#FF3B30', borderColor: '#FF3B30' }]}
+                    onPress={handleCancelProgress}
+                  >
+                    <Text style={[styles.progressActionText, { color: '#FFFFFF' }]}>Cancel</Text>
+                  </TouchableOpacity>
+                ) : (
+                  <View style={styles.progressCancelRow}>
+                    <Text style={[styles.progressCancelText, { color: theme.colors.textSecondary }]}>Cancelling…</Text>
+                  </View>
+                )}
+              </View>
             </>
-          )}
+          ) : null}
         </View>
       </View>
     </Modal>
@@ -833,6 +974,17 @@ export const SyncSettingsModal: React.FC<SyncSettingsProps> = ({
                     </>
                   )}
                 </TouchableOpacity>
+
+                {syncStatus.enabled && (
+                  <TouchableOpacity
+                    style={[styles.button, styles.secondaryButton, { borderColor: '#FF6B6B', marginTop: 10 }]}
+                    onPress={handleRestoreFromCloud}
+                    disabled={isLoading}
+                  >
+                    <Ionicons name="cloud-download" size={18} color="#FF6B6B" style={styles.buttonIcon} />
+                    <Text style={[styles.secondaryButtonText, { color: '#FF6B6B' }]}>Restore from Cloud</Text>
+                  </TouchableOpacity>
+                )}
               </View>
             )}
 
@@ -994,6 +1146,33 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 18,
     fontWeight: '600',
+  progressActionsRow: {
+    width: '100%',
+    flexDirection: 'row',
+    justifyContent: 'center',
+    marginTop: 12,
+  },
+  progressActionButton: {
+    flex: 1,
+    paddingVertical: 10,
+    borderRadius: 10,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  progressActionText: {
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  progressCancelRow: {
+    width: '100%',
+    paddingVertical: 10,
+    alignItems: 'center',
+  },
+  progressCancelText: {
+    fontSize: 14,
+    fontWeight: '600',
+  },
     marginBottom: 4,
   },
   sectionDescription: {

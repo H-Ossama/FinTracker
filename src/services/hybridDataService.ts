@@ -1,5 +1,6 @@
 import { localStorageService, LocalWallet, LocalTransaction, LocalCategory } from './localStorageService';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as SecureStore from 'expo-secure-store';
 
 interface HybridWallet extends Omit<LocalWallet, 'isDirty'> {
   syncStatus: 'synced' | 'local_only' | 'pending_sync' | 'conflict';
@@ -440,6 +441,22 @@ class HybridDataService {
     }
   }
 
+  async restoreFromCloud(user: any, onProgress?: (progress: any) => void): Promise<{ success: boolean; error?: string; lastSync?: string }> {
+    try {
+      const { cloudSyncService } = await import('./cloudSyncService');
+      const googleUserLike: any = {
+        id: user?.id || user?.uid || user?.email || 'user',
+        email: user?.email || '',
+        name: user?.name || user?.displayName || 'User',
+        photo: user?.avatar,
+      };
+      const result = await cloudSyncService.downloadUserData(googleUserLike, onProgress);
+      return { success: result.success, error: result.error, lastSync: result.lastSync };
+    } catch (error) {
+      return { success: false, error: error instanceof Error ? error.message : 'Restore failed' };
+    }
+  }
+
   async getSyncStatus(): Promise<{
     enabled: boolean;
     authenticated: boolean;
@@ -688,13 +705,56 @@ class HybridDataService {
     try {
       console.log('🔄 Enabling cloud sync for existing user:', user.email);
       const { cloudSyncService } = await import('./cloudSyncService');
+      const { backendAuthService } = await import('./backendAuthService');
       
-      // Set authentication token for the cloud sync service
-      // Use user's existing auth token or create a session token
-      let authToken = user.accessToken || user.idToken;
+      const getStoredAuthToken = async (): Promise<string | null> => {
+        try {
+          const token = await SecureStore.getItemAsync('user_token');
+          if (token) return token;
+        } catch (e) {
+          console.error('SecureStore read failed:', e);
+        }
+
+        const demoToken = await AsyncStorage.getItem('demo_token_backup');
+        if (demoToken) return demoToken;
+        const backupToken = await AsyncStorage.getItem('auth_token_backup');
+        if (backupToken) return backupToken;
+        return null;
+      };
+
+      // Cloud sync requires a backend session JWT (validated by backend middleware).
+      // Never invent a token locally (backend will reject it).
+      let authToken: string | null = null;
+
+      if (user?.isGoogleUser) {
+        // Prefer cached backend token
+        authToken = await AsyncStorage.getItem('auth_token');
+        if (!authToken) {
+          // Exchange stored Google ID token for backend session
+          const googleIdToken = await SecureStore.getItemAsync('google_id_token');
+          if (googleIdToken) {
+            const backendLogin = await backendAuthService.loginWithGoogle(googleIdToken);
+            if (backendLogin.success) {
+              authToken = backendLogin.token;
+              await AsyncStorage.setItem('auth_token', authToken);
+            } else {
+              return { success: false, error: backendLogin.error || 'Backend Google login failed' };
+            }
+          }
+        }
+      } else {
+        // Email/password users should already have a backend session token stored.
+        authToken = user?.accessToken || user?.idToken || null;
+        if (!authToken) {
+          authToken = await getStoredAuthToken();
+        }
+      }
+
       if (!authToken) {
-        // For non-Google users or if no token available, create a session token
-        authToken = `session_${user.uid || user.id}_${Date.now()}`;
+        return {
+          success: false,
+          error: 'Missing backend session token. Please sign in again, then retry cloud sync.',
+        };
       }
       
       console.log('🔑 Setting auth token for cloud sync service');
