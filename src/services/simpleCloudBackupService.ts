@@ -84,6 +84,7 @@ export interface SyncProgress {
   progress: number;
   message: string;
   error?: string;
+  itemsCount?: number;
 }
 
 type ProgressCallback = (progress: SyncProgress) => void;
@@ -304,6 +305,7 @@ class SimpleCloudBackupService {
         stage: 'complete',
         progress: 100,
         message: `Backup complete! ${totalItems} items saved.`,
+        itemsCount: totalItems,
       });
 
       console.log(`✅ Backup complete: ${totalItems} items saved to cloud`);
@@ -487,6 +489,7 @@ class SimpleCloudBackupService {
         stage: 'complete',
         progress: 100,
         message: `Restore complete! ${restoredCount} items restored.`,
+        itemsCount: restoredCount,
       });
 
       console.log(`✅ Restore complete: ${restoredCount} items restored from cloud`);

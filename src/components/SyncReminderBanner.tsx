@@ -161,16 +161,16 @@ export const SyncReminderBanner: React.FC<SyncReminderProps> = React.memo(({ onS
 
         onSyncComplete?.();
       } else {
-        const msg = result.error || 'Sync failed';
+        const msg = result.error || 'Cloud backup failed';
         try {
-          syncProgressService.setProgress({ operation: 'sync', stage: 'error', progress: 0, message: msg, failed: true, error: msg });
+          syncProgressService.setProgress({ operation: 'backup', stage: 'error', progress: 0, message: msg, failed: true, error: msg });
         } catch {}
       }
     } catch (error) {
-      console.error('Sync failed:', error);
-      const msg = error instanceof Error ? error.message : 'Sync failed';
+      console.error('Cloud backup failed:', error);
+      const msg = error instanceof Error ? error.message : 'Cloud backup failed';
       try {
-        syncProgressService.setProgress({ operation: 'sync', stage: 'error', progress: 0, message: msg, failed: true, error: msg });
+        syncProgressService.setProgress({ operation: 'backup', stage: 'error', progress: 0, message: msg, failed: true, error: msg });
       } catch {}
     } finally {
       if (mountedRef.current) setIsLoading(false);
@@ -223,11 +223,11 @@ export const SyncReminderBanner: React.FC<SyncReminderProps> = React.memo(({ onS
           </View>
           
           <View style={styles.textContainer}>
-            <Text style={[styles.title, { color: theme.colors.text }]}>Time to Sync!</Text>
+            <Text style={[styles.title, { color: theme.colors.text }]}>Cloud Backup</Text>
             <Text style={[styles.description, { color: theme.colors.textSecondary }]}>
-              {unsyncedItems > 0 
-                ? `You have ${unsyncedItems} unsynced items`
-                : 'Keep your data backed up and synced'
+              {unsyncedItems > 0
+                ? `You have ${unsyncedItems} items not backed up yet`
+                : 'Keep your data safely backed up'
               }
             </Text>
           </View>
@@ -241,7 +241,7 @@ export const SyncReminderBanner: React.FC<SyncReminderProps> = React.memo(({ onS
               {isLoading ? (
                 <ActivityIndicator size="small" color={theme.colors.primary} />
               ) : (
-                <Ionicons name="sync" size={20} color={theme.colors.primary} />
+                <Ionicons name="cloud-upload-outline" size={20} color={theme.colors.primary} />
               )}
             </TouchableOpacity>
 
@@ -274,12 +274,12 @@ export const SyncReminderBanner: React.FC<SyncReminderProps> = React.memo(({ onS
             <View style={[styles.modalContent, { backgroundColor: theme.colors.surface }]}>
               <View style={[styles.modalHeader, { backgroundColor: theme.colors.background }]}>
                 <Ionicons name="cloud-upload" size={32} color={theme.colors.primary} />
-                <Text style={[styles.modalTitle, { color: theme.colors.text }]}>Sync Reminder</Text>
+                <Text style={[styles.modalTitle, { color: theme.colors.text }]}>Cloud Backup Reminder</Text>
               </View>
 
               <View style={styles.modalBody}>
                 <Text style={[styles.modalDescription, { color: theme.colors.textSecondary }]}>
-                  We recommend syncing your financial data regularly to:
+                  We recommend backing up your financial data regularly to:
                 </Text>
 
                 <View style={styles.benefitsList}>
@@ -288,8 +288,8 @@ export const SyncReminderBanner: React.FC<SyncReminderProps> = React.memo(({ onS
                     <Text style={[styles.benefitText, { color: theme.colors.textSecondary }]}>Keep your data safely backed up</Text>
                   </View>
                   <View style={styles.benefitItem}>
-                    <Ionicons name="sync" size={20} color={theme.colors.primary} />
-                    <Text style={[styles.benefitText, { color: theme.colors.textSecondary }]}>Access from multiple devices</Text>
+                    <Ionicons name="cloud-done-outline" size={20} color={theme.colors.primary} />
+                    <Text style={[styles.benefitText, { color: theme.colors.textSecondary }]}>Restore anytime on a new phone</Text>
                   </View>
                   <View style={styles.benefitItem}>
                     <Ionicons name="time" size={20} color="#FF9500" />
@@ -307,7 +307,7 @@ export const SyncReminderBanner: React.FC<SyncReminderProps> = React.memo(({ onS
                 )}
 
                 <Text style={[styles.reminderNote, { color: theme.colors.textSecondary }]}>
-                  💡 You can disable these reminders in sync settings
+                  💡 You can disable these reminders in backup settings
                 </Text>
               </View>
 
@@ -328,8 +328,8 @@ export const SyncReminderBanner: React.FC<SyncReminderProps> = React.memo(({ onS
                     <ActivityIndicator size="small" color="white" />
                   ) : (
                     <>
-                      <Ionicons name="sync" size={18} color="white" />
-                      <Text style={styles.primaryButtonText}>Sync Now</Text>
+                      <Ionicons name="cloud-upload" size={18} color="white" />
+                      <Text style={styles.primaryButtonText}>Back Up Now</Text>
                     </>
                   )}
                 </TouchableOpacity>

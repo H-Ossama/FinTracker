@@ -3,6 +3,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as SecureStore from 'expo-secure-store';
 import { getBackendApiBaseUrl } from '../config/apiConfig';
 import { cloudSyncDiagnostics } from '../utils/cloudSyncDiagnostics';
+import { simpleCloudBackupService } from './simpleCloudBackupService';
 
 interface HybridWallet extends Omit<LocalWallet, 'isDirty'> {
   syncStatus: 'synced' | 'local_only' | 'pending_sync' | 'conflict';
@@ -109,14 +110,10 @@ class HybridDataService {
       // Check sync status (use dynamic import to avoid circular dependency)
       let syncStatus = { enabled: false, authenticated: false, unsyncedItems: 0 };
       try {
-        const { cloudSyncService } = await import('./cloudSyncService');
-        syncStatus = await cloudSyncService.getSyncStatus();
-        
-        // Perform quick sync check if enabled
-        await cloudSyncService.quickSyncCheck();
-        
+        syncStatus = await this.getSyncStatus();
+
         // Check if sync reminder should be shown
-        const shouldRemind = await cloudSyncService.shouldShowSyncReminder();
+        const shouldRemind = await this.shouldShowSyncReminder();
         if (shouldRemind) {
           // This will be handled by the UI component
           console.log('Sync reminder needed');
@@ -436,8 +433,33 @@ class HybridDataService {
 
   async performManualSync(onProgress?: (progress: any) => void): Promise<{ success: boolean; error?: string }> {
     try {
-      const { cloudSyncService } = await import('./cloudSyncService');
-      return cloudSyncService.performFullSync(onProgress);
+      if (!simpleCloudBackupService.isAuthenticated()) {
+        return { success: false, error: 'Sign in with Google to backup to cloud' };
+      }
+
+      // Manual sync in the new model == create a cloud backup
+      const result = await simpleCloudBackupService.backup((p) => {
+        try {
+          onProgress?.({
+            operation: 'backup',
+            stage: p.stage,
+            progress: p.progress,
+            message: p.message,
+            itemsCount: (p as any).itemsCount,
+            complete: p.stage === 'complete',
+            failed: p.stage === 'error',
+            error: p.error,
+          });
+        } catch {}
+      });
+
+      if (result.success) {
+        try {
+          await AsyncStorage.setItem('cloud_sync_enabled', 'true');
+        } catch {}
+      }
+
+      return { success: result.success, error: result.error };
     } catch (error) {
       return { success: false, error: error instanceof Error ? error.message : 'Sync failed' };
     }
@@ -445,15 +467,26 @@ class HybridDataService {
 
   async restoreFromCloud(user: any, onProgress?: (progress: any) => void): Promise<{ success: boolean; error?: string; lastSync?: string }> {
     try {
-      const { cloudSyncService } = await import('./cloudSyncService');
-      const googleUserLike: any = {
-        id: user?.id || user?.uid || user?.email || 'user',
-        email: user?.email || '',
-        name: user?.name || user?.displayName || 'User',
-        photo: user?.avatar,
-      };
-      const result = await cloudSyncService.downloadUserData(googleUserLike, onProgress);
-      return { success: result.success, error: result.error, lastSync: result.lastSync };
+      if (!simpleCloudBackupService.isAuthenticated()) {
+        return { success: false, error: 'Sign in with Google to restore from cloud' };
+      }
+
+      const result = await simpleCloudBackupService.restore((p) => {
+        try {
+          onProgress?.({
+            operation: 'restore',
+            stage: p.stage,
+            progress: p.progress,
+            message: p.message,
+            itemsCount: (p as any).itemsCount,
+            complete: p.stage === 'complete',
+            failed: p.stage === 'error',
+            error: p.error,
+          });
+        } catch {}
+      });
+
+      return { success: result.success, error: result.error, lastSync: result.timestamp };
     } catch (error) {
       return { success: false, error: error instanceof Error ? error.message : 'Restore failed' };
     }
@@ -467,8 +500,36 @@ class HybridDataService {
     nextReminderDue: Date | null;
   }> {
     try {
-      const { cloudSyncService } = await import('./cloudSyncService');
-      return cloudSyncService.getSyncStatus();
+      const enabledFlag = (await AsyncStorage.getItem('cloud_sync_enabled')) === 'true';
+      const authenticated = simpleCloudBackupService.isAuthenticated();
+
+      // Use the last backup time as "lastSync" for UI compatibility
+      const times = await simpleCloudBackupService.getLastSyncTimes().catch(() => ({ lastBackup: null, lastRestore: null }));
+      const lastSync = times.lastBackup ? new Date(times.lastBackup) : null;
+
+      // Count dirty/unsynced SQLite items (AsyncStorage items aren't tracked)
+      let unsyncedItems = 0;
+      try {
+        const [wallets, transactions, categories] = await Promise.all([
+          localStorageService.getWallets(),
+          localStorageService.getTransactions(),
+          localStorageService.getCategories(),
+        ]);
+        unsyncedItems =
+          wallets.filter(w => (w as any).isDirty || !(w as any).lastSynced).length +
+          transactions.filter(t => (t as any).isDirty || !(t as any).lastSynced).length +
+          categories.filter(c => (c as any).isDirty || !(c as any).lastSynced).length;
+      } catch {
+        // ignore
+      }
+
+      return {
+        enabled: enabledFlag,
+        authenticated,
+        lastSync,
+        unsyncedItems,
+        nextReminderDue: null,
+      };
     } catch (error) {
       return { enabled: false, authenticated: false, pendingItems: 0, lastSync: null, unsyncedItems: 0, nextReminderDue: null };
     }
@@ -583,9 +644,17 @@ class HybridDataService {
       if (disabled) {
         return false;
       }
-      
-      const { cloudSyncService } = await import('./cloudSyncService');
-      return cloudSyncService.shouldShowSyncReminder();
+
+      // Mirror legacy behavior: show reminder when cloud backup is disabled
+      // AND there is data that could be backed up.
+      const cloudSyncEnabled = await AsyncStorage.getItem('cloud_sync_enabled');
+      const isSyncDisabled = cloudSyncEnabled !== 'true';
+      if (!isSyncDisabled) {
+        return false;
+      }
+
+      const status = await this.getSyncStatus();
+      return isSyncDisabled && (status.unsyncedItems > 0);
     } catch (error) {
       return false;
     }
@@ -593,8 +662,7 @@ class HybridDataService {
 
   async markSyncReminderShown(): Promise<void> {
     try {
-      const { cloudSyncService } = await import('./cloudSyncService');
-      await cloudSyncService.markReminderShown();
+      await AsyncStorage.setItem('sync_reminder_last_shown', new Date().toISOString());
     } catch (error) {
       console.log('Could not mark sync reminder as shown:', error);
     }

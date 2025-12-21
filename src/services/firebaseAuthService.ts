@@ -73,7 +73,27 @@ class FirebaseAuthService {
         throw new Error('No ID token received from Google Sign-In');
       }
 
-      console.log('✅ Got Google ID token');
+      return await this.signInWithGoogleIdToken(idToken);
+    } catch (error) {
+      console.error('❌ Firebase Google Sign-In error:', error);
+      return {
+        success: false,
+        message: `Firebase sign-in failed: ${error}`,
+      };
+    }
+  }
+
+  /**
+   * Sign in to Firebase using an already-obtained Google ID token.
+   * This avoids triggering a second interactive Google sign-in flow.
+   */
+  async signInWithGoogleIdToken(idToken: string): Promise<AuthResult> {
+    try {
+      if (!idToken) {
+        return { success: false, message: 'Missing Google ID token' };
+      }
+
+      console.log('✅ Got Google ID token (external)');
 
       // Create Firebase credential
       const googleCredential = GoogleAuthProvider.credential(idToken);
@@ -100,7 +120,7 @@ class FirebaseAuthService {
         message: 'Successfully signed in with Google and Firebase',
       };
     } catch (error) {
-      console.error('❌ Firebase Google Sign-In error:', error);
+      console.error('❌ Firebase sign-in (idToken) error:', error);
       return {
         success: false,
         message: `Firebase sign-in failed: ${error}`,

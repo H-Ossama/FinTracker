@@ -4,10 +4,11 @@ import * as LocalAuthentication from 'expo-local-authentication';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Buffer } from 'buffer';
 import { googleAuthService, GoogleUser } from '../services/googleAuthService';
-import { cloudSyncService } from '../services/cloudSyncService';
 import { firebaseAuthService } from '../services/firebaseAuthService';
 import { syncProgressService } from '../services/syncProgressService';
 import { backendAuthService, BackendUser } from '../services/backendAuthService';
+import { simpleCloudBackupService } from '../services/simpleCloudBackupService';
+import { localStorageService } from '../services/localStorageService';
 
 // Types
 export interface User {
@@ -736,7 +737,12 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         await googleAuthService.signOut();
       }
 
-      await cloudSyncService.logout();
+      // Sign out from Firebase (best-effort). Google sign-out may already be done above.
+      try {
+        await firebaseAuthService.signOut();
+      } catch (e) {
+        console.warn('Firebase sign-out failed (ignored):', e);
+      }
 
       // Clear stored data
       await SecureStore.deleteItemAsync(STORAGE_KEYS.USER_TOKEN);
@@ -831,9 +837,9 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       await AsyncStorage.removeItem(STORAGE_KEYS.CLOUD_SYNC_ENABLED);
       await AsyncStorage.removeItem('google_user_info');
 
-      // Clear backend cloud session JWT (stored separately for /api/sync/*)
+      // Clear Firebase auth session (best-effort)
       try {
-        await cloudSyncService.logout();
+        await firebaseAuthService.signOut();
       } catch {}
       
       // Clear app-specific data
@@ -1095,7 +1101,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       await AsyncStorage.removeItem(STORAGE_KEYS.USER_DATA);
       await AsyncStorage.removeItem(STORAGE_KEYS.REMEMBER_ME);
       await AsyncStorage.removeItem(STORAGE_KEYS.GOOGLE_USER);
-      await cloudSyncService.clearAuthToken();
+      await AsyncStorage.removeItem(STORAGE_KEYS.CLOUD_SYNC_ENABLED);
     } catch (error) {
       console.error('Error clearing stored session:', error);
     }
@@ -1141,6 +1147,10 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const signInWithGoogle = async () => {
     try {
       setState(prev => ({ ...prev, isLoading: true }));
+
+      // Determine whether this device has already completed a login before.
+      // We use this to avoid silently overwriting existing local data on subsequent logins.
+      const hasLoggedInBefore = (await AsyncStorage.getItem(STORAGE_KEYS.HAS_LOGGED_IN_BEFORE)) === 'true';
       
       const result = await googleAuthService.signIn();
       
@@ -1170,33 +1180,44 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       // Persist app session (Google users don't need token validation)
       await persistAuthSession(user, 'google_session', true, { isGoogleUser: true });
 
-      // Exchange Google ID token for backend session JWT (required by /api/sync/*)
-      const backendLogin = await backendAuthService.loginWithGoogle(googleUser.idToken);
-      if (backendLogin.success) {
-        await cloudSyncService.setAuthToken(backendLogin.token);
-        await AsyncStorage.setItem('auth_token', backendLogin.token);
-        await AsyncStorage.setItem(STORAGE_KEYS.CLOUD_SYNC_ENABLED, 'true');
-      } else {
-        await AsyncStorage.setItem(STORAGE_KEYS.CLOUD_SYNC_ENABLED, 'false');
-        console.warn('Backend Google login failed during sign-in:', backendLogin.error);
-      }
+      // Cloud backup is Firebase-only now.
+      // Enable cloud backup if Firebase auth is active.
+      const firebaseAuthed = simpleCloudBackupService.isAuthenticated();
+      await AsyncStorage.setItem(STORAGE_KEYS.CLOUD_SYNC_ENABLED, firebaseAuthed ? 'true' : 'false');
 
-      // Check for existing cloud backup and sync (with progress UI)
+      // Auto-restore on first login on this device (safe mode): only if local data is empty.
       try {
-        if (!backendLogin.success) {
-          throw new Error(backendLogin.error || 'Backend cloud session unavailable');
-        }
-        syncProgressService.clear();
-        syncProgressService.setProgress({ stage: 'checking', progress: 5, message: 'Checking for cloud backup...' });
-        const hasBackup = await cloudSyncService.hasCloudBackup(googleUser);
-        if (hasBackup) {
-          // Download and restore with progress
-          const downloadResult = await cloudSyncService.downloadUserData(googleUser, (p) => {
-            try { syncProgressService.setProgress(p); } catch {}
-          });
+        if (firebaseAuthed && !hasLoggedInBefore) {
+          const [wallets, transactions] = await Promise.all([
+            localStorageService.getWallets(),
+            localStorageService.getTransactions(),
+          ]);
 
-          if (!downloadResult.success) {
-            throw new Error(downloadResult.error || 'Cloud restore failed');
+          // Categories are seeded by default on first launch; don't treat that as "existing user data".
+          const hasLocalData = wallets.length + transactions.length > 0;
+          if (!hasLocalData) {
+            syncProgressService.clear();
+            syncProgressService.setProgress({ operation: 'restore', stage: 'checking', progress: 5, message: 'Checking for cloud backup...' });
+
+            const info = await simpleCloudBackupService.getBackupInfo();
+            if (info.exists) {
+              await simpleCloudBackupService.restore((p) => {
+                try {
+                  syncProgressService.setProgress({
+                    operation: 'restore',
+                    stage: p.stage,
+                    progress: p.progress,
+                    message: p.message,
+                    itemsCount: (p as any).itemsCount,
+                    complete: p.stage === 'complete',
+                    failed: p.stage === 'error',
+                    error: p.error,
+                  });
+                } catch {}
+              });
+            }
+          } else {
+            console.log('ℹ️ Skipping auto-restore: local data already exists');
           }
         }
       } catch (err) {
@@ -1262,25 +1283,32 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       // Persist app session (Google users don't need token validation)
       await persistAuthSession(user, 'google_session', true, { isGoogleUser: true });
 
-      // Exchange Google ID token for backend JWT (required by /api/sync/* middleware)
-      const backendLogin = await backendAuthService.loginWithGoogle(googleUser.idToken);
-      if (backendLogin.success) {
-        await cloudSyncService.setAuthToken(backendLogin.token);
-        await AsyncStorage.setItem('auth_token', backendLogin.token);
-        await AsyncStorage.setItem(STORAGE_KEYS.CLOUD_SYNC_ENABLED, 'true');
+      // Cloud backup is Firebase-only now.
+      const firebaseAuthed = simpleCloudBackupService.isAuthenticated();
+      await AsyncStorage.setItem(STORAGE_KEYS.CLOUD_SYNC_ENABLED, firebaseAuthed ? 'true' : 'false');
 
-        // Upload initial data to cloud with progress UI
+      // Upload initial backup to cloud (best-effort)
+      if (firebaseAuthed) {
         try {
-          syncProgressService.setProgress({ stage: 'uploading', progress: 5, message: 'Uploading initial backup...' });
-          await cloudSyncService.uploadUserData(googleUser, (p) => {
-            try { syncProgressService.setProgress(p); } catch {}
+          syncProgressService.clear();
+          syncProgressService.setProgress({ operation: 'backup', stage: 'uploading', progress: 5, message: 'Uploading initial backup...' });
+          await simpleCloudBackupService.backup((p) => {
+            try {
+              syncProgressService.setProgress({
+                operation: 'backup',
+                stage: p.stage,
+                progress: p.progress,
+                message: p.message,
+                itemsCount: (p as any).itemsCount,
+                complete: p.stage === 'complete',
+                failed: p.stage === 'error',
+                error: p.error,
+              });
+            } catch {}
           });
         } catch (err) {
-          console.warn('Initial cloud upload failed during Google sign-up:', err);
+          console.warn('Initial cloud backup failed during Google sign-up:', err);
         }
-      } else {
-        await AsyncStorage.setItem(STORAGE_KEYS.CLOUD_SYNC_ENABLED, 'false');
-        console.warn('Backend Google login failed during sign-up:', backendLogin.error);
       }
 
       setState(prev => ({
@@ -1290,7 +1318,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         isLoading: false,
         rememberMe: true,
         isGoogleAuthenticated: true,
-        cloudSyncEnabled: backendLogin.success,
+        cloudSyncEnabled: firebaseAuthed,
       }));
       
       return { success: true };
@@ -1306,16 +1334,30 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const syncWithCloud = async () => {
     try {
       if (!state.user || !state.isGoogleAuthenticated) {
-        return { success: false, error: 'Google authentication required for cloud sync' };
+        return { success: false, error: 'Google authentication required for cloud backup' };
       }
 
-      const googleUser = await googleAuthService.getCurrentUser();
-      if (!googleUser) {
-        return { success: false, error: 'Google user session expired' };
+      if (!simpleCloudBackupService.isAuthenticated()) {
+        return { success: false, error: 'Firebase session not available. Please sign in again.' };
       }
 
-      const result = await cloudSyncService.syncUserData(googleUser);
-      return result;
+      syncProgressService.clear();
+      const result = await simpleCloudBackupService.backup((p) => {
+        try {
+          syncProgressService.setProgress({
+            operation: 'backup',
+            stage: p.stage,
+            progress: p.progress,
+            message: p.message,
+            itemsCount: (p as any).itemsCount,
+            complete: p.stage === 'complete',
+            failed: p.stage === 'error',
+            error: p.error,
+          });
+        } catch {}
+      });
+
+      return { success: result.success, error: result.error };
     } catch (error) {
       return { 
         success: false, 
@@ -1327,22 +1369,36 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const enableCloudSync = async () => {
     try {
       if (!state.user || !state.isGoogleAuthenticated) {
-        return { success: false, error: 'Google authentication required for cloud sync' };
+        return { success: false, error: 'Google authentication required for cloud backup' };
       }
 
-      const googleUser = await googleAuthService.getCurrentUser();
-      if (!googleUser) {
-        return { success: false, error: 'Google user session expired' };
+      if (!simpleCloudBackupService.isAuthenticated()) {
+        return { success: false, error: 'Firebase session not available. Please sign in again.' };
       }
 
       // Upload current data to cloud
-      const result = await cloudSyncService.uploadUserData(googleUser);
+      const result = await simpleCloudBackupService.backup((p) => {
+        try {
+          syncProgressService.setProgress({
+            operation: 'backup',
+            stage: p.stage,
+            progress: p.progress,
+            message: p.message,
+            itemsCount: (p as any).itemsCount,
+            complete: p.stage === 'complete',
+            failed: p.stage === 'error',
+            error: p.error,
+          });
+        } catch {}
+      });
+
       if (result.success) {
         await AsyncStorage.setItem(STORAGE_KEYS.CLOUD_SYNC_ENABLED, 'true');
         setState(prev => ({ ...prev, cloudSyncEnabled: true }));
+        return { success: true };
       }
 
-      return result;
+      return { success: false, error: result.error || 'Failed to enable cloud backup' };
     } catch (error) {
       return { 
         success: false, 

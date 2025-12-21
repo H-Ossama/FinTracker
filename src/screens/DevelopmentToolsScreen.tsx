@@ -24,6 +24,7 @@ const DevelopmentToolsScreen = () => {
   const navigation = useNavigation();
   const [isDemoMode, setIsDemoMode] = useState(false);
   const [demoModeLoading, setDemoModeLoading] = useState(false);
+  const [clearAllDataLoading, setClearAllDataLoading] = useState(false);
   const [dataStats, setDataStats] = useState<any>(null);
 
   const styles = createStyles(theme);
@@ -129,6 +130,51 @@ const DevelopmentToolsScreen = () => {
             }
           }
         }
+      ]
+    );
+  };
+
+  const handleClearAllData = async () => {
+    Alert.alert(
+      'Clear All Data',
+      'This will delete all local app data on this device (wallets, transactions, budgets, bills, goals, reminders, settings, and caches).\n\nYour cloud backup (if any) will NOT be deleted.\n\nContinue?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Clear All',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              setClearAllDataLoading(true);
+
+              // Clear DB + feature stores
+              await hybridDataService.clearAllData();
+
+              // Wipe AsyncStorage (settings + cached flags etc)
+              const AsyncStorage = await import('@react-native-async-storage/async-storage');
+              await AsyncStorage.default.clear();
+
+              // Clear diagnostics logs if present
+              try {
+                const { cloudSyncDiagnostics } = await import('../utils/cloudSyncDiagnostics');
+                await cloudSyncDiagnostics.clear();
+              } catch {}
+
+              // Re-init core so the app is in a valid empty state
+              await hybridDataService.initializeApp();
+
+              await loadDataStats();
+              await checkDemoMode();
+
+              Alert.alert('Done', 'All local data has been cleared.');
+            } catch (error) {
+              console.error('Error clearing all data:', error);
+              Alert.alert('Error', 'Failed to clear all local data.');
+            } finally {
+              setClearAllDataLoading(false);
+            }
+          },
+        },
       ]
     );
   };
@@ -249,9 +295,18 @@ const DevelopmentToolsScreen = () => {
       onPress: handleInitializeSampleData,
     },
     {
+      id: 'clear_all_data',
+      title: 'Clear All Data',
+      subtitle: 'Wipe all local app data on this device',
+      icon: 'trash-bin-outline',
+      color: '#FF3B30',
+      onPress: handleClearAllData,
+      loading: clearAllDataLoading,
+    },
+    {
       id: 'sync_test',
-      title: 'Test Sync System',
-      subtitle: 'Verify data backup and restoration',
+        title: 'Test Cloud Backup',
+        subtitle: 'Verify data backup and restoration',
       icon: 'sync-outline',
       color: '#007AFF',
       onPress: handleSyncTest,

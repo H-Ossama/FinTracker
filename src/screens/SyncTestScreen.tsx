@@ -12,7 +12,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../contexts/ThemeContext';
 import { syncTester, SyncTestReport, TestResult } from '../utils/syncTester';
-import { cloudSyncService } from '../services/cloudSyncService';
+import { simpleCloudBackupService } from '../services/simpleCloudBackupService';
 import { cloudSyncDiagnostics } from '../utils/cloudSyncDiagnostics';
 
 const SyncTestScreen: React.FC = () => {
@@ -23,7 +23,7 @@ const SyncTestScreen: React.FC = () => {
   const showDiagnostics = async () => {
     const logs = await cloudSyncDiagnostics.getAll();
     if (!logs.length) {
-      Alert.alert('Cloud Sync Logs', 'No diagnostics logs recorded yet. Try a sync attempt, then come back here.');
+      Alert.alert('Cloud Backup Logs', 'No diagnostics logs recorded yet. Try a cloud backup/restore, then come back here.');
       return;
     }
 
@@ -37,7 +37,7 @@ const SyncTestScreen: React.FC = () => {
       .join('\n');
 
     Alert.alert(
-      'Cloud Sync Logs (last 50)',
+      'Cloud Backup Logs (last 50)',
       text.length > 3500 ? text.slice(-3500) : text,
       [
         {
@@ -45,7 +45,7 @@ const SyncTestScreen: React.FC = () => {
           style: 'destructive',
           onPress: async () => {
             await cloudSyncDiagnostics.clear();
-            Alert.alert('Cloud Sync Logs', 'Cleared.');
+            Alert.alert('Cloud Backup Logs', 'Cleared.');
           },
         },
         { text: 'OK' },
@@ -58,21 +58,21 @@ const SyncTestScreen: React.FC = () => {
     setTestReport(null);
 
     try {
-      console.log('🚀 Starting cloud sync test from UI...');
+      console.log('🚀 Starting cloud backup/restore test from UI...');
 
-      const isAuthenticated = await cloudSyncService.isAuthenticated();
+      const isAuthenticated = simpleCloudBackupService.isAuthenticated();
       if (!isAuthenticated) {
         Alert.alert(
           'Authentication Required',
-          'Please sign in and ensure cloud sync is enabled before running this test.',
+          'Please sign in to run the cloud backup/restore test.',
           [{ text: 'OK' }]
         );
         return;
       }
 
-      console.log('✅ Cloud sync authentication detected');
+      console.log('✅ Cloud backup authentication detected');
 
-      // Run the sync test against cloud backend
+      // Run the backup/restore test (Firebase-only)
       const report = await syncTester.runCompleteSyncTest();
       setTestReport(report);
       
@@ -81,16 +81,16 @@ const SyncTestScreen: React.FC = () => {
       
       // Show user-friendly alert
       Alert.alert(
-        report.overall ? 'Cloud Sync Test Passed! 🔥✅' : 'Cloud Sync Test Failed ❌',
+        report.overall ? 'Cloud Backup Test Passed! ✅' : 'Cloud Backup Test Failed ❌',
         report.overall 
-          ? 'All cloud sync operations completed successfully. Your data is safely stored on the server!'
-          : 'Some cloud sync operations failed. Check the details below.',
+          ? 'Backup and restore completed successfully. Your data can be recovered from the cloud.'
+          : 'Some backup/restore operations failed. Check the details below.',
         [{ text: 'OK' }]
       );
       
     } catch (error) {
-      console.error('❌ Cloud sync test error:', error);
-      Alert.alert('Test Error', 'Failed to run cloud sync test: ' + error);
+      console.error('❌ Cloud backup test error:', error);
+      Alert.alert('Test Error', 'Failed to run cloud backup/restore test: ' + error);
     } finally {
       setIsRunning(false);
     }
@@ -108,10 +108,10 @@ const SyncTestScreen: React.FC = () => {
     <SafeAreaView style={[styles.container, { backgroundColor: theme.colors.background }]}>
       <View style={[styles.header, { borderBottomColor: theme.colors.border }]}>
         <Text style={[styles.title, { color: theme.colors.text }]}>
-          Sync Test
+          Cloud Backup Test
         </Text>
         <Text style={[styles.subtitle, { color: theme.colors.textSecondary }]}>
-          Test data backup and restoration
+          Test cloud backup and restore
         </Text>
       </View>
 
@@ -124,9 +124,9 @@ const SyncTestScreen: React.FC = () => {
             </Text>
             <Text style={[styles.infoDescription, { color: theme.colors.textSecondary }]}>
               1. Creates sample data (wallets, transactions, budgets){'\n'}
-              2. Uploads data to cloud storage{'\n'}
+              2. Backs up data to cloud storage{'\n'}
               3. Clears local data (simulates app reinstall){'\n'}
-              4. Downloads data from cloud storage{'\n'}
+              4. Restores data from cloud storage{'\n'}
               5. Verifies data integrity
             </Text>
           </View>
@@ -147,7 +147,7 @@ const SyncTestScreen: React.FC = () => {
             <Ionicons name="play-circle" size={20} color="white" />
           )}
           <Text style={styles.testButtonText}>
-            {isRunning ? 'Running Test...' : 'Run Sync Test'}
+            {isRunning ? 'Running Test...' : 'Run Backup/Restore Test'}
           </Text>
         </TouchableOpacity>
 
@@ -156,7 +156,7 @@ const SyncTestScreen: React.FC = () => {
           onPress={showDiagnostics}
         >
           <Ionicons name="document-text-outline" size={20} color={theme.colors.primary} />
-          <Text style={[styles.testButtonText, { color: theme.colors.text }]}>View Cloud Sync Logs</Text>
+          <Text style={[styles.testButtonText, { color: theme.colors.text }]}>View Cloud Backup Logs</Text>
         </TouchableOpacity>
 
         {testReport && (

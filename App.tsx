@@ -36,6 +36,8 @@ const AppLockScreen = lazy(() => import('./src/screens/AppLockScreen'));
 const BillsTrackerScreen = lazy(() => import('./src/screens/BillsTrackerScreen'));
 const BudgetPlannerScreen = lazy(() => import('./src/screens/BudgetPlannerScreen'));
 const RemindersScreen = lazy(() => import('./src/screens/RemindersScreen'));
+const CloudBackupScreen = lazy(() => import('./src/screens/CloudBackupScreen'));
+const MonthlyReportsScreen = lazy(() => import('./src/screens/MonthlyReportsScreen'));
 const SyncTestScreen = lazy(() => import('./src/screens/SyncTestScreen'));
 const DevelopmentToolsScreen = lazy(() => import('./src/screens/DevelopmentToolsScreen'));
 const PrivacyPolicyScreen = lazy(() => import('./src/screens/PrivacyPolicyScreen'));
@@ -207,12 +209,12 @@ const AppNavigator = React.memo(() => {
         clearTimeout(navigationTransitionTimeout.current);
       }
 
-      // Delay showing the loader to avoid adding perceived lag on fast transitions.
+      // Show a loader quickly so the tap feels responsive on first-open screens.
       navigationTransitionTimeout.current = setTimeout(() => {
         if (isMounted.current) {
           setIsNavigating(true);
         }
-      }, 150);
+      }, 50);
 
       InteractionManager.runAfterInteractions(() => {
         if (!isMounted.current) {
@@ -430,6 +432,20 @@ const AppNavigator = React.memo(() => {
                   }}
                 />
                 <Stack.Screen 
+                  name="CloudBackup" 
+                  component={CloudBackupScreen}
+                  options={{ 
+                    headerShown: false,
+                  }}
+                />
+                <Stack.Screen 
+                  name="MonthlyReports" 
+                  component={MonthlyReportsScreen}
+                  options={{ 
+                    headerShown: false,
+                  }}
+                />
+                <Stack.Screen 
                   name="SyncTest" 
                   component={SyncTestScreen}
                   options={{ 
@@ -480,7 +496,7 @@ const AppNavigator = React.memo(() => {
             )}
           </Stack.Navigator>
         </NavigationContainer>
-        <FullScreenLoader visible={isNavigating} message="Switching screens..." transparent />
+        <FullScreenLoader visible={isNavigating} message="Loading..." />
       </TouchActivityWrapper>
     </Suspense>
   );

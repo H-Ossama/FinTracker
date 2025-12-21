@@ -13,7 +13,7 @@ import {
   StatusBar,
   Image,
 } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { PieChart } from 'react-native-chart-kit';
@@ -229,7 +229,10 @@ const BudgetPlannerScreen = ({ navigation }: any) => {
     const currentDate = new Date();
     for (let i = -6; i <= 6; i++) {
       const date = new Date(currentDate.getFullYear(), currentDate.getMonth() + i, 1);
-      const monthYear = date.toISOString().slice(0, 7);
+      // Use local year/month (avoid UTC conversion causing duplicates around timezone offsets)
+      const year = date.getFullYear();
+      const month = String(date.getMonth() + 1).padStart(2, '0');
+      const monthYear = `${year}-${month}`;
       const monthName = date.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
       months.push({ value: monthYear, label: monthName, key: `month-${monthYear}` });
     }

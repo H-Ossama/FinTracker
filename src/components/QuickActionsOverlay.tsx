@@ -6,10 +6,13 @@ import {
   Text,
   View,
   Platform,
+  Animated,
+  ScrollView,
 } from 'react-native';
 import { BlurView } from 'expo-blur';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useTheme } from '../contexts/ThemeContext';
 import { useLocalization } from '../contexts/LocalizationContext';
@@ -25,6 +28,7 @@ const QuickActionsOverlay: React.FC<Props> = ({ visible, onClose }) => {
   const { theme, isDark } = useTheme();
   const { t } = useLocalization();
   const navigation = useNavigation();
+  const insets = useSafeAreaInsets();
   const quickActions = useQuickActions();
 
   const [actions, setActions] = useState<QuickAction[]>([]);
@@ -119,13 +123,41 @@ const QuickActionsOverlay: React.FC<Props> = ({ visible, onClose }) => {
   const panelBg = isDark ? 'rgba(24, 24, 27, 0.92)' : 'rgba(255, 255, 255, 0.92)';
   const panelBorder = isDark ? 'rgba(255,255,255,0.10)' : 'rgba(0,0,0,0.06)';
 
-  const actionRing = useMemo(() => {
-    // Match the screenshot: 4 enabled actions + Settings (5 items total).
-    return [...actions.slice(0, 4), settingsAction];
+  const popoverActions = useMemo(() => {
+    // Screenshot-like: compact list (keep existing icons/actions)
+    return [...actions, settingsAction];
   }, [actions, settingsAction]);
 
+  const anim = React.useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    if (visible) {
+      Animated.timing(anim, {
+        toValue: 1,
+        duration: 180,
+        useNativeDriver: true,
+      }).start();
+    } else {
+      Animated.timing(anim, {
+        toValue: 0,
+        duration: 140,
+        useNativeDriver: true,
+      }).start();
+    }
+  }, [anim, visible]);
+
+  const popoverTranslateY = anim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [18, 0],
+  });
+
+  const popoverScale = anim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0.96, 1],
+  });
+
   return (
-    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
+    <Modal visible={visible} transparent animationType="none" onRequestClose={onClose}>
       <View style={styles.root}>
         <BlurView
           intensity={Platform.OS === 'android' ? 40 : 55}
@@ -133,138 +165,161 @@ const QuickActionsOverlay: React.FC<Props> = ({ visible, onClose }) => {
           style={StyleSheet.absoluteFill}
         />
 
-        {/* Dark grey veil for better visibility (above blur) */}
-        <View
+        {/* Subtle veil above blur */}
+        <Animated.View
           pointerEvents="none"
           style={[
             StyleSheet.absoluteFill,
-            { backgroundColor: isDark ? 'rgba(0,0,0,0.65)' : 'rgba(80,80,80,0.65)' },
+            {
+              backgroundColor: isDark ? 'rgba(0,0,0,0.35)' : 'rgba(0,0,0,0.18)',
+              opacity: anim,
+            },
           ]}
         />
 
         {/* Backdrop: dismiss when tapping outside */}
         <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
 
-        {/* Circular panel */}
-        <View style={styles.panelWrap} pointerEvents="box-none">
-          <View style={[styles.panel, { backgroundColor: panelBg }]}>
-            <Text style={[styles.title, { color: theme.colors.text }]}>{t('quick_actions') || 'Quick Actions'}</Text>
-
-            <View style={styles.ringStage}>
-              {/* Actions arranged around a circle */}
-              {actionRing.map((a, idx) => {
-                const total = actionRing.length;
-                const angle = (idx * (2 * Math.PI)) / total - Math.PI / 2;
-                const x = Math.cos(angle) * RING_RADIUS;
-                const y = Math.sin(angle) * RING_RADIUS;
-                const left = RING_STAGE_SIZE / 2 + x - ACTION_SIZE / 2;
-                const top = RING_STAGE_SIZE / 2 + y - ACTION_SIZE / 2;
-
-                return (
-                  <View key={a.id} style={[styles.ringItem, { left, top }]}>
-                    <Pressable
-                      onPress={() => handleAction(a)}
-                      style={({ pressed }) => [
-                        styles.actionButton,
-                        {
-                          backgroundColor: a.color,
-                          transform: [{ scale: pressed ? 0.96 : 1 }],
-                        },
-                      ]}
-                    >
-                      <Ionicons name={a.icon as any} size={22} color="#FFFFFF" />
-                    </Pressable>
-                    <Text style={[styles.actionLabel, { color: theme.colors.text }]} numberOfLines={2}>
+        {/* Popover panel (iOS-style) */}
+        <View
+          style={[styles.popoverWrap, { paddingBottom: Math.max(insets.bottom, 10) + TAB_BAR_OFFSET }]}
+          pointerEvents="box-none"
+        >
+          <Animated.View
+            style={[
+              styles.popover,
+              {
+                transform: [{ translateY: popoverTranslateY }, { scale: popoverScale }],
+                opacity: anim,
+              },
+            ]}
+          >
+            <BlurView
+              intensity={Platform.OS === 'android' ? 25 : 40}
+              tint={isDark ? 'dark' : 'light'}
+              style={StyleSheet.absoluteFill}
+            />
+            <View style={[styles.popoverChrome, { borderColor: panelBorder, backgroundColor: panelBg }]}>
+              <ScrollView
+                showsVerticalScrollIndicator={false}
+                style={styles.list}
+                contentContainerStyle={styles.listContent}
+              >
+                {popoverActions.map((a) => (
+                  <Pressable
+                    key={a.id}
+                    onPress={() => handleAction(a)}
+                    style={({ pressed }) => [
+                      styles.row,
+                      {
+                        backgroundColor: isDark ? 'rgba(15,15,18,0.60)' : 'rgba(20,20,25,0.12)',
+                        borderColor: isDark ? 'rgba(255,255,255,0.10)' : 'rgba(0,0,0,0.06)',
+                        opacity: pressed ? 0.88 : 1,
+                      },
+                    ]}
+                  >
+                    <View style={[styles.iconBubble, { backgroundColor: a.color }]}>
+                      <Ionicons name={a.icon as any} size={20} color="#FFFFFF" />
+                    </View>
+                    <Text style={[styles.rowLabel, { color: isDark ? '#FFFFFF' : theme.colors.text }]} numberOfLines={1}>
                       {t(a.label) || a.label}
                     </Text>
-                  </View>
-                );
-              })}
+                  </Pressable>
+                ))}
+              </ScrollView>
             </View>
-          </View>
+
+            {/* Arrow pointing to the center quick button */}
+            <View style={styles.pointerWrap} pointerEvents="none">
+              <View style={[styles.pointer, { backgroundColor: panelBg, borderColor: panelBorder }]} />
+            </View>
+          </Animated.View>
         </View>
       </View>
     </Modal>
   );
 };
 
-const CIRCLE_SIZE = 340;
-const RING_STAGE_SIZE = 300;
-const ACTION_SIZE = 54;
-const RING_RADIUS = 110;
+const TAB_BAR_OFFSET = 104;
 
 const styles = StyleSheet.create({
   root: {
     flex: 1,
   },
-  panelWrap: {
+  popoverWrap: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'flex-end',
-    paddingBottom: 110,
   },
-  panel: {
-    width: CIRCLE_SIZE,
-    height: CIRCLE_SIZE,
-    borderRadius: CIRCLE_SIZE / 2,
-    paddingTop: 18,
-    paddingHorizontal: 18,
-    paddingBottom: 14,
+  popover: {
+    width: 280,
+    borderRadius: 26,
     overflow: 'visible',
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.22,
-    shadowRadius: 20,
-    elevation: 14,
+    shadowOffset: { width: 0, height: 14 },
+    shadowOpacity: 0.28,
+    shadowRadius: 24,
+    elevation: 18,
   },
-  title: {
+  popoverChrome: {
+    borderRadius: 26,
+    borderWidth: 1,
+    padding: 12,
+    maxHeight: 340,
+    overflow: 'hidden',
+  },
+  list: {
+    flexGrow: 0,
+  },
+  listContent: {
+    gap: 12,
+  },
+  row: {
+    height: 56,
+    borderRadius: 28,
+    borderWidth: 1,
+    paddingHorizontal: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  iconBubble: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.22,
+    shadowRadius: 12,
+    elevation: 10,
+  },
+  rowLabel: {
     fontSize: 16,
     fontWeight: '700',
-    textAlign: 'center',
-    marginBottom: 12,
   },
-  ringStage: {
-    width: RING_STAGE_SIZE,
-    height: RING_STAGE_SIZE,
-    alignSelf: 'center',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  centerButton: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
-    backgroundColor: '#111827',
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.25,
-    shadowRadius: 12,
-    elevation: 10,
-  },
-  ringItem: {
+  pointerWrap: {
     position: 'absolute',
-    width: 92,
-    alignItems: 'center',
+    bottom: -10,
+    left: '50%',
+    transform: [{ translateX: -8 }],
+    width: 16,
+    height: 16,
+    overflow: 'visible',
   },
-  actionButton: {
-    width: ACTION_SIZE,
-    height: ACTION_SIZE,
-    borderRadius: ACTION_SIZE / 2,
-    alignItems: 'center',
-    justifyContent: 'center',
+  pointer: {
+    width: 16,
+    height: 16,
+    borderWidth: 1,
+    transform: [{ rotate: '45deg' }],
+    borderRadius: 4,
+    opacity: 0.98,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.2,
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.18,
     shadowRadius: 12,
     elevation: 10,
-  },
-  actionLabel: {
-    marginTop: 6,
-    fontSize: 11,
-    fontWeight: '700',
-    textAlign: 'center',
   },
 });
 

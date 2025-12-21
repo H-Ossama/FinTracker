@@ -12,8 +12,8 @@ const SyncProgressModal: React.FC = () => {
   const [payload, setPayload] = useState<any>({ progress: 0, message: '' });
   const [showCompleteAlert, setShowCompleteAlert] = useState(false);
   const [cancelRequestedState, setCancelRequested] = useState(false);
-  const [completeAlertTitle, setCompleteAlertTitle] = useState('Sync Complete');
-  const [completeAlertMessage, setCompleteAlertMessage] = useState('Your data is synced successfully.');
+  const [completeAlertTitle, setCompleteAlertTitle] = useState('Cloud Backup');
+  const [completeAlertMessage, setCompleteAlertMessage] = useState('Your data is backed up.');
 
   const mountedRef = useRef(false);
   const clearTimerRef = useRef<number | null>(null);
@@ -37,22 +37,30 @@ const SyncProgressModal: React.FC = () => {
 
       if (p.complete) {
         const op = p.operation as string | undefined;
-        const isRestore = op === 'restore' || String(p.stage || '').includes('restore') || String(p.stage || '').includes('downloading');
+        const isRestore = op === 'restore' || String(p.stage || '').includes('restor') || String(p.stage || '').includes('downloading');
+        const itemsCount = typeof p.itemsCount === 'number' ? p.itemsCount : undefined;
 
-        if (isRestore) {
-          setCompleteAlertTitle('Data Restored');
-          setCompleteAlertMessage('Your cloud backup was downloaded and applied to this device.');
-        } else {
-          setCompleteAlertTitle('Sync Complete');
-          setCompleteAlertMessage('Your cloud backup is up to date.');
-        }
+        const title = isRestore ? 'Cloud Restore Complete' : 'Cloud Backup Complete';
+        const message = isRestore
+          ? (itemsCount != null
+              ? `Restored ${itemsCount} items from your cloud backup.`
+              : 'Your cloud backup was downloaded and applied to this device.')
+          : (itemsCount != null
+              ? `Saved ${itemsCount} items to your cloud backup.`
+              : 'Your data was saved to your cloud backup.');
+
+        setCompleteAlertTitle(title);
+        setCompleteAlertMessage(message);
 
         // schedule a local notification announcing completion
         try {
           notificationService.scheduleLocalNotification(
-            isRestore ? 'Data Restored' : 'Sync Complete',
-            isRestore ? 'Your cloud backup has been downloaded to this device.' : 'Your cloud backup is up to date.',
-            { type: isRestore ? 'sync_restore' : 'sync_complete' }
+            title,
+            message,
+            {
+              type: isRestore ? 'cloud_restore_complete' : 'cloud_backup_complete',
+              itemsCount,
+            }
           ).catch(() => {});
         } catch (_) {}
 
@@ -94,29 +102,56 @@ const SyncProgressModal: React.FC = () => {
     try { syncProgressService.clearCancel(); } catch {}
 
     try {
-      const result = await hybridDataService.performManualSync((p: any) => {
-        try { syncProgressService.setProgress(p); } catch {}
-      });
+      const op = payload?.operation as string | undefined;
+      const isRestore = op === 'restore' || String(payload?.stage || '').includes('restor') || String(payload?.stage || '').includes('downloading');
+      const result = isRestore
+        ? await hybridDataService.restoreFromCloud(null, (p: any) => {
+            try { syncProgressService.setProgress(p); } catch {}
+          })
+        : await hybridDataService.performManualSync((p: any) => {
+            try { syncProgressService.setProgress(p); } catch {}
+          });
+
       if (!result.success) {
         try {
-          syncProgressService.setProgress({ stage: 'error', progress: 0, message: result.error || 'Sync failed', failed: true });
+          syncProgressService.setProgress({
+            operation: isRestore ? 'restore' : 'backup',
+            stage: 'error',
+            progress: 0,
+            message: result.error || (isRestore ? 'Cloud restore failed' : 'Cloud backup failed'),
+            failed: true,
+          });
         } catch {}
       }
     } catch (err: any) {
       try {
-        syncProgressService.setProgress({ stage: 'error', progress: 0, message: err?.message || 'Sync failed', failed: true });
+        syncProgressService.setProgress({
+          operation: (payload?.operation as string | undefined) || 'backup',
+          stage: 'error',
+          progress: 0,
+          message: err?.message || 'Operation failed',
+          failed: true,
+        });
       } catch {}
     }
   };
 
   const stage = String(payload?.stage || '');
   const operation = payload?.operation as string | undefined;
-  const title =
-    stage === 'waking_server'
-      ? 'Waking Cloud Server'
-      : operation === 'restore' || stage.includes('restor') || stage.includes('downloading')
-        ? 'Restoring Data'
-        : 'Syncing Data';
+  const inferredRestore = operation === 'restore' || stage.includes('restor') || stage.includes('downloading');
+  const title = inferredRestore ? 'Restoring from Cloud Backup' : 'Backing Up to Cloud';
+
+  const defaultMessage = inferredRestore
+    ? (stage === 'downloading'
+        ? 'Downloading your cloud backup…'
+        : stage === 'restoring'
+          ? 'Applying backup to this device…'
+          : 'Preparing restore…')
+    : (stage === 'collecting'
+        ? 'Preparing backup package…'
+        : stage === 'uploading'
+          ? 'Uploading your backup…'
+          : 'Preparing backup…');
 
   const progress = typeof payload.progress === 'number' ? Math.max(0, Math.min(100, payload.progress)) : 0;
 
@@ -127,7 +162,7 @@ const SyncProgressModal: React.FC = () => {
           <View style={[styles.card, { backgroundColor: theme.colors.surface }]}> 
             <Text style={[styles.title, { color: theme.colors.text }]}>{title}</Text>
             <Text style={[styles.message, { color: payload.failed ? '#FF6B6B' : theme.colors.textSecondary }]}>
-              {payload.message || (payload.stage === 'uploading' ? 'Uploading your backup…' : 'Downloading your backup…')}
+              {payload.message || defaultMessage}
             </Text>
             <View style={styles.progressRow}>
               {Platform.OS === 'android' ? (
@@ -143,7 +178,7 @@ const SyncProgressModal: React.FC = () => {
               {!payload.failed ? (
                 !cancelRequestedState ? (
                   <TouchableOpacity onPress={handleCancel} style={{ padding: 10, alignItems: 'center', borderRadius: 8, backgroundColor: '#FF3B30' }}>
-                    <Text style={{ color: 'white', fontWeight: '600' }}>Cancel</Text>
+                    <Text style={{ color: 'white', fontWeight: '600' }}>{inferredRestore ? 'Cancel Restore' : 'Cancel Backup'}</Text>
                   </TouchableOpacity>
                 ) : (
                   <View style={{ padding: 10, alignItems: 'center' }}>

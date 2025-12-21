@@ -20,12 +20,12 @@ import { useTheme } from '../contexts/ThemeContext';
 import { useLocalization } from '../contexts/LocalizationContext';
 import { useAuth } from '../contexts/AuthContext';
 import { useNavigation } from '@react-navigation/native';
-import { SimpleCloudBackupModal } from '../components/SimpleCloudBackupModal';
 import { notificationService } from '../services/notificationService';
 import { GoalsService } from '../services/goalsService';
 import { billsService } from '../services/billsService';
 import { budgetService } from '../services/budgetService';
 import { dataInitializationService } from '../services/dataInitializationService';
+import { dataExportService } from '../services/dataExportService';
 import { Goal, Bill } from '../types';
 
 const MoreScreen = () => {
@@ -35,7 +35,7 @@ const MoreScreen = () => {
   const navigation = useNavigation();
   const insets = useSafeAreaInsets();
   const [isBalanceMasked, setIsBalanceMasked] = useState(false);
-  const [showSyncModal, setShowSyncModal] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
   const [goals, setGoals] = useState<Goal[]>([]);
   const [goalsLoading, setGoalsLoading] = useState(true);
   const [bills, setBills] = useState<Bill[]>([]);
@@ -200,14 +200,32 @@ const MoreScreen = () => {
       key={item.id} 
       style={styles.menuItem}
       onPress={() => {
-        if (item.id === 'backup') {
-          setShowSyncModal(true);
-        } else if (item.id === 'goals') {
+        if (item.id === 'goals') {
           navigation.navigate('SavingsGoals' as never);
         } else if (item.id === 'bills') {
           navigation.navigate('BillsReminder' as never);
         } else if (item.id === 'budget') {
           navigation.navigate('BudgetPlanner' as never);
+        } else if (item.id === 'backup') {
+          navigation.navigate('CloudBackup' as never);
+        } else if (item.id === 'reports') {
+          navigation.navigate('MonthlyReports' as never);
+        } else if (item.id === 'export') {
+          if (isExporting) return;
+
+          (async () => {
+            try {
+              setIsExporting(true);
+              const result = await dataExportService.exportAsJson();
+              if (result.success) {
+                Alert.alert('Export Ready', 'Your export file is ready to share.');
+              } else {
+                Alert.alert('Export Failed', result.error || 'Unknown error');
+              }
+            } finally {
+              setIsExporting(false);
+            }
+          })();
         }
         // Add other navigation handlers here as needed
       }}
@@ -226,6 +244,9 @@ const MoreScreen = () => {
           <View style={styles.badge}>
             <Text style={styles.badgeText}>{item.badge}</Text>
           </View>
+        )}
+        {item.id === 'export' && isExporting && (
+          <ActivityIndicator size="small" color={theme.colors.primary} style={{ marginRight: 8 }} />
         )}
         <Ionicons name="chevron-forward" size={16} color="#C7C7CC" />
       </View>
@@ -655,14 +676,6 @@ const MoreScreen = () => {
         </ScrollView>
       </View>
 
-      {/* Cloud Backup Modal */}
-      <SimpleCloudBackupModal
-        visible={showSyncModal}
-        onClose={() => setShowSyncModal(false)}
-        onComplete={() => {
-          setShowSyncModal(false);
-        }}
-      />
     </View>
   );
 };

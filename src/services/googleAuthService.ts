@@ -156,7 +156,7 @@ class GoogleAuthService {
 
       // Also sign in to Firebase
       console.log('🔥 Signing in to Firebase...');
-      const firebaseResult = await firebaseAuthService.signInWithGoogle();
+      const firebaseResult = await firebaseAuthService.signInWithGoogleIdToken(googleUser.idToken);
       
       if (!firebaseResult.success) {
         console.error('❌ Firebase sign-in failed:', firebaseResult.message);

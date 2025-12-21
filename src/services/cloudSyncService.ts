@@ -7,6 +7,7 @@ import { hybridDataService } from './hybridDataService';
 import { getBackendApiBaseUrl, getBackendApiRoot } from '../config/apiConfig';
 import { backendAuthService } from './backendAuthService';
 import { cloudSyncDiagnostics } from '../utils/cloudSyncDiagnostics';
+import { Buffer } from 'buffer';
 
 
 export interface UserDataBackup {
@@ -80,6 +81,27 @@ class CloudSyncService {
 
   private isJwtToken(token: string | null | undefined): boolean {
     return typeof token === 'string' && token.includes('.') && token.split('.').length === 3;
+  }
+
+  private decodeJwtPayload(token: string): any | null {
+    try {
+      if (!this.isJwtToken(token)) return null;
+      const payloadPart = token.split('.')[1];
+      if (!payloadPart) return null;
+
+      const base64 = payloadPart.replace(/-/g, '+').replace(/_/g, '/');
+      const padded = base64.padEnd(Math.ceil(base64.length / 4) * 4, '=');
+      const json = Buffer.from(padded, 'base64').toString('utf8');
+      return JSON.parse(json);
+    } catch {
+      return null;
+    }
+  }
+
+  private isGoogleIdToken(token: string): boolean {
+    const payload = this.decodeJwtPayload(token);
+    const iss = typeof payload?.iss === 'string' ? payload.iss : '';
+    return iss.includes('accounts.google.com');
   }
 
   private async ensureBackendSessionToken(onProgress?: (p: any) => void): Promise<boolean> {
@@ -1343,11 +1365,11 @@ class CloudSyncService {
   async logout(): Promise<void> {
     try {
       const token = await this.getAuthToken();
-      const looksLikeJwt = typeof token === 'string' && token.includes('.') && token.split('.').length === 3;
-      if (token && looksLikeJwt) {
+      if (token && this.isJwtToken(token) && !this.isGoogleIdToken(token)) {
         const result = await backendAuthService.logout(token);
-        if (!result.success && !result.networkError) {
-          console.warn('⚠️ Backend logout failed:', result.error);
+        if (!result.success && __DEV__) {
+          // Backend logout is best-effort; never block local logout or spam warnings.
+          console.log('ℹ️ Backend logout skipped/failed:', result.error);
         }
       }
     } catch (error) {

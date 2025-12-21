@@ -31,12 +31,14 @@ interface SimpleCloudBackupModalProps {
   visible: boolean;
   onClose: () => void;
   onComplete?: () => void;
+  mode?: 'modal' | 'screen';
 }
 
 export const SimpleCloudBackupModal: React.FC<SimpleCloudBackupModalProps> = ({
   visible,
   onClose,
   onComplete,
+  mode = 'modal',
 }) => {
   const { theme } = useTheme();
   const { user, isGoogleAuthenticated } = useAuth();
@@ -49,10 +51,11 @@ export const SimpleCloudBackupModal: React.FC<SimpleCloudBackupModalProps> = ({
   const [lastRestoreTime, setLastRestoreTime] = useState<string | null>(null);
 
   useEffect(() => {
-    if (visible) {
+    const shouldLoad = mode === 'screen' ? true : visible;
+    if (shouldLoad) {
       loadBackupInfo();
     }
-  }, [visible]);
+  }, [visible, mode]);
 
   const loadBackupInfo = async () => {
     try {
@@ -274,23 +277,22 @@ export const SimpleCloudBackupModal: React.FC<SimpleCloudBackupModalProps> = ({
 
   const isAuthenticated = simpleCloudBackupService.isAuthenticated();
 
-  return (
-    <Modal visible={visible} animationType="slide" presentationStyle="pageSheet">
-      <View style={{ flex: 1, backgroundColor: '#1C1C1E' }}>
-        <StatusBar barStyle="light-content" backgroundColor="#1C1C1E" />
-        
-        {/* Header */}
-        <View style={[styles.header, { paddingTop: insets.top }]}>
-          <TouchableOpacity onPress={onClose} style={styles.closeButton}>
-            <Ionicons name="close" size={24} color="#FFFFFF" />
-          </TouchableOpacity>
-          <Text style={styles.headerTitle}>Cloud Backup</Text>
-          <View style={{ width: 40 }} />
-        </View>
+  const content = (
+    <View style={{ flex: 1, backgroundColor: '#1C1C1E' }}>
+      <StatusBar barStyle="light-content" backgroundColor="#1C1C1E" />
 
-        {/* Content */}
-        <View style={[styles.content, { backgroundColor: theme.colors.background }]}>
-          <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
+      {/* Header */}
+      <View style={[styles.header, { paddingTop: insets.top }]}>
+        <TouchableOpacity onPress={onClose} style={styles.closeButton}>
+          <Ionicons name={mode === 'screen' ? 'chevron-back' : 'close'} size={24} color="#FFFFFF" />
+        </TouchableOpacity>
+        <Text style={styles.headerTitle}>Cloud Backup</Text>
+        <View style={{ width: 40 }} />
+      </View>
+
+      {/* Content */}
+      <View style={[styles.content, { backgroundColor: theme.colors.background }]}>
+        <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
             
             {/* Status Card */}
             <View style={[styles.card, { backgroundColor: theme.colors.surface }]}>
@@ -517,13 +519,22 @@ export const SimpleCloudBackupModal: React.FC<SimpleCloudBackupModalProps> = ({
               </View>
             )}
 
-            <View style={{ height: 40 }} />
-          </ScrollView>
-        </View>
-
-        {/* Progress Overlay */}
-        {progress && renderProgressOverlay()}
+          <View style={{ height: 40 }} />
+        </ScrollView>
       </View>
+
+      {/* Progress Overlay */}
+      {progress && renderProgressOverlay()}
+    </View>
+  );
+
+  if (mode === 'screen') {
+    return content;
+  }
+
+  return (
+    <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
+      {content}
     </Modal>
   );
 };
