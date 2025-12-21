@@ -20,7 +20,7 @@ import { useTheme } from '../contexts/ThemeContext';
 import { useLocalization } from '../contexts/LocalizationContext';
 import { useAuth } from '../contexts/AuthContext';
 import { useNavigation } from '@react-navigation/native';
-import { SyncSettingsModal } from '../components/SyncSettingsModal';
+import { SimpleCloudBackupModal } from '../components/SimpleCloudBackupModal';
 import { notificationService } from '../services/notificationService';
 import { GoalsService } from '../services/goalsService';
 import { billsService } from '../services/billsService';
@@ -655,11 +655,11 @@ const MoreScreen = () => {
         </ScrollView>
       </View>
 
-      {/* Sync Settings Modal */}
-      <SyncSettingsModal
+      {/* Cloud Backup Modal */}
+      <SimpleCloudBackupModal
         visible={showSyncModal}
         onClose={() => setShowSyncModal(false)}
-        onSyncComplete={() => {
+        onComplete={() => {
           setShowSyncModal(false);
         }}
       />

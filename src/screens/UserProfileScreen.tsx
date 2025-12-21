@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -24,6 +24,7 @@ import { useTheme } from '../contexts/ThemeContext';
 import { useLocalization } from '../contexts/LocalizationContext';
 import { useCustomAlert } from '../hooks/useCustomAlert';
 import CustomAlert from '../components/CustomAlert';
+import { FullScreenLoader } from '../components/ScreenLoadingIndicator';
 
 interface ProfileFormData {
   name: string;
@@ -47,6 +48,16 @@ const UserProfileScreen: React.FC<UserProfileScreenProps> = ({ navigation }) => 
   const [showNewPassword, setShowNewPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [isDeletingAccount, setIsDeletingAccount] = useState(false);
+
+  const isMountedRef = useRef(true);
+
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
 
   const { theme } = useTheme();
   const { t } = useLocalization();
@@ -150,6 +161,7 @@ const UserProfileScreen: React.FC<UserProfileScreenProps> = ({ navigation }) => 
   const confirmDeleteAccount = async () => {
     try {
       setIsLoading(true);
+      setIsDeletingAccount(true);
       
       const result = await deleteAccount();
 
@@ -177,7 +189,10 @@ const UserProfileScreen: React.FC<UserProfileScreenProps> = ({ navigation }) => 
         'An unexpected error occurred while deleting your account. Please try again.'
       );
     } finally {
-      setIsLoading(false);
+      if (isMountedRef.current) {
+        setIsLoading(false);
+        setIsDeletingAccount(false);
+      }
     }
   };
 
@@ -206,6 +221,11 @@ const UserProfileScreen: React.FC<UserProfileScreenProps> = ({ navigation }) => 
   return (
     <View style={{ flex: 1, backgroundColor: theme.colors.headerBackground }}>
       <StatusBar barStyle="light-content" backgroundColor={theme.colors.headerBackground} />
+
+      <FullScreenLoader
+        visible={isDeletingAccount}
+        message={t('profile_screen_deleting_account') || 'Deleting your account…'}
+      />
       
       {/* Dark Header */}
       <View style={[styles.darkHeader, { paddingTop: insets.top }]}>

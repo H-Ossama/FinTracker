@@ -41,16 +41,25 @@ const ScreenContentWrapper: React.FC<ScreenContentWrapperProps> = ({
   children, 
   onContentReady 
 }) => {
-  useEffect(() => {
-    // Call onContentReady after the content has been laid out
-    const timeoutId = setTimeout(() => {
-      onContentReady?.();
-    }, 0);
+  const hasNotifiedReady = useRef(false);
 
-    return () => clearTimeout(timeoutId);
+  const notifyReady = useCallback(() => {
+    if (hasNotifiedReady.current) return;
+    hasNotifiedReady.current = true;
+
+    // Wait until after layout + the next frame so the screen is actually visible
+    InteractionManager.runAfterInteractions(() => {
+      requestAnimationFrame(() => {
+        onContentReady?.();
+      });
+    });
   }, [onContentReady]);
 
-  return <>{children}</>;
+  return (
+    <View style={styles.sceneWrapper} onLayout={notifyReady}>
+      {children}
+    </View>
+  );
 };
 
 const SwipeableBottomTabNavigator = React.memo(() => {
@@ -309,6 +318,9 @@ const SwipeableBottomTabNavigator = React.memo(() => {
 
 const styles = StyleSheet.create({
   container: {
+    flex: 1,
+  },
+  sceneWrapper: {
     flex: 1,
   },
   loadingContainer: {

@@ -237,16 +237,30 @@ router.post('/google', [
     }
 
     const { idToken } = req.body as { idToken: string };
-    const audience = process.env.GOOGLE_WEB_CLIENT_ID;
-    if (!audience) {
+
+    const audiences = [
+      process.env.GOOGLE_WEB_CLIENT_ID,
+      process.env.GOOGLE_ANDROID_CLIENT_ID,
+      process.env.GOOGLE_IOS_CLIENT_ID,
+      ...(process.env.GOOGLE_CLIENT_IDS?.split(',') || []),
+    ]
+      .map(value => (typeof value === 'string' ? value.trim() : ''))
+      .filter(Boolean);
+
+    if (audiences.length === 0) {
       throw createError('Google Sign-In is not configured on the server', 500);
     }
 
     const client = getGoogleClient();
-    const ticket = await client.verifyIdToken({
-      idToken,
-      audience,
-    });
+    let ticket;
+    try {
+      ticket = await client.verifyIdToken({
+        idToken,
+        audience: audiences,
+      });
+    } catch {
+      throw createError('Invalid Google token', 401);
+    }
     const payload = ticket.getPayload();
     if (!payload?.email) {
       throw createError('Invalid Google token', 401);

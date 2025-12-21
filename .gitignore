@@ -6,6 +6,8 @@ yarn-error.log*
 
 # Expo
 .expo/
+# Sometimes this file gets committed accidentally; keep it ignored.
+.expo/devices.json
 dist/
 web-build/
 

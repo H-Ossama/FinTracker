@@ -13,11 +13,45 @@ import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../contexts/ThemeContext';
 import { syncTester, SyncTestReport, TestResult } from '../utils/syncTester';
 import { cloudSyncService } from '../services/cloudSyncService';
+import { cloudSyncDiagnostics } from '../utils/cloudSyncDiagnostics';
 
 const SyncTestScreen: React.FC = () => {
   const { theme } = useTheme();
   const [isRunning, setIsRunning] = useState(false);
   const [testReport, setTestReport] = useState<SyncTestReport | null>(null);
+
+  const showDiagnostics = async () => {
+    const logs = await cloudSyncDiagnostics.getAll();
+    if (!logs.length) {
+      Alert.alert('Cloud Sync Logs', 'No diagnostics logs recorded yet. Try a sync attempt, then come back here.');
+      return;
+    }
+
+    const text = logs
+      .slice(-50)
+      .map((l) => {
+        const time = l.ts.replace('T', ' ').replace('Z', '');
+        const data = l.data ? ` ${JSON.stringify(l.data)}` : '';
+        return `[${time}] ${l.level.toUpperCase()}: ${l.message}${data}`;
+      })
+      .join('\n');
+
+    Alert.alert(
+      'Cloud Sync Logs (last 50)',
+      text.length > 3500 ? text.slice(-3500) : text,
+      [
+        {
+          text: 'Clear Logs',
+          style: 'destructive',
+          onPress: async () => {
+            await cloudSyncDiagnostics.clear();
+            Alert.alert('Cloud Sync Logs', 'Cleared.');
+          },
+        },
+        { text: 'OK' },
+      ]
+    );
+  };
 
   const runSyncTest = async () => {
     setIsRunning(true);
@@ -115,6 +149,14 @@ const SyncTestScreen: React.FC = () => {
           <Text style={styles.testButtonText}>
             {isRunning ? 'Running Test...' : 'Run Sync Test'}
           </Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={[styles.testButton, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border, borderWidth: 1 }]}
+          onPress={showDiagnostics}
+        >
+          <Ionicons name="document-text-outline" size={20} color={theme.colors.primary} />
+          <Text style={[styles.testButtonText, { color: theme.colors.text }]}>View Cloud Sync Logs</Text>
         </TouchableOpacity>
 
         {testReport && (

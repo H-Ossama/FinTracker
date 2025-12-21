@@ -652,28 +652,8 @@ export default function App() {
   }, []);
 
   // CONDITIONAL RETURNS AFTER ALL HOOKS
-  
-  // Show loading screen while initializing
-  if (isLoading) {
-    return (
-      <SafeAreaProvider>
-        <LoadingScreen />
-      </SafeAreaProvider>
-    );
-  }
 
-  // Show error screen if initialization failed
-  if (!initResult?.success) {
-    return (
-      <SafeAreaProvider>
-        <ErrorScreen 
-          error={initResult?.error || 'Unknown error'} 
-          onRetry={initializeApp}
-        />
-      </SafeAreaProvider>
-    );
-  }
-
+  // Always mount LocalizationProvider so useLocalization never runs outside it.
   return (
     <SafeAreaProvider>
       <LocalizationProvider>
@@ -681,16 +661,25 @@ export default function App() {
           <AuthProvider>
             <NotificationProvider>
               <QuickActionsProvider>
-                <View style={styles.appContainer}>
-                  <AppNavigator />
-                  {/* Lazy load sync reminder banner - positioned after navigator to overlay properly */}
-                  <Suspense fallback={null}>
-                    <SyncReminderBanner onSyncComplete={handleSyncComplete} />
-                  </Suspense>
-                  <Suspense fallback={null}>
-                    <SyncProgressModal />
-                  </Suspense>
-                </View>
+                {isLoading ? (
+                  <LoadingScreen />
+                ) : !initResult?.success ? (
+                  <ErrorScreen 
+                    error={initResult?.error || 'Unknown error'} 
+                    onRetry={initializeApp}
+                  />
+                ) : (
+                  <View style={styles.appContainer}>
+                    <AppNavigator />
+                    {/* Lazy load sync reminder banner - positioned after navigator to overlay properly */}
+                    <Suspense fallback={null}>
+                      <SyncReminderBanner onSyncComplete={handleSyncComplete} />
+                    </Suspense>
+                    <Suspense fallback={null}>
+                      <SyncProgressModal />
+                    </Suspense>
+                  </View>
+                )}
               </QuickActionsProvider>
             </NotificationProvider>
           </AuthProvider>

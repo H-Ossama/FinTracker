@@ -815,12 +815,26 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     try {
       // Clear all secure storage
       await SecureStore.deleteItemAsync(STORAGE_KEYS.USER_TOKEN);
+
+      // Clear Google tokens (so Google sign-in won't reuse the previous session)
+      try {
+        await SecureStore.deleteItemAsync('google_id_token');
+        await SecureStore.deleteItemAsync('google_access_token');
+      } catch {}
       
       // Clear all AsyncStorage data
       await AsyncStorage.removeItem(STORAGE_KEYS.USER_DATA);
       await AsyncStorage.removeItem(STORAGE_KEYS.REMEMBER_ME);
       await AsyncStorage.removeItem(STORAGE_KEYS.BIOMETRIC_ENABLED);
       await AsyncStorage.removeItem(STORAGE_KEYS.HAS_LOGGED_IN_BEFORE);
+      await AsyncStorage.removeItem(STORAGE_KEYS.GOOGLE_USER);
+      await AsyncStorage.removeItem(STORAGE_KEYS.CLOUD_SYNC_ENABLED);
+      await AsyncStorage.removeItem('google_user_info');
+
+      // Clear backend cloud session JWT (stored separately for /api/sync/*)
+      try {
+        await cloudSyncService.logout();
+      } catch {}
       
       // Clear app-specific data
       await AsyncStorage.removeItem('app_initialized');
@@ -860,8 +874,25 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
   const deleteAccount = async () => {
     try {
+      setState(prev => ({ ...prev, isLoading: true }));
+
+      // If this is a Google user, revoke/sign out first so the next sign-in
+      // does not immediately reuse the old Google session.
+      if (state.isGoogleAuthenticated || state.user?.isGoogleUser) {
+        try {
+          await googleAuthService.revokeAccess();
+        } catch {}
+        try {
+          await googleAuthService.signOut();
+        } catch {}
+        try {
+          await firebaseAuthService.signOut();
+        } catch {}
+      }
+
       const token = await SecureStore.getItemAsync(STORAGE_KEYS.USER_TOKEN);
       if (!token) {
+        setState(prev => ({ ...prev, isLoading: false }));
         return { success: false, error: 'Not authenticated' };
       }
 
@@ -888,6 +919,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       
       return { success: true };
     } catch (error) {
+      setState(prev => ({ ...prev, isLoading: false }));
       return { 
         success: false, 
         error: error instanceof Error ? error.message : 'Account deletion failed' 

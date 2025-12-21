@@ -6,6 +6,7 @@ import { notificationService } from './notificationService';
 import { hybridDataService } from './hybridDataService';
 import { getBackendApiBaseUrl, getBackendApiRoot } from '../config/apiConfig';
 import { backendAuthService } from './backendAuthService';
+import { cloudSyncDiagnostics } from '../utils/cloudSyncDiagnostics';
 
 
 export interface UserDataBackup {
@@ -77,6 +78,10 @@ class CloudSyncService {
   private readonly syncEndpoint: string;
   private authToken: string | null = null;
 
+  private isJwtToken(token: string | null | undefined): boolean {
+    return typeof token === 'string' && token.includes('.') && token.split('.').length === 3;
+  }
+
   private async ensureBackendSessionToken(onProgress?: (p: any) => void): Promise<boolean> {
     // Backend expects its own session JWT stored in `auth_token`.
     try {
@@ -84,7 +89,52 @@ class CloudSyncService {
       const stored = await AsyncStorage.getItem(this.AUTH_TOKEN_KEY);
       if (stored) {
         this.authToken = stored;
+        await cloudSyncDiagnostics.append('info', 'Restored backend session from AsyncStorage auth_token', {
+          token: maskToken(stored),
+        });
+        if (__DEV__) {
+          console.log('🔑 CloudSync: restored backend session from AsyncStorage auth_token', maskToken(stored));
+        }
         return true;
+      }
+    } catch {}
+
+    // Email/password sign-in stores the session token in SecureStore (`user_token`).
+    // Load it here so cloud sync works after re-login without requiring a separate enable step.
+    try {
+      const secureToken = await SecureStore.getItemAsync('user_token');
+      if (this.isJwtToken(secureToken)) {
+        this.authToken = secureToken as string;
+        await cloudSyncDiagnostics.append('info', 'Restored backend session from SecureStore user_token', {
+          token: maskToken(secureToken as string),
+        });
+        if (__DEV__) {
+          console.log('🔑 CloudSync: restored backend session from SecureStore user_token', maskToken(secureToken as string));
+        }
+        return true;
+      }
+    } catch {}
+
+    // If SecureStore is unavailable/failing, AuthContext can fall back to AsyncStorage backups.
+    // Accept those only if they look like a real backend JWT.
+    try {
+      const backupCandidates = ['auth_token_backup', 'demo_token_backup'];
+      for (const key of backupCandidates) {
+        const candidate = await AsyncStorage.getItem(key);
+        if (this.isJwtToken(candidate)) {
+          this.authToken = candidate as string;
+          try {
+            // Persist into the canonical key so future lookups are fast.
+            await AsyncStorage.setItem(this.AUTH_TOKEN_KEY, candidate as string);
+          } catch {}
+          await cloudSyncDiagnostics.append('warn', `Restored backend session from AsyncStorage ${key}`, {
+            token: maskToken(candidate as string),
+          });
+          if (__DEV__) {
+            console.log(`🔑 CloudSync: restored backend session from AsyncStorage ${key}`, maskToken(candidate as string));
+          }
+          return true;
+        }
       }
     } catch {}
 
@@ -101,8 +151,20 @@ class CloudSyncService {
       const backendLogin = await backendAuthService.loginWithGoogle(googleIdToken);
       if (backendLogin.success) {
         await this.setAuthToken(backendLogin.token);
+        await cloudSyncDiagnostics.append('info', 'Created backend session via Google token exchange', {
+          token: maskToken(backendLogin.token),
+        });
+        if (__DEV__) {
+          console.log('🔑 CloudSync: created backend session via Google token exchange', maskToken(backendLogin.token));
+        }
         return true;
       }
+
+      await cloudSyncDiagnostics.append('error', 'Google token exchange failed to create backend session', {
+        error: (backendLogin as any).error,
+        status: (backendLogin as any).status,
+        networkError: (backendLogin as any).networkError,
+      });
     } catch {
       // ignore
     }
@@ -215,15 +277,15 @@ class CloudSyncService {
   }
   
   async isAuthenticated(): Promise<boolean> {
-    if (this.authToken) return true;
     try {
-      const token = await AsyncStorage.getItem(this.AUTH_TOKEN_KEY);
-      if (token) {
-        this.authToken = token;
-        return true;
+      const ok = await this.ensureBackendSessionToken();
+      if (!ok) {
+        await cloudSyncDiagnostics.append('warn', 'No backend session available for cloud sync');
       }
-    } catch {}
-    return false;
+      return ok;
+    } catch {
+      return false;
+    }
   }
 
   /**
@@ -533,6 +595,10 @@ class CloudSyncService {
 
         if (response.status === 401) {
           const message = data?.error?.message || data?.error || 'Authentication failed. Please sign in again.';
+          await cloudSyncDiagnostics.append('warn', 'Cloud sync request returned 401', {
+            path,
+            message,
+          });
 
           // Backend tokens can be rotated by login; re-load once and retry.
           if (!didReloadAfter401) {
@@ -546,6 +612,45 @@ class CloudSyncService {
                 try { syncProgressService.setProgress({ operation, stage: 'connecting', progress: 12, message: msg }); } catch {}
                 await this.sleep(200);
                 continue;
+              }
+            } catch {
+              // ignore
+            }
+
+            // Also check SecureStore for email/password sessions.
+            try {
+              const secureToken = await SecureStore.getItemAsync('user_token');
+              if (this.isJwtToken(secureToken) && secureToken !== this.authToken) {
+                this.authToken = secureToken as string;
+                const msg = 'Retrying with refreshed session…';
+                onProgress?.({ operation, stage: 'connecting', progress: 12, message: msg });
+                try { syncProgressService.setProgress({ operation, stage: 'connecting', progress: 12, message: msg }); } catch {}
+                await this.sleep(200);
+                continue;
+              }
+            } catch {
+              // ignore
+            }
+
+            // Finally, try AsyncStorage backups (when SecureStore is unavailable).
+            try {
+              const backupCandidates = ['auth_token_backup', 'demo_token_backup'];
+              for (const key of backupCandidates) {
+                const candidate = await AsyncStorage.getItem(key);
+                if (this.isJwtToken(candidate) && candidate !== this.authToken) {
+                  this.authToken = candidate as string;
+                  try {
+                    await AsyncStorage.setItem(this.AUTH_TOKEN_KEY, candidate as string);
+                  } catch {}
+                  await cloudSyncDiagnostics.append('warn', `Reloaded session from AsyncStorage ${key} after 401`, {
+                    token: maskToken(candidate as string),
+                  });
+                  const msg = 'Retrying with recovered session…';
+                  onProgress?.({ operation, stage: 'connecting', progress: 12, message: msg });
+                  try { syncProgressService.setProgress({ operation, stage: 'connecting', progress: 12, message: msg }); } catch {}
+                  await this.sleep(200);
+                  continue;
+                }
               }
             } catch {
               // ignore

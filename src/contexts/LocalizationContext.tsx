@@ -389,6 +389,7 @@ const translations = {
     'profile_screen_account_deleted': 'Account Deleted',
     'profile_screen_account_deleted_success': 'Your account has been deleted successfully.',
     'profile_screen_deletion_failed': 'Deletion Failed',
+    'profile_screen_deleting_account': 'Deleting your account…',
     'profile_screen_sign_out_confirmation': 'Are you sure you want to sign out of your account?',
     'profile_screen_unexpected_error': 'An unexpected error occurred. Please try again.',
     
@@ -1373,6 +1374,7 @@ const translations = {
     'profile_screen_account_deleted': 'Konto gelöscht',
     'profile_screen_account_deleted_success': 'Ihr Konto wurde erfolgreich gelöscht.',
     'profile_screen_deletion_failed': 'Löschung fehlgeschlagen',
+    'profile_screen_deleting_account': 'Konto wird gelöscht…',
     'profile_screen_sign_out_confirmation': 'Sind Sie sicher, dass Sie sich von Ihrem Konto abmelden möchten?',
     'profile_screen_unexpected_error': 'Ein unerwarteter Fehler ist aufgetreten. Bitte versuchen Sie es erneut.',
     
@@ -2346,6 +2348,7 @@ const translations = {
     'profile_screen_account_deleted': 'تم حذف الحساب',
     'profile_screen_account_deleted_success': 'تم حذف حسابك بنجاح.',
     'profile_screen_deletion_failed': 'فشل الحذف',
+    'profile_screen_deleting_account': 'جارٍ حذف حسابك…',
     'profile_screen_sign_out_confirmation': 'هل أنت متأكد من تسجيل الخروج من حسابك؟',
     'profile_screen_unexpected_error': 'حدث خطأ غير متوقع. يرجى المحاولة مرة أخرى.',
     

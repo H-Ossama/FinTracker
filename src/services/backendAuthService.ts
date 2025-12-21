@@ -38,19 +38,59 @@ export interface BackendSessionValidationResult {
 const AUTH_URL = getBackendAuthUrl();
 const USERS_URL = getBackendUsersUrl();
 
-const parseErrorMessage = async (response: Response): Promise<string> => {
-  try {
-    const data = await response.json();
-    if (data?.error) {
-      return typeof data.error === 'string' ? data.error : 'Request failed';
-    }
-    if (data?.message) {
-      return typeof data.message === 'string' ? data.message : 'Request failed';
-    }
-    return `Request failed with status ${response.status}`;
-  } catch (error) {
-    return `Request failed with status ${response.status}`;
+const safeString = (value: unknown): string | null => {
+  if (typeof value === 'string') {
+    const trimmed = value.trim();
+    return trimmed ? trimmed : null;
   }
+  return null;
+};
+
+const extractErrorMessageFromJson = (data: any): string | null => {
+  if (!data || typeof data !== 'object') return null;
+
+  // Common shapes:
+  // { error: "..." }
+  // { message: "..." }
+  // { error: { message: "..." } }
+  // { error: { error: "..." } }
+  // { error: { details: "..." } }
+  const direct = safeString(data.error) || safeString(data.message);
+  if (direct) return direct;
+
+  const nested =
+    safeString(data?.error?.message) ||
+    safeString(data?.error?.error) ||
+    safeString(data?.error?.details) ||
+    safeString(data?.message?.message);
+
+  return nested;
+};
+
+const parseErrorMessage = async (response: Response): Promise<string> => {
+  const statusLabel = `${response.status}${response.statusText ? ` ${response.statusText}` : ''}`;
+
+  // Try JSON first (via clone so we can still read text fallback)
+  try {
+    const data = await response.clone().json();
+    const message = extractErrorMessageFromJson(data);
+    if (message) return message;
+  } catch {
+    // ignore
+  }
+
+  // Fallback: read text body for non-JSON errors
+  try {
+    const text = safeString(await response.clone().text());
+    if (text) {
+      // Avoid giant HTML error pages in UI.
+      return text.length > 280 ? `${text.slice(0, 280)}…` : text;
+    }
+  } catch {
+    // ignore
+  }
+
+  return `Request failed (${statusLabel})`;
 };
 
 const handleNetworkError = (error: unknown): BackendAuthError => {
@@ -174,6 +214,7 @@ export const backendAuthService = {
 
       if (!response.ok) {
         const errorMessage = await parseErrorMessage(response);
+        console.error('❌ Backend Google login failed with status', response.status, ':', errorMessage);
         return {
           success: false,
           error: errorMessage,
@@ -197,6 +238,7 @@ export const backendAuthService = {
         status: response.status,
       };
     } catch (error) {
+      console.error('🌐 Backend Google login network error:', error);
       return handleNetworkError(error);
     }
   },

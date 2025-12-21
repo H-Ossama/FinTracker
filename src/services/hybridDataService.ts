@@ -1,6 +1,8 @@
 import { localStorageService, LocalWallet, LocalTransaction, LocalCategory } from './localStorageService';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as SecureStore from 'expo-secure-store';
+import { getBackendApiBaseUrl } from '../config/apiConfig';
+import { cloudSyncDiagnostics } from '../utils/cloudSyncDiagnostics';
 
 interface HybridWallet extends Omit<LocalWallet, 'isDirty'> {
   syncStatus: 'synced' | 'local_only' | 'pending_sync' | 'conflict';
@@ -706,6 +708,11 @@ class HybridDataService {
       console.log('🔄 Enabling cloud sync for existing user:', user.email);
       const { cloudSyncService } = await import('./cloudSyncService');
       const { backendAuthService } = await import('./backendAuthService');
+
+      await cloudSyncDiagnostics.append('info', 'Enable cloud sync requested', {
+        email: user?.email,
+        isGoogleUser: !!user?.isGoogleUser,
+      });
       
       const getStoredAuthToken = async (): Promise<string | null> => {
         try {
@@ -730,16 +737,47 @@ class HybridDataService {
         // Prefer cached backend token
         authToken = await AsyncStorage.getItem('auth_token');
         if (!authToken) {
+          // Wake backend (Railway can sleep)
+          try {
+            const base = getBackendApiBaseUrl();
+            await cloudSyncDiagnostics.append('info', 'Waking backend before Google session exchange', { url: `${base}/health` });
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 20000);
+            try {
+              await fetch(`${base}/health`, { method: 'GET', signal: controller.signal });
+            } finally {
+              clearTimeout(timeoutId);
+            }
+          } catch {}
+
           // Exchange stored Google ID token for backend session
           const googleIdToken = await SecureStore.getItemAsync('google_id_token');
           if (googleIdToken) {
+            await cloudSyncDiagnostics.append('info', 'Exchanging Google ID token for backend session');
             const backendLogin = await backendAuthService.loginWithGoogle(googleIdToken);
             if (backendLogin.success) {
               authToken = backendLogin.token;
               await AsyncStorage.setItem('auth_token', authToken);
             } else {
-              return { success: false, error: backendLogin.error || 'Backend Google login failed' };
+              await cloudSyncDiagnostics.append('error', 'Backend Google login failed', {
+                error: backendLogin.error,
+                status: (backendLogin as any).status,
+                networkError: (backendLogin as any).networkError,
+              });
+
+              const status = (backendLogin as any).status as number | undefined;
+              const networkError = (backendLogin as any).networkError as boolean | undefined;
+              const baseMessage = backendLogin.error || 'Backend Google login failed';
+              const enrichedMessage = networkError
+                ? `${baseMessage}. Check your internet connection and try again.`
+                : typeof status === 'number'
+                  ? `${baseMessage} (HTTP ${status})`
+                  : baseMessage;
+
+              return { success: false, error: enrichedMessage };
             }
+          } else {
+            await cloudSyncDiagnostics.append('error', 'Missing google_id_token in SecureStore');
           }
         }
       } else {
@@ -751,6 +789,10 @@ class HybridDataService {
       }
 
       if (!authToken) {
+        await cloudSyncDiagnostics.append('error', 'Missing backend session token after enable attempt', {
+          email: user?.email,
+          isGoogleUser: !!user?.isGoogleUser,
+        });
         return {
           success: false,
           error: 'Missing backend session token. Please sign in again, then retry cloud sync.',
@@ -759,6 +801,7 @@ class HybridDataService {
       
       console.log('🔑 Setting auth token for cloud sync service');
       await cloudSyncService.setAuthToken(authToken);
+      await cloudSyncDiagnostics.append('info', 'Cloud sync auth token set');
       
       // Check if user is already authenticated with Google
       if (user.isGoogleUser) {
@@ -769,6 +812,7 @@ class HybridDataService {
         // Store Google sync enabled flag
         await AsyncStorage.setItem('cloud_sync_enabled', 'true');
         console.log('✅ Cloud sync enabled for Google user');
+        await cloudSyncDiagnostics.append('info', 'Cloud sync enabled');
         return { success: true };
       } else {
         console.log('📧 Email user detected, enabling sync with credentials');
@@ -778,10 +822,14 @@ class HybridDataService {
         // Store sync enabled flag
         await AsyncStorage.setItem('cloud_sync_enabled', 'true');
         console.log('✅ Cloud sync enabled for email user');
+        await cloudSyncDiagnostics.append('info', 'Cloud sync enabled');
         return { success: true };
       }
     } catch (error) {
       console.error('❌ Error enabling cloud sync for existing user:', error);
+      await cloudSyncDiagnostics.append('error', 'Enable cloud sync crashed', {
+        error: error instanceof Error ? error.message : String(error),
+      });
       return { 
         success: false, 
         error: error instanceof Error ? error.message : 'Failed to enable sync'
