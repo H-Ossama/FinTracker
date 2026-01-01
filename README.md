@@ -1,151 +1,90 @@
-# FinTracker 💰
+# FinTracker
 
-A modern, privacy-first mobile finance tracking application built with React Native, Expo, and TypeScript.
+FinTracker is a personal finance tracker built with Expo (React Native) and TypeScript. It is designed to work offline-first, storing your data locally by default.
 
-**Track your finances with complete privacy control** - works 100% offline with optional cloud sync.
+## Screenshots
 
----
+<table>
+   <tr>
+      <td><img src="Screenshots/screen-1.png" width="250" alt="FinTracker screenshot 1" /></td>
+      <td><img src="Screenshots/screen-2.png" width="250" alt="FinTracker screenshot 2" /></td>
+      <td><img src="Screenshots/screen-3.png" width="250" alt="FinTracker screenshot 3" /></td>
+   </tr>
+   <tr>
+      <td><img src="Screenshots/screen-4.png" width="250" alt="FinTracker screenshot 4" /></td>
+      <td><img src="Screenshots/screen-5.png" width="250" alt="FinTracker screenshot 5" /></td>
+      <td><img src="Screenshots/screen-6.png" width="250" alt="FinTracker screenshot 6" /></td>
+   </tr>
+</table>
 
-## ✨ Features
+## Features
 
-### 🏠 Smart Dashboard
-- **Balance Overview** - See all your money at a glance
-- **Multi-Wallet Support** - Bank, Cash, Savings, Credit Cards
-- **Recent Transactions** - Quick access to your latest activity
-- **Quick Actions** - Add expenses, income, or transfer money instantly
+- Multiple wallets with transfers
+- Income and expense tracking
+- Budgets, reminders, bills, and goals
+- Charts and insights
+- Data stored locally (offline-first)
 
-### 📊 Insights & Analytics
-- **Spending Breakdown** - Visual category-based analysis
-- **Interactive Charts** - Understand your spending patterns
-- **Period Views** - Daily, weekly, and monthly insights
-- **Smart Recommendations** - Get personalized finance tips
+## Tech Stack
 
-### 👛 Wallet Management
-- **Multiple Wallets** - Organize money by source or purpose
-- **Real-time Balances** - Always up-to-date financial status
-- **Easy Transfers** - Move money between wallets seamlessly
-- **Transaction History** - Complete record of all activities
+- Expo + React Native
+- TypeScript
+- SQLite (local database)
+- React Navigation
 
-### ⚙️ More Features
-- **Bill Tracking** - Never miss a payment
-- **Savings Goals** - Track progress toward your objectives
-- **Budget Planning** - Set and monitor spending limits
-- **Reminders** - Get notified about important financial tasks
+## Project Structure
 
-### 🔒 Privacy & Security
-- **Local-First Storage** - Your data stays on your device by default
-- **Optional Cloud Sync** - Manual sync control when you want it
-- **No Forced Registration** - Use without creating an account
-- **End-to-End Encryption** - Your data is always protected (planned)
-- **Works 100% Offline** - All data stored locally in SQLite
+- Mobile app: root of the repository
+- Backend API (optional): `backend/`
 
----
-
-## 🛠️ Tech Stack
-
-**Built with modern, reliable technologies:**
-
-- **React Native + Expo** - Cross-platform mobile development
-- **TypeScript** - Type safety and better development experience
-- **SQLite** - Fast, reliable local database
-- **React Navigation** - Smooth app navigation
-- **Node.js + Express** - Backend API (in development)
-- **PostgreSQL** - Cloud database for sync features (planned)
-
----
-
-## 📱 Download
-
-[![Download APK](https://img.shields.io/badge/Download%20APK-Latest%20Release-blue?style=for-the-badge&logo=android)](https://github.com/H-Ossama/FinTracker/releases/latest)
-
----
-
-## 🚀 Getting Started
+## Getting Started (Mobile App)
 
 ### Prerequisites
-- Node.js 18+
-- Expo CLI
-- Mobile device with Expo Go app (or Android emulator)
 
-### Development Setup
+- Node.js 18+
+- npm
+- Expo Go (device) or an Android/iOS emulator
+
+### Install & Run
 
 ```bash
-# Clone the repository
-git clone https://github.com/H-Ossama/FinTracker.git
-cd FinTracker
-
-# Install dependencies
 npm install
-
-# Start development server
 npm start
-
-# Scan QR code with Expo Go app on your phone
 ```
 
-### Build for Android
+### Run on Device/Emulator
 
 ```bash
 npm run android
-```
-
-### Build for iOS
-
-```bash
+# or
 npm run ios
 ```
 
----
+## Backend (Optional)
 
-## 🤝 Contributing
+The backend lives in `backend/`. Setup instructions are in `backend/SETUP.md`.
 
-We welcome contributions! Here's how to get involved:
+Typical workflow:
 
-1. **Report Bugs** - Found an issue? [Create an issue](https://github.com/H-Ossama/FinTracker/issues)
-2. **Suggest Features** - Have ideas? [Start a discussion](https://github.com/H-Ossama/FinTracker/discussions)
-3. **Code Contributions** - Submit a pull request:
-   - Fork the repository
-   - Create a feature branch (`git checkout -b feature/AmazingFeature`)
-   - Commit changes (`git commit -m 'Add AmazingFeature'`)
-   - Push to branch (`git push origin feature/AmazingFeature`)
-   - Open a Pull Request
+```bash
+cd backend
+npm install
+npm run dev
+```
 
-### Development Guidelines
-- Always test local-first functionality
-- Ensure app works without backend
-- Follow TypeScript best practices
-- Write tests for new features
+## Releases
 
----
+Download the latest build from the GitHub releases page:
+https://github.com/H-Ossama/FinTracker/releases
 
-## 📄 License
+## Contributing
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+- Bug reports: https://github.com/H-Ossama/FinTracker/issues
+- Feature requests: https://github.com/H-Ossama/FinTracker/discussions
 
----
+## License
 
-## 💬 Support & Community
-
-- 🐛 **Bug Reports:** [GitHub Issues](https://github.com/H-Ossama/FinTracker/issues)
-- 💡 **Feature Requests:** [GitHub Discussions](https://github.com/H-Ossama/FinTracker/discussions)
-- 📧 **Email:** support@finex.app
-
----
-
-## 🎯 Why Hybrid Architecture?
-
-Traditional finance apps force you to choose between:
-- **Cloud-only**: Requires internet, privacy concerns, vendor lock-in
-- **Local-only**: No backup, no multi-device access, data loss risk
-
-**FinTracker's hybrid approach gives you the best of both worlds:**
-- ✅ **Privacy by default** (local storage first)
-- ✅ **Backup when wanted** (optional cloud sync)  
-- ✅ **User control** (you decide what to sync)
-- ✅ **No vendor lock-in** (export your data anytime)
-- ✅ **Works everywhere** (offline-first design)
-
----
+MIT (see `LICENSE`).
 
 ## ⭐ Show Your Support
 
@@ -156,7 +95,3 @@ If you find this project useful, please consider:
 - Testing the development build and sharing feedback
 - Contributing to the codebase
 - Reporting issues you encounter
-
----
-
-*Currently under active development. Your feedback helps shape the final product!* 🚀
