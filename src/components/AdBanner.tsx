@@ -11,7 +11,7 @@
  * - Safe area aware
  */
 
-import React, { useState, memo } from 'react';
+import React, { useEffect, useMemo, useRef, useState, memo } from 'react';
 import {
   View,
   StyleSheet,
@@ -20,7 +20,7 @@ import {
 import { BannerAd, BannerAdSize } from 'react-native-google-mobile-ads';
 import { useAds } from '../contexts/AdContext';
 import { useTheme } from '../contexts/ThemeContext';
-import { getAdUnitId } from '../services/adService';
+import { getAdRequestConfig, getAdUnitId } from '../services/adService';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -41,7 +41,16 @@ interface AdBannerProps {
 const AdBanner: React.FC<AdBannerProps> = memo(({ screenName }) => {
   const { adsEnabled, shouldShowBanner } = useAds();
   const { theme, isDark } = useTheme();
-  const [hasError, setHasError] = useState(false);
+  const [hasPermanentError, setHasPermanentError] = useState(false);
+  const [isCoolingDown, setIsCoolingDown] = useState(false);
+  const [reloadKey, setReloadKey] = useState(0);
+  const retryCountRef = useRef(0);
+  const retryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const MAX_RETRIES = 3;
+
+  const unitId = useMemo(() => getAdUnitId('banner'), []);
+  const requestOptions = useMemo(() => getAdRequestConfig(), []);
 
   // Check if banner should be shown for this screen
   const showBanner = adsEnabled && shouldShowBanner(screenName);
@@ -51,10 +60,42 @@ const AdBanner: React.FC<AdBannerProps> = memo(({ screenName }) => {
     return null;
   }
 
-  // Don't render if there was an error loading the ad
-  if (hasError) {
+  // Don't render if we've given up for this screen session
+  if (hasPermanentError) {
     return null;
   }
+
+  useEffect(() => {
+    return () => {
+      if (retryTimerRef.current) {
+        clearTimeout(retryTimerRef.current);
+        retryTimerRef.current = null;
+      }
+    };
+  }, []);
+
+  const scheduleRetry = () => {
+    if (retryTimerRef.current) {
+      clearTimeout(retryTimerRef.current);
+      retryTimerRef.current = null;
+    }
+
+    const nextRetryCount = retryCountRef.current + 1;
+    retryCountRef.current = nextRetryCount;
+
+    if (nextRetryCount > MAX_RETRIES) {
+      setHasPermanentError(true);
+      setIsCoolingDown(false);
+      return;
+    }
+
+    const delayMs = Math.min(30000, 1500 * Math.pow(2, nextRetryCount - 1));
+    setIsCoolingDown(true);
+    retryTimerRef.current = setTimeout(() => {
+      setReloadKey((k) => k + 1);
+      setIsCoolingDown(false);
+    }, delayMs);
+  };
 
   return (
     <View 
@@ -67,18 +108,30 @@ const AdBanner: React.FC<AdBannerProps> = memo(({ screenName }) => {
       ]}
     >
       <View style={styles.adContainer}>
-        <BannerAd
-          unitId={getAdUnitId('banner')}
-          size={BannerAdSize.BANNER}
-          requestOptions={{
-            requestNonPersonalizedAdsOnly: false,
-            keywords: ['finance', 'budgeting', 'saving', 'banking', 'family'],
-          }}
-          onAdFailedToLoad={(error) => {
-            console.log('Banner ad failed to load:', error);
-            setHasError(true);
-          }}
-        />
+        {!isCoolingDown ? (
+          <BannerAd
+            key={reloadKey}
+            unitId={unitId}
+            size={BannerAdSize.BANNER}
+            requestOptions={requestOptions}
+            onAdLoaded={() => {
+              retryCountRef.current = 0;
+              setHasPermanentError(false);
+              setIsCoolingDown(false);
+            }}
+            onAdFailedToLoad={(error) => {
+              // Treat as transient by default (e.g. internal errors, temporary network issues).
+              // We'll retry a few times, then give up for this session to avoid noisy logs.
+              console.log('Banner ad failed to load:', {
+                code: (error as any)?.code,
+                message: (error as any)?.message,
+              });
+              scheduleRetry();
+            }}
+          />
+        ) : (
+          <View style={styles.cooldownPlaceholder} />
+        )}
       </View>
     </View>
   );
@@ -97,6 +150,10 @@ const styles = StyleSheet.create({
     width: '100%',
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  cooldownPlaceholder: {
+    width: '100%',
+    height: BANNER_HEIGHT,
   },
 });
 

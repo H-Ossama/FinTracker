@@ -1,5 +1,6 @@
 import React, { createContext, useContext, ReactNode, useCallback } from 'react';
 import { analyticsService } from '../services/analyticsService';
+import { useSubscription } from './SubscriptionContext';
 
 interface AnalyticsRefreshContextType {
   /**
@@ -43,18 +44,21 @@ interface AnalyticsRefreshProviderProps {
 }
 
 export const AnalyticsRefreshProvider: React.FC<AnalyticsRefreshProviderProps> = ({ children }) => {
+  const { hasFeature } = useSubscription();
+  const canUseAIInsights = hasFeature('advancedInsights');
+
   const refreshRecommendations = useCallback(async () => {
     try {
       console.log('🔄 Refreshing recommendations...');
       // When the component calls getRecommendations with forceRefresh=true,
       // it will trigger a new API call
-      await analyticsService.getRecommendations(true);
+      await analyticsService.getRecommendations(true, { allowAI: canUseAIInsights });
       console.log('✅ Recommendations refreshed');
     } catch (error) {
       console.error('Error refreshing recommendations:', error);
       throw error;
     }
-  }, []);
+  }, [canUseAIInsights]);
 
   const refreshTrendInsights = useCallback(async () => {
     try {

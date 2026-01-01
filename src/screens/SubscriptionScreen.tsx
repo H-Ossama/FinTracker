@@ -6,7 +6,6 @@ import {
   TouchableOpacity,
   ScrollView,
   StatusBar,
-  Alert,
   ActivityIndicator,
   Linking,
 } from 'react-native';
@@ -21,6 +20,7 @@ import {
   SUBSCRIPTION_PRICING,
   BillingPeriod 
 } from '../contexts/SubscriptionContext';
+import { useDialog } from '../contexts/DialogContext';
 
 type Props = {
   navigation: any;
@@ -30,6 +30,7 @@ const SubscriptionScreen: React.FC<Props> = ({ navigation }) => {
   const { theme, isDark } = useTheme();
   const { t } = useLocalization();
   const insets = useSafeAreaInsets();
+  const dialog = useDialog();
   const { 
     planId, 
     isPro, 
@@ -61,37 +62,34 @@ const SubscriptionScreen: React.FC<Props> = ({ navigation }) => {
       ? SUBSCRIPTION_PRICING.yearly.displayPrice
       : SUBSCRIPTION_PRICING.monthly.displayPrice;
 
-    Alert.alert(
-      t('subscription_upgrade_title') || 'Start Pro subscription',
-      t('subscription_upgrade_confirm', { price: selectedPrice }) ||
+    dialog.confirm({
+      title: t('subscription_upgrade_title') || 'Start Pro subscription',
+      message:
+        t('subscription_upgrade_confirm', { price: selectedPrice }) ||
         `Pro • ${selectedPrice}\n\nCancel anytime in Google Play. Renews automatically unless canceled.\n\nNote: Purchases are simulated in this build.`,
-      [
-        { text: t('cancel') || 'Cancel', style: 'cancel' },
-        {
-          text: t('subscription_upgrade_button') || 'Continue',
-          style: 'default',
-          onPress: async () => {
-            try {
-              setSaving(true);
-              // In production, this would trigger Google Play Billing
-              await setPlan('pro');
-              Alert.alert(
-                t('subscription_welcome_pro') || 'Welcome to Pro',
-                t('subscription_welcome_pro_message') || 'Pro features are now unlocked on this device.',
-                [{ text: 'OK' }]
-              );
-            } catch {
-              Alert.alert(
-                t('error') || 'Error', 
-                t('subscription_change_failed') || 'Failed to upgrade. Please try again.'
-              );
-            } finally {
-              setSaving(false);
-            }
-          },
-        },
-      ]
-    );
+      confirmText: t('subscription_upgrade_button') || 'Continue',
+      cancelText: t('cancel') || 'Cancel',
+      onConfirm: () => {
+        void (async () => {
+          try {
+            setSaving(true);
+            // In production, this would trigger Google Play Billing
+            await setPlan('pro');
+            dialog.success(
+              t('subscription_welcome_pro') || 'Welcome to Pro',
+              t('subscription_welcome_pro_message') || 'Pro features are now unlocked on this device.'
+            );
+          } catch {
+            dialog.error(
+              t('error') || 'Error',
+              t('subscription_change_failed') || 'Failed to upgrade. Please try again.'
+            );
+          } finally {
+            setSaving(false);
+          }
+        })();
+      },
+    });
   };
 
   const handleRestorePurchases = async () => {
@@ -100,11 +98,10 @@ const SubscriptionScreen: React.FC<Props> = ({ navigation }) => {
     await new Promise(resolve => setTimeout(resolve, 1500));
     setSaving(false);
     
-    Alert.alert(
+    dialog.alert(
       t('subscription_restore_title') || 'Restore purchases',
       t('subscription_restore_message') ||
-        'No active subscription was found for this Google account. If you just purchased, wait a minute and try again.',
-      [{ text: 'OK' }]
+        'No active subscription was found for this Google account. If you just purchased, wait a minute and try again.'
     );
   };
 
@@ -187,6 +184,41 @@ const SubscriptionScreen: React.FC<Props> = ({ navigation }) => {
                 </Text>
                 <Ionicons name="open-outline" size={16} color={theme.colors.primary} />
               </TouchableOpacity>
+            </View>
+
+            {/* Actions */}
+            <View style={[styles.actionsCard, { backgroundColor: theme.colors.surface }]}>
+              <TouchableOpacity
+                style={styles.actionRow}
+                onPress={handleRestorePurchases}
+                disabled={saving}
+              >
+                <Ionicons name="refresh" size={18} color={theme.colors.primary} />
+                <Text style={[styles.actionText, { color: theme.colors.text }]}
+                >
+                  {t('subscription_restore') || 'Restore Purchases'}
+                </Text>
+              </TouchableOpacity>
+
+              {__DEV__ ? (
+                <TouchableOpacity
+                  style={[styles.actionRow, styles.actionRowDanger]}
+                  onPress={async () => {
+                    try {
+                      setSaving(true);
+                      await setPlan('free');
+                    } finally {
+                      setSaving(false);
+                    }
+                  }}
+                  disabled={saving}
+                >
+                  <Ionicons name="close-circle" size={18} color="#EF4444" />
+                  <Text style={[styles.actionText, { color: '#EF4444' }]}>
+                    Reset to Free (dev)
+                  </Text>
+                </TouchableOpacity>
+              ) : null}
             </View>
 
             {/* Features List */}
@@ -388,6 +420,18 @@ const SubscriptionScreen: React.FC<Props> = ({ navigation }) => {
             >
               <Text style={[styles.restoreButtonText, { color: theme.colors.primary }]}>
                 {t('subscription_restore') || 'Restore Purchases'}
+              </Text>
+            </TouchableOpacity>
+
+            {/* Manage Subscription */}
+            <TouchableOpacity 
+              style={styles.restoreButton}
+              onPress={handleManageSubscription}
+              disabled={saving}
+            >
+              <Text style={[styles.restoreButtonText, { color: theme.colors.primary }]}
+              >
+                {t('subscription_manage_google') || 'Manage subscription in Google Play'}
               </Text>
             </TouchableOpacity>
 
@@ -753,6 +797,34 @@ const createStyles = (theme: any, isDark: boolean) =>
       borderTopColor: theme.colors.border,
     },
     manageButtonText: {
+      fontSize: 14,
+      fontWeight: '600',
+    },
+
+    // Actions Card
+    actionsCard: {
+      borderRadius: 16,
+      paddingVertical: 6,
+      paddingHorizontal: 8,
+      marginBottom: 20,
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.08,
+      shadowRadius: 8,
+      elevation: 3,
+    },
+    actionRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 10,
+      paddingVertical: 14,
+      paddingHorizontal: 12,
+      borderRadius: 12,
+    },
+    actionRowDanger: {
+      marginTop: 2,
+    },
+    actionText: {
       fontSize: 14,
       fontWeight: '600',
     },

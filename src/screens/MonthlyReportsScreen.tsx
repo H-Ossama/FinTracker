@@ -10,7 +10,6 @@ import { useAuth } from '../contexts/AuthContext';
 import { useAds } from '../contexts/AdContext';
 import { localStorageService } from '../services/localStorageService';
 import { useInterstitialAd } from '../components/InterstitialAd';
-import AdBanner from '../components/AdBanner';
 
 type MonthRow = {
   month: string; // YYYY-MM
@@ -38,16 +37,20 @@ const MonthlyReportsScreen: React.FC = () => {
   const { user } = useAuth();
   const navigation = useNavigation();
   const insets = useSafeAreaInsets();
-  const { adsEnabled, shouldShowBanner } = useAds();
+  const { adsEnabled } = useAds();
   const { showInterstitialIfNeeded, InterstitialComponent } = useInterstitialAd('MonthlyReports');
 
   const [loading, setLoading] = useState(true);
   const [rows, setRows] = useState<MonthRow[]>([]);
 
   useEffect(() => {
+    if (adsEnabled) {
+      showInterstitialIfNeeded();
+    }
+  }, [adsEnabled, showInterstitialIfNeeded]);
+
+  useEffect(() => {
     let mounted = true;
-    // Show interstitial ad on first visit (free users only)
-    showInterstitialIfNeeded();
 
     const load = async () => {
       try {
@@ -303,13 +306,6 @@ const MonthlyReportsScreen: React.FC = () => {
         )}
       </View>
 
-      {/* Banner Ad for free users */}
-      {adsEnabled && shouldShowBanner('MonthlyReports') && (
-        <View style={styles.bannerAdContainer}>
-          <AdBanner screenName="MonthlyReports" />
-        </View>
-      )}
-
       {/* Interstitial Ad Modal */}
       <InterstitialComponent />
     </View>
@@ -319,12 +315,6 @@ const MonthlyReportsScreen: React.FC = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-  },
-  bannerAdContainer: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
   },
 
   // Dark Header Section

@@ -17,9 +17,7 @@ const MoreScreen = lazy(loadMoreScreen);
 import { useTheme } from '../contexts/ThemeContext';
 import { useLocalization } from '../contexts/LocalizationContext';
 import { useNavigationLoading } from '../contexts/NavigationLoadingContext';
-import { useAds } from '../contexts/AdContext';
 import QuickActionsOverlay from './QuickActionsOverlay';
-import AdBanner from './AdBanner';
 
 const initialLayout = { width: Dimensions.get('window').width };
 
@@ -84,7 +82,6 @@ const SwipeableBottomTabNavigator = React.memo(() => {
   const { t } = useLocalization();
   const insets = useSafeAreaInsets();
   const { startLoading, isScreenVisited } = useNavigationLoading();
-  const { adsEnabled, shouldShowBanner } = useAds();
   const [index, setIndex] = useState(0);
   const [quickActionsOpen, setQuickActionsOpen] = useState(false);
   const isMounted = useRef(false);
@@ -119,8 +116,6 @@ const SwipeableBottomTabNavigator = React.memo(() => {
   ], [t]);
 
   const currentTabScreenName = tabScreenNames[index] || 'TabHome';
-  const showBottomBanner = adsEnabled && shouldShowBanner(currentTabScreenName);
-  const bottomBannerHeight = showBottomBanner ? (stylesConst.bannerHeight + insets.bottom) : 0;
 
   // Memoized scene renderer with lazy loading
   const renderScene = useCallback(({ route }: { route: any }) => {
@@ -194,7 +189,7 @@ const SwipeableBottomTabNavigator = React.memo(() => {
         styles.tabBarWrapper,
         {
           paddingBottom: Math.max(insets.bottom, 10),
-          bottom: bottomBannerHeight,
+          bottom: 0,
         },
       ]}
       pointerEvents="box-none"
@@ -288,7 +283,7 @@ const SwipeableBottomTabNavigator = React.memo(() => {
         </View>
       </View>
     </View>
-  ), [bottomBannerHeight, getIconName, handleIndexChange, index, insets.bottom, t, theme.colors.primary]);
+  ), [getIconName, handleIndexChange, index, insets.bottom, t, theme.colors.primary]);
 
   return (
     <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
@@ -305,21 +300,10 @@ const SwipeableBottomTabNavigator = React.memo(() => {
         animationEnabled={true}
       />
 
-      {/* Banner under the navigation menu (free users only) */}
-      {showBottomBanner && (
-        <View style={[styles.bottomBannerWrapper, { paddingBottom: insets.bottom }]}>
-          <AdBanner screenName={currentTabScreenName} />
-        </View>
-      )}
-
       <QuickActionsOverlay visible={quickActionsOpen} onClose={() => setQuickActionsOpen(false)} />
     </View>
   );
 });
-
-const stylesConst = {
-  bannerHeight: 50,
-};
 
 const styles = StyleSheet.create({
   container: {
@@ -327,13 +311,6 @@ const styles = StyleSheet.create({
   },
   sceneWrapper: {
     flex: 1,
-  },
-  bottomBannerWrapper: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    bottom: 0,
-    zIndex: 20,
   },
   loadingContainer: {
     flex: 1,

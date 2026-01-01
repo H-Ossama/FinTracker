@@ -11,7 +11,6 @@ import {
   Text,
   TouchableOpacity,
   StyleSheet,
-  Alert,
   Modal,
   ActivityIndicator,
   ScrollView,
@@ -21,6 +20,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../contexts/ThemeContext';
 import { useAuth } from '../contexts/AuthContext';
+import { useDialog } from '../contexts/DialogContext';
 import { 
   simpleCloudBackupService, 
   BackupInfo, 
@@ -42,6 +42,7 @@ export const SimpleCloudBackupModal: React.FC<SimpleCloudBackupModalProps> = ({
 }) => {
   const { theme } = useTheme();
   const { user, isGoogleAuthenticated } = useAuth();
+  const dialog = useDialog();
   const insets = useSafeAreaInsets();
 
   const [isLoading, setIsLoading] = useState(false);
@@ -84,11 +85,7 @@ export const SimpleCloudBackupModal: React.FC<SimpleCloudBackupModalProps> = ({
 
   const handleBackup = async () => {
     if (!simpleCloudBackupService.isAuthenticated()) {
-      Alert.alert(
-        'Sign In Required',
-        'Please sign in with Google to backup your data to the cloud.',
-        [{ text: 'OK' }]
-      );
+      dialog.alert('Sign In Required', 'Please sign in with Google to backup your data to the cloud.', 'OK');
       return;
     }
 
@@ -100,18 +97,32 @@ export const SimpleCloudBackupModal: React.FC<SimpleCloudBackupModalProps> = ({
       });
 
       if (result.success) {
-        Alert.alert(
-          '✅ Backup Complete',
-          `Successfully backed up ${result.itemsBackedUp} items to the cloud.`,
-          [{ text: 'OK' }]
-        );
+        dialog.show({
+          title: '✅ Backup Complete',
+          message: `Successfully backed up ${result.itemsBackedUp} items to the cloud.`,
+          icon: 'checkmark-circle',
+          iconColor: '#22C55E',
+          buttons: [{ text: 'OK', style: 'default' }],
+        });
         await loadBackupInfo();
         onComplete?.();
       } else {
-        Alert.alert('Backup Failed', result.error || 'Unknown error occurred');
+        dialog.show({
+          title: 'Backup Failed',
+          message: result.error || 'Unknown error occurred',
+          icon: 'alert-circle',
+          iconColor: '#EF4444',
+          buttons: [{ text: 'OK', style: 'default' }],
+        });
       }
     } catch (error) {
-      Alert.alert('Error', error instanceof Error ? error.message : 'Backup failed');
+      dialog.show({
+        title: 'Error',
+        message: error instanceof Error ? error.message : 'Backup failed',
+        icon: 'alert-circle',
+        iconColor: '#EF4444',
+        buttons: [{ text: 'OK', style: 'default' }],
+      });
     } finally {
       setProgress(null);
     }
@@ -119,27 +130,22 @@ export const SimpleCloudBackupModal: React.FC<SimpleCloudBackupModalProps> = ({
 
   const handleRestore = async () => {
     if (!simpleCloudBackupService.isAuthenticated()) {
-      Alert.alert(
-        'Sign In Required',
-        'Please sign in with Google to restore your data from the cloud.',
-        [{ text: 'OK' }]
-      );
+      dialog.alert('Sign In Required', 'Please sign in with Google to restore your data from the cloud.', 'OK');
       return;
     }
 
     if (!backupInfo?.exists) {
-      Alert.alert(
-        'No Backup Found',
-        'No cloud backup exists for your account. Create a backup first!',
-        [{ text: 'OK' }]
-      );
+      dialog.alert('No Backup Found', 'No cloud backup exists for your account. Create a backup first!', 'OK');
       return;
     }
 
-    Alert.alert(
-      '⚠️ Restore from Cloud',
-      'This will REPLACE all data on this device with your cloud backup. Your current local data will be lost.\n\nAre you sure you want to continue?',
-      [
+    dialog.show({
+      title: '⚠️ Restore from Cloud',
+      message:
+        'This will REPLACE all data on this device with your cloud backup. Your current local data will be lost.\n\nAre you sure you want to continue?',
+      icon: 'warning',
+      iconColor: '#F59E0B',
+      buttons: [
         { text: 'Cancel', style: 'cancel' },
         {
           text: 'Restore',
@@ -153,55 +159,84 @@ export const SimpleCloudBackupModal: React.FC<SimpleCloudBackupModalProps> = ({
               });
 
               if (result.success) {
-                Alert.alert(
-                  '✅ Restore Complete',
-                  `Successfully restored ${result.itemsRestored} items from your cloud backup.`,
-                  [{ text: 'OK' }]
-                );
+                dialog.show({
+                  title: '✅ Restore Complete',
+                  message: `Successfully restored ${result.itemsRestored} items from your cloud backup.`,
+                  icon: 'checkmark-circle',
+                  iconColor: '#22C55E',
+                  buttons: [{ text: 'OK', style: 'default' }],
+                });
                 await loadBackupInfo();
                 onComplete?.();
               } else {
-                Alert.alert('Restore Failed', result.error || 'Unknown error occurred');
+                dialog.show({
+                  title: 'Restore Failed',
+                  message: result.error || 'Unknown error occurred',
+                  icon: 'alert-circle',
+                  iconColor: '#EF4444',
+                  buttons: [{ text: 'OK', style: 'default' }],
+                });
               }
             } catch (error) {
-              Alert.alert('Error', error instanceof Error ? error.message : 'Restore failed');
+              dialog.show({
+                title: 'Error',
+                message: error instanceof Error ? error.message : 'Restore failed',
+                icon: 'alert-circle',
+                iconColor: '#EF4444',
+                buttons: [{ text: 'OK', style: 'default' }],
+              });
             } finally {
               setProgress(null);
             }
           },
         },
-      ]
-    );
+      ],
+    });
   };
 
   const handleDeleteBackup = async () => {
-    Alert.alert(
-      '🗑️ Delete Cloud Backup',
-      'This will permanently delete your cloud backup. Your local data will NOT be affected.\n\nAre you sure?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete',
-          style: 'destructive',
-          onPress: async () => {
-            setIsLoading(true);
-            try {
-              const result = await simpleCloudBackupService.deleteBackup();
-              if (result.success) {
-                Alert.alert('Deleted', 'Your cloud backup has been deleted.');
-                await loadBackupInfo();
-              } else {
-                Alert.alert('Error', result.error || 'Failed to delete backup');
-              }
-            } catch (error) {
-              Alert.alert('Error', error instanceof Error ? error.message : 'Delete failed');
-            } finally {
-              setIsLoading(false);
-            }
-          },
-        },
-      ]
-    );
+    dialog.confirm({
+      title: '🗑️ Delete Cloud Backup',
+      message:
+        'This will permanently delete your cloud backup. Your local data will NOT be affected.\n\nAre you sure?',
+      cancelText: 'Cancel',
+      confirmText: 'Delete',
+      destructive: true,
+      onConfirm: async () => {
+        setIsLoading(true);
+        try {
+          const result = await simpleCloudBackupService.deleteBackup();
+          if (result.success) {
+            dialog.show({
+              title: 'Deleted',
+              message: 'Your cloud backup has been deleted.',
+              icon: 'checkmark-circle',
+              iconColor: '#22C55E',
+              buttons: [{ text: 'OK', style: 'default' }],
+            });
+            await loadBackupInfo();
+          } else {
+            dialog.show({
+              title: 'Error',
+              message: result.error || 'Failed to delete backup',
+              icon: 'alert-circle',
+              iconColor: '#EF4444',
+              buttons: [{ text: 'OK', style: 'default' }],
+            });
+          }
+        } catch (error) {
+          dialog.show({
+            title: 'Error',
+            message: error instanceof Error ? error.message : 'Delete failed',
+            icon: 'alert-circle',
+            iconColor: '#EF4444',
+            buttons: [{ text: 'OK', style: 'default' }],
+          });
+        } finally {
+          setIsLoading(false);
+        }
+      },
+    });
   };
 
   const formatDate = (dateString: string | null) => {

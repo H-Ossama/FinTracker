@@ -130,17 +130,22 @@ class AnalyticsService {
     }
   }
 
-  async getRecommendations(forceRefresh = false): Promise<ApiResponse<RecommendationsData>> {
+  async getRecommendations(
+    forceRefresh = false,
+    options?: { allowAI?: boolean }
+  ): Promise<ApiResponse<RecommendationsData>> {
     try {
       // Check if user is authenticated
       const isAuth = firebaseAuthService.isAuthenticated();
+
+      const allowAI = options?.allowAI !== false;
       
-      if (isAuth) {
+      if (isAuth && allowAI) {
         // Use local calculations with AI recommendations
         this.logOnce('Using AI-powered recommendations (cached)...', '💡');
         return this.getRecommendationsWithAI(forceRefresh);
       } else {
-        // Offline mode - use local calculations
+        // Offline mode (or AI disabled) - use local calculations
         return this.getLocalRecommendations();
       }
     } catch (error) {

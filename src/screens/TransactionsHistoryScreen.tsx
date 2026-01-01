@@ -12,7 +12,6 @@ import {
   Animated,
   Dimensions,
   Vibration,
-  Alert,
   StatusBar,
   Image,
 } from 'react-native';
@@ -26,8 +25,8 @@ import { useAuth } from '../contexts/AuthContext';
 import { hybridDataService, HybridTransaction } from '../services/hybridDataService';
 import TransactionDetailsModal from '../components/TransactionDetailsModal';
 import { useInterstitialAd } from '../components/InterstitialAd';
-import AdBanner from '../components/AdBanner';
 import { useAds } from '../contexts/AdContext';
+import { useDialog } from '../contexts/DialogContext';
 
 const { width } = Dimensions.get('window');
 
@@ -52,8 +51,9 @@ const TransactionsHistoryScreen = () => {
   const { formatCurrency, t } = useLocalization();
   const { user } = useAuth();
   const insets = useSafeAreaInsets();
-  const { adsEnabled, shouldShowBanner } = useAds();
+  const { adsEnabled } = useAds();
   const { showInterstitialIfNeeded, InterstitialComponent } = useInterstitialAd('TransactionsHistory');
+  const dialog = useDialog();
   
   const [transactions, setTransactions] = useState<HybridTransaction[]>([]);
   const [loading, setLoading] = useState(true);
@@ -75,9 +75,13 @@ const TransactionsHistoryScreen = () => {
 
   useEffect(() => {
     loadTransactions();
-    // Show interstitial ad on first visit (free users only)
-    showInterstitialIfNeeded();
   }, []);
+
+  useEffect(() => {
+    if (adsEnabled) {
+      showInterstitialIfNeeded();
+    }
+  }, [adsEnabled, showInterstitialIfNeeded]);
 
   const loadTransactions = async () => {
     try {
@@ -86,7 +90,7 @@ const TransactionsHistoryScreen = () => {
       setTransactions(allTransactions);
     } catch (error) {
       console.error('Error loading transactions:', error);
-      Alert.alert(t('error'), t('failed_to_load_transactions'));
+      dialog.error(t('error'), t('failed_to_load_transactions'));
     } finally {
       setLoading(false);
     }
@@ -270,16 +274,18 @@ const TransactionsHistoryScreen = () => {
 
   const handleTransactionLongPress = (transaction: HybridTransaction) => {
     Vibration.vibrate([50, 50, 50]);
-    Alert.alert(
-      t('transaction_options'),
-      t('choose_action'),
-      [
-        { text: t('edit'), onPress: () => handleEditTransaction(transaction) },
-        { text: t('duplicate'), onPress: () => handleDuplicateTransaction(transaction) },
-        { text: t('delete'), style: 'destructive', onPress: () => handleDeleteTransaction(transaction.id) },
-        { text: t('cancel'), style: 'cancel' }
-      ]
-    );
+    dialog.show({
+      title: t('transaction_options'),
+      message: t('choose_action'),
+      icon: 'ellipsis-horizontal',
+      iconColor: theme.colors.primary,
+      buttons: [
+        { text: t('edit'), onPress: () => handleEditTransaction(transaction), style: 'default' },
+        { text: t('duplicate'), onPress: () => handleDuplicateTransaction(transaction), style: 'default' },
+        { text: t('delete'), style: 'destructive', onPress: () => void handleDeleteTransaction(transaction.id) },
+        { text: t('cancel'), style: 'cancel' },
+      ],
+    });
   };
 
   const handleEditTransaction = (transaction: HybridTransaction) => {
@@ -300,7 +306,7 @@ const TransactionsHistoryScreen = () => {
       await loadTransactions();
     } catch (error) {
       console.error('Error deleting transaction:', error);
-      Alert.alert(t('error'), t('failed_to_delete_transaction'));
+      dialog.error(t('error'), t('failed_to_delete_transaction'));
     }
   };
 
@@ -708,11 +714,6 @@ const TransactionsHistoryScreen = () => {
       />
 
       {/* Banner Ad for free users */}
-      {adsEnabled && shouldShowBanner('TransactionsHistory') && (
-        <View style={styles.bannerAdContainer}>
-          <AdBanner screenName="TransactionsHistory" />
-        </View>
-      )}
 
       {/* Interstitial Ad Modal */}
       <InterstitialComponent />
@@ -723,12 +724,6 @@ const TransactionsHistoryScreen = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-  },
-  bannerAdContainer: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
   },
   darkHeader: {
     paddingHorizontal: 20,

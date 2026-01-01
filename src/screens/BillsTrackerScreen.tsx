@@ -6,7 +6,6 @@ import {
   ScrollView,
   TouchableOpacity,
   RefreshControl,
-  Alert,
   Modal,
   TextInput,
   Switch,
@@ -25,16 +24,17 @@ import { localStorageService } from '../services/localStorageService';
 import { Bill, BillCategory } from '../types';
 import { useFocusEffect } from '@react-navigation/native';
 import { useInterstitialAd } from '../components/InterstitialAd';
-import AdBanner from '../components/AdBanner';
 import { useAds } from '../contexts/AdContext';
+import { useDialog } from '../contexts/DialogContext';
 
 const BillsTrackerScreen = ({ navigation, route }: any) => {
   const { theme } = useTheme();
   const { t, formatCurrency } = useLocalization();
   const { formatWalletBalance } = useWalletVisibility();
   const { user } = useAuth();
+  const dialog = useDialog();
   const insets = useSafeAreaInsets();
-  const { adsEnabled, shouldShowBanner } = useAds();
+  const { adsEnabled } = useAds();
   const { showInterstitialIfNeeded, InterstitialComponent } = useInterstitialAd('BillsTracker');
   const [bills, setBills] = useState<Bill[]>([]);
   const [categories, setCategories] = useState<BillCategory[]>([]);
@@ -114,7 +114,7 @@ const BillsTrackerScreen = ({ navigation, route }: any) => {
         // Clear the param to prevent reopening on subsequent visits
         navigation.setParams({ openAddModal: undefined });
       }
-    }, [route?.params?.openAddModal])
+    }, [route?.params?.openAddModal, adsEnabled, showInterstitialIfNeeded])
   );
 
   const loadData = async () => {
@@ -171,7 +171,7 @@ const BillsTrackerScreen = ({ navigation, route }: any) => {
       }
     } catch (error) {
       console.error('❌ Error loading bills data:', error);
-      Alert.alert(t('error'), t('bills.loadingError', { error: error instanceof Error ? error.message : 'Unknown error' }));
+      dialog.error(t('error'), t('bills.loadingError', { error: error instanceof Error ? error.message : 'Unknown error' }));
       
       // Set empty data to prevent infinite loading
       setBills([]);
@@ -198,7 +198,7 @@ const BillsTrackerScreen = ({ navigation, route }: any) => {
 
   const handleMarkAsPaid = async (bill: Bill) => {
     if (wallets.length === 0) {
-      Alert.alert(t('no_wallets'), t('bills.noWallets'));
+      dialog.warning(t('no_wallets'), t('bills.noWallets'));
       return;
     }
     setSelectedBillForPayment(bill);
@@ -213,24 +213,26 @@ const BillsTrackerScreen = ({ navigation, route }: any) => {
       const selectedWalletData = wallets.find(w => w.id === selectedWallet);
       
       if (selectedWalletData && selectedWalletData.balance < selectedBillForPayment.amount) {
-        Alert.alert(
-          t('bills.insufficientFunds'),
-          t('bills.insufficientFunds', { 
+        dialog.show({
+          title: t('bills.insufficientFunds'),
+          message: t('bills.insufficientFunds', {
             walletName: selectedWalletData.name,
             currentBalance: formatCurrency(selectedWalletData.balance),
             requiredAmount: formatCurrency(selectedBillForPayment.amount)
           }),
-          [
+          icon: 'warning',
+          iconColor: '#F59E0B',
+          buttons: [
             { text: t('payment.cancel'), style: 'cancel' },
-            { text: t('bills.payAnyway'), onPress: () => performPayment() }
-          ]
-        );
+            { text: t('bills.payAnyway'), style: 'default', onPress: () => performPayment() },
+          ],
+        });
       } else {
         await performPayment();
       }
     } catch (error) {
       console.error('Error processing payment:', error);
-      Alert.alert(t('error'), t('bills.paymentFailed'));
+      dialog.error(t('error'), t('bills.paymentFailed'));
     }
   };
 
@@ -252,11 +254,11 @@ const BillsTrackerScreen = ({ navigation, route }: any) => {
       await loadData();
       setSelectedBillForPayment(null);
       
-      Alert.alert(t('success'), t('bills.paymentSuccess', { amount: formatCurrency(selectedBillForPayment.amount) }));
+      dialog.success(t('success'), t('bills.paymentSuccess', { amount: formatCurrency(selectedBillForPayment.amount) }));
       console.log('✅ Payment process completed successfully');
     } catch (error) {
       console.error('❌ Error making payment:', error);
-      Alert.alert(t('error'), t('bills.paymentFailed'));
+      dialog.error(t('error'), t('bills.paymentFailed'));
     }
   };
 
@@ -282,13 +284,13 @@ const BillsTrackerScreen = ({ navigation, route }: any) => {
   const handleUpdateBill = async () => {
     try {
       if (!editBill.title || !editBill.amount || !editBill.categoryId || !selectedBillForEdit) {
-        Alert.alert(t('error'), t('addBill.fillRequired'));
+        dialog.warning(t('error'), t('addBill.fillRequired'));
         return;
       }
 
       const category = categories.find(c => c.id === editBill.categoryId);
       if (!category) {
-        Alert.alert(t('error'), t('addBill.selectCategory'));
+        dialog.warning(t('error'), t('addBill.selectCategory'));
         return;
       }
 
@@ -311,10 +313,10 @@ const BillsTrackerScreen = ({ navigation, route }: any) => {
       setSelectedBillForEdit(null);
       resetEditForm();
       await loadData();
-      Alert.alert(t('success'), t('bills.billUpdated'));
+      dialog.success(t('success'), t('bills.billUpdated'));
     } catch (error) {
       console.error('Error updating bill:', error);
-      Alert.alert(t('error'), t('bills.updateFailed'));
+      dialog.error(t('error'), t('bills.updateFailed'));
     }
   };
 
@@ -337,38 +339,34 @@ const BillsTrackerScreen = ({ navigation, route }: any) => {
 
   const handleDeleteBill = async (bill: Bill) => {
     try {
-      Alert.alert(
-        t('bills.deleteBill'),
-        t('bills.deleteConfirm', { billTitle: bill.title }),
-        [
-          { text: t('payment.cancel'), style: 'cancel' },
-          {
-            text: t('bills.deleteBill'),
-            style: 'destructive',
-            onPress: async () => {
-              await billsService.deleteBill(bill.id);
-              await loadData();
-              Alert.alert(t('success'), t('bills.billDeleted'));
-            }
-          }
-        ]
-      );
+      dialog.confirm({
+        title: t('bills.deleteBill'),
+        message: t('bills.deleteConfirm', { billTitle: bill.title }),
+        confirmText: t('bills.deleteBill'),
+        cancelText: t('payment.cancel'),
+        destructive: true,
+        onConfirm: async () => {
+          await billsService.deleteBill(bill.id);
+          await loadData();
+          dialog.success(t('success'), t('bills.billDeleted'));
+        },
+      });
     } catch (error) {
       console.error('Error deleting bill:', error);
-      Alert.alert(t('error'), t('bills.deleteFailed'));
+      dialog.error(t('error'), t('bills.deleteFailed'));
     }
   };
 
   const handleAddBill = async () => {
     try {
       if (!newBill.title || !newBill.amount || !newBill.categoryId) {
-        Alert.alert(t('error'), t('addBill.fillRequired'));
+        dialog.warning(t('error'), t('addBill.fillRequired'));
         return;
       }
 
       const category = categories.find(c => c.id === newBill.categoryId);
       if (!category) {
-        Alert.alert(t('error'), t('addBill.selectCategory'));
+        dialog.warning(t('error'), t('addBill.selectCategory'));
         return;
       }
 
@@ -391,10 +389,10 @@ const BillsTrackerScreen = ({ navigation, route }: any) => {
       setShowAddModal(false);
       resetForm();
       await loadData();
-      Alert.alert(t('success'), t('bills.billCreated'));
+      dialog.success(t('success'), t('bills.billCreated'));
     } catch (error) {
       console.error('Error adding bill:', error);
-      Alert.alert(t('error'), t('bills.createFailed'));
+      dialog.error(t('error'), t('bills.createFailed'));
     }
   };
 
@@ -996,7 +994,7 @@ const BillsTrackerScreen = ({ navigation, route }: any) => {
                             },
                           ]}
                         >
-                          {t(`bills.${freq.replace('-', '')}`)}
+                          {freq === 'one-time' ? t('bills.oneTime') : t(`bills.${freq}`)}
                         </Text>
                       </TouchableOpacity>
                     ))}
@@ -1237,25 +1235,28 @@ const BillsTrackerScreen = ({ navigation, route }: any) => {
             {__DEV__ && (
               <TouchableOpacity 
                 onPress={async () => {
-                  Alert.alert(
-                    'Development Tools',
-                    'Reset bills with test data?',
-                    [
+                  dialog.show({
+                    title: 'Development Tools',
+                    message: 'Reset bills with test data?',
+                    icon: 'help-circle',
+                    iconColor: '#3B82F6',
+                    buttons: [
                       { text: 'Cancel', style: 'cancel' },
-                      { 
-                        text: 'Reset', 
+                      {
+                        text: 'Reset',
+                        style: 'destructive',
                         onPress: async () => {
                           try {
                             await billsService.resetWithTestBills();
                             await loadData();
-                            Alert.alert('Success', 'Test bills have been reset!');
+                            dialog.success('Success', 'Test bills have been reset!');
                           } catch (error) {
-                            Alert.alert('Error', 'Failed to reset test bills');
+                            dialog.error('Error', 'Failed to reset test bills');
                           }
-                        }
-                      }
-                    ]
-                  );
+                        },
+                      },
+                    ],
+                  });
                 }}
                 style={[styles.headerIconButton, { backgroundColor: theme.colors.headerSurface }]}
               >
@@ -1335,13 +1336,6 @@ const BillsTrackerScreen = ({ navigation, route }: any) => {
       {/* Payment Modal */}
       {renderPaymentModal()}
 
-      {/* Banner Ad for free users */}
-      {adsEnabled && shouldShowBanner('BillsTracker') && (
-        <View style={styles.bannerAdContainer}>
-          <AdBanner screenName="BillsTracker" />
-        </View>
-      )}
-
       {/* Interstitial Ad Modal */}
       <InterstitialComponent />
     </View>
@@ -1351,12 +1345,6 @@ const BillsTrackerScreen = ({ navigation, route }: any) => {
 const createStyles = (theme: any) => StyleSheet.create({
   container: {
     flex: 1,
-  },
-  bannerAdContainer: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
   },
   darkHeader: {
     paddingHorizontal: 20,

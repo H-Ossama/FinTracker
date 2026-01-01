@@ -7,7 +7,6 @@ import {
   TouchableOpacity,
   ScrollView,
   TextInput,
-  Alert,
   Platform,
   KeyboardAvoidingView,
   StatusBar,
@@ -19,6 +18,7 @@ import { BorrowedMoney } from '../types';
 import { useTheme } from '../contexts/ThemeContext';
 import { useLocalization } from '../contexts/LocalizationContext';
 import { localStorageService, LocalWallet } from '../services/localStorageService';
+import { useDialog } from '../contexts/DialogContext';
 
 interface AddBorrowedMoneyModalProps {
   visible: boolean;
@@ -36,6 +36,22 @@ const AddBorrowedMoneyModal: React.FC<AddBorrowedMoneyModalProps> = ({
   const { theme } = useTheme();
   const { t } = useLocalization();
   const insets = useSafeAreaInsets();
+  const dialog = useDialog();
+
+  const getWalletIoniconName = (wallet: Partial<LocalWallet> | undefined) => {
+    const rawIcon = (wallet?.icon ?? '').toString();
+    const normalizedIcon = rawIcon.trim().toLowerCase();
+    const normalizedType = (wallet?.type ?? '').toString().trim().toUpperCase();
+
+    // Stored wallet icons sometimes use semantic names like "bank" which are not valid Ionicons.
+    if (normalizedIcon === 'bank' || normalizedType === 'BANK') return 'card-outline';
+    if (normalizedIcon === 'cash' || normalizedType === 'CASH') return 'cash-outline';
+    if (normalizedIcon === 'credit' || normalizedType === 'CREDIT_CARD') return 'card-outline';
+    if (normalizedIcon === 'savings' || normalizedType === 'SAVINGS') return 'wallet-outline';
+    if (normalizedIcon === 'investment' || normalizedType === 'INVESTMENT') return 'stats-chart-outline';
+
+    return rawIcon || 'wallet-outline';
+  };
   const [formData, setFormData] = useState({
     personName: '',
     amount: '',
@@ -87,22 +103,22 @@ const AddBorrowedMoneyModal: React.FC<AddBorrowedMoneyModalProps> = ({
 
   const handleAdd = () => {
     if (!formData.personName.trim()) {
-      Alert.alert('Error', t('person_name_required'));
+      dialog.error(t('error') || 'Error', t('person_name_required'));
       return;
     }
     
     if (!formData.amount.trim() || isNaN(Number(formData.amount))) {
-      Alert.alert('Error', t('valid_amount'));
+      dialog.error(t('error') || 'Error', t('valid_amount'));
       return;
     }
     
     if (!formData.reason.trim()) {
-      Alert.alert('Error', t('reason_required'));
+      dialog.error(t('error') || 'Error', t('reason_required'));
       return;
     }
 
     if (!formData.walletId) {
-      Alert.alert('Error', 'Please select a wallet to add the borrowed money to');
+      dialog.error(t('error') || 'Error', t('add_money_select_wallet') || 'Please select a wallet');
       return;
     }
 
@@ -154,22 +170,27 @@ const AddBorrowedMoneyModal: React.FC<AddBorrowedMoneyModalProps> = ({
       presentationStyle="pageSheet"
       onRequestClose={handleClose}
     >
-      <View style={{ flex: 1, backgroundColor: '#1C1C1E' }}>
-        <StatusBar barStyle="light-content" backgroundColor="#1C1C1E" />
+      <View style={[styles.root, { backgroundColor: theme.colors.headerBackground }]}>
+        <StatusBar barStyle="light-content" backgroundColor={theme.colors.headerBackground} />
         
         {/* Dark Header */}
-        <View style={[styles.darkHeader, { paddingTop: insets.top }]}>
+        <View style={[styles.darkHeader, { paddingTop: insets.top, backgroundColor: theme.colors.headerBackground }]}>
           <View style={styles.headerRow}>
-            <TouchableOpacity onPress={handleClose} style={styles.closeButton}>
-              <Ionicons name="close" size={24} color="#FFFFFF" />
+            <TouchableOpacity
+              onPress={handleClose}
+              style={[styles.headerIconButton, { backgroundColor: theme.colors.headerSurface, borderColor: theme.colors.headerBorder }]}
+            >
+              <Ionicons name="close" size={22} color={theme.colors.headerText} />
             </TouchableOpacity>
-            <Text style={styles.headerTitle}>
+            <Text style={[styles.headerTitle, { color: theme.colors.headerText }]}>
               {t('add_borrowed_money_title')}
             </Text>
-            <TouchableOpacity onPress={handleAdd} style={styles.addButton}>
-              <Text style={styles.addButtonText}>
-                {t('add_new')}
-              </Text>
+            <TouchableOpacity
+              onPress={handleAdd}
+              activeOpacity={0.9}
+              style={[styles.headerPrimaryButton, { backgroundColor: theme.colors.primary }]}
+            >
+              <Text style={styles.headerPrimaryButtonText}>{t('add_new')}</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -326,7 +347,7 @@ const AddBorrowedMoneyModal: React.FC<AddBorrowedMoneyModalProps> = ({
                         }
                       ]}>
                         <Ionicons 
-                          name={wallet.icon as any || 'wallet-outline'} 
+                          name={getWalletIoniconName(wallet) as any} 
                           size={22} 
                           color={formData.walletId === wallet.id ? 'white' : theme.colors.text}
                         />
@@ -455,11 +476,10 @@ const AddBorrowedMoneyModal: React.FC<AddBorrowedMoneyModalProps> = ({
 };
 
 const styles = StyleSheet.create({
-  container: {
+  root: {
     flex: 1,
   },
   darkHeader: {
-    backgroundColor: '#1C1C1E',
     paddingHorizontal: 20,
     paddingBottom: 20,
   },
@@ -469,28 +489,31 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     marginTop: 10,
   },
-  closeButton: {
+  headerIconButton: {
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: 'rgba(255,255,255,0.1)',
+    borderWidth: 1,
     alignItems: 'center',
     justifyContent: 'center',
   },
   headerTitle: {
     fontSize: 18,
     fontWeight: '600',
-    color: '#FFFFFF',
     flex: 1,
     textAlign: 'center',
   },
-  addButton: {
-    padding: 4,
+  headerPrimaryButton: {
+    paddingHorizontal: 14,
+    height: 40,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  addButtonText: {
+  headerPrimaryButtonText: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#3B82F6',
+    color: '#FFFFFF',
   },
   contentContainer: {
     flex: 1,
@@ -501,30 +524,6 @@ const styles = StyleSheet.create({
   },
   keyboardAvoidingView: {
     flex: 1,
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 20,
-    paddingVertical: 16,
-    borderBottomWidth: 1,
-  },
-  closeButton: {
-    padding: 4,
-  },
-  headerTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    flex: 1,
-    textAlign: 'center',
-  },
-  addButton: {
-    padding: 4,
-  },
-  addButtonText: {
-    fontSize: 16,
-    fontWeight: '600',
   },
   content: {
     flex: 1,

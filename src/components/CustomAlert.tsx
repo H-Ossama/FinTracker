@@ -101,7 +101,12 @@ const CustomAlert: React.FC<CustomAlertProps> = ({
           </View>
 
           {/* Buttons */}
-          <View style={styles.buttonsContainer}>
+          <View
+            style={[
+              styles.buttonsContainer,
+              buttons.length > 2 ? styles.buttonsContainerStacked : styles.buttonsContainerRow,
+            ]}
+          >
             {buttons.map((button, index) => (
               <TouchableOpacity
                 key={index}
@@ -109,8 +114,8 @@ const CustomAlert: React.FC<CustomAlertProps> = ({
                   styles.button,
                   getButtonStyle(button.style),
                   buttons.length === 1 && styles.singleButton,
-                  index === 0 && buttons.length > 1 && styles.firstButton,
-                  index === buttons.length - 1 && buttons.length > 1 && styles.lastButton,
+                  index === 0 && buttons.length === 2 && styles.firstButton,
+                  index === buttons.length - 1 && buttons.length === 2 && styles.lastButton,
                 ]}
                 onPress={() => handleButtonPress(button)}
                 activeOpacity={0.7}
@@ -185,8 +190,13 @@ const styles = StyleSheet.create({
     opacity: 0.8,
   },
   buttonsContainer: {
-    flexDirection: 'row',
     gap: 12,
+  },
+  buttonsContainerRow: {
+    flexDirection: 'row',
+  },
+  buttonsContainerStacked: {
+    flexDirection: 'column',
   },
   button: {
     flex: 1,

@@ -19,6 +19,7 @@ import Svg, { Circle, Path, Text as SvgText, Defs, RadialGradient, Stop } from '
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { useAuth } from '../contexts/AuthContext';
+import { useSubscription } from '../contexts/SubscriptionContext';
 // Lazy import for analytics service to reduce initial bundle
 type SpendingCategory = {
   id: string;
@@ -87,7 +88,10 @@ const InsightsScreen = () => {
   const { currency, formatCurrency, t, language } = useLocalization();
   const navigation = useNavigation();
   const { user } = useAuth();
+  const { hasFeature, showUpgradeModal } = useSubscription();
   const insets = useSafeAreaInsets();
+
+  const canUseAIInsights = hasFeature('advancedInsights');
   
   const getCurrencySymbol = () => {
     const symbols = { USD: '$', EUR: '€', MAD: 'MAD' };
@@ -253,7 +257,7 @@ const InsightsScreen = () => {
   useFocusEffect(
     useCallback(() => {
       fetchData();
-    }, [selectedPeriod])
+    }, [selectedPeriod, canUseAIInsights])
   );
   
   // Function to fetch data from analytics service
@@ -278,7 +282,7 @@ const InsightsScreen = () => {
       const [spendingResponse, trendResponse, recommendationsResponse] = await Promise.all([
         analyticsService.getSpendingByCategory(apiPeriod),
         analyticsService.getTrendData(apiPeriod, groupBy as 'day' | 'week' | 'month'),
-        analyticsService.getRecommendations()
+        analyticsService.getRecommendations(false, { allowAI: canUseAIInsights })
       ]);
       
       if (spendingResponse.success && spendingResponse.data) {
@@ -306,7 +310,7 @@ const InsightsScreen = () => {
   // Handle pull to refresh
   const onRefresh = useCallback(() => {
     fetchData(true);
-  }, [selectedPeriod]);
+  }, [selectedPeriod, canUseAIInsights]);
 
   // Enhanced categories with fallback colors if needed
   const enhancedCategories = categories.map((category, index) => ({
@@ -742,7 +746,21 @@ const InsightsScreen = () => {
         
         {/* Recommendations */}
         <View style={styles.section}>
-          <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>{t('recommendations')}</Text>
+          <View style={styles.sectionTitleRow}>
+            <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>{t('recommendations')}</Text>
+            {!canUseAIInsights && (
+              <TouchableOpacity
+                activeOpacity={0.8}
+                onPress={() => showUpgradeModal('advancedInsights')}
+                style={[styles.upgradePill, { backgroundColor: theme.colors.primary }]}
+              >
+                <Ionicons name="lock-closed" size={14} color="#FFFFFF" />
+                <Text style={[styles.upgradePillText, language === 'ar' && styles.arabicText]}>
+                  {t('subscription_upgrade_to_pro')}
+                </Text>
+              </TouchableOpacity>
+            )}
+          </View>
           {recommendations.length > 0 ? (
             recommendations.map((recommendation, index) => (
               <View key={`recommendation-${index}`} style={[styles.recommendationCard, { backgroundColor: theme.colors.surface }]}>
@@ -1207,6 +1225,19 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     marginBottom: 16,
+  },
+  upgradePill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 999,
+  },
+  upgradePillText: {
+    marginLeft: 6,
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#FFFFFF',
   },
   trendViewSelector: {
     flexDirection: 'row',

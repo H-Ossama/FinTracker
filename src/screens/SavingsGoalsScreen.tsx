@@ -21,7 +21,6 @@ import { Goal } from '../types';
 import { GoalsService } from '../services/goalsService';
 import AddGoalModal from '../components/AddGoalModal';
 import { useInterstitialAd } from '../components/InterstitialAd';
-import AdBanner from '../components/AdBanner';
 import { useAds } from '../contexts/AdContext';
 
 const SavingsGoalsScreen = () => {
@@ -30,7 +29,7 @@ const SavingsGoalsScreen = () => {
   const { user } = useAuth();
   const navigation = useNavigation();
   const insets = useSafeAreaInsets();
-  const { adsEnabled, shouldShowBanner } = useAds();
+  const { adsEnabled } = useAds();
   const { showInterstitialIfNeeded, InterstitialComponent } = useInterstitialAd('SavingsGoals');
   const [goals, setGoals] = useState<Goal[]>([]);
   const [refreshing, setRefreshing] = useState(false);
@@ -47,9 +46,13 @@ const SavingsGoalsScreen = () => {
 
   useEffect(() => {
     loadGoals();
-    // Show interstitial ad on first visit (free users only)
-    showInterstitialIfNeeded();
   }, []);
+
+  useEffect(() => {
+    if (adsEnabled) {
+      showInterstitialIfNeeded();
+    }
+  }, [adsEnabled, showInterstitialIfNeeded]);
 
   const loadGoals = async () => {
     try {
@@ -313,13 +316,6 @@ const SavingsGoalsScreen = () => {
         editingGoal={editingGoal}
       />
 
-      {/* Banner Ad for free users */}
-      {adsEnabled && shouldShowBanner('SavingsGoals') && (
-        <View style={styles.bannerAdContainer}>
-          <AdBanner screenName="SavingsGoals" />
-        </View>
-      )}
-
       {/* Interstitial Ad Modal */}
       <InterstitialComponent />
     </View>
@@ -329,12 +325,6 @@ const SavingsGoalsScreen = () => {
 const createStyles = (theme: any) => StyleSheet.create({
   container: {
     flex: 1,
-  },
-  bannerAdContainer: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
   },
   darkHeader: {
     paddingHorizontal: 20,

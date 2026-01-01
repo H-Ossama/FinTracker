@@ -33,10 +33,13 @@ export const useInterstitialAd = (screenName: string) => {
   const isShowing = useRef(false);
 
   const showInterstitialIfNeeded = useCallback(() => {
+    // If ads are not enabled yet (e.g. subscription state still loading), do not
+    // consume the one-shot guard; this lets callers retry when ads become enabled.
+    if (!adsEnabled) return;
     if (hasChecked.current) return;
-    hasChecked.current = true;
+    if (!shouldShowInterstitial(screenName) || isShowing.current) return;
 
-    if (!adsEnabled || !shouldShowInterstitial(screenName) || isShowing.current) return;
+    hasChecked.current = true;
 
     isShowing.current = true;
 
@@ -50,7 +53,12 @@ export const useInterstitialAd = (screenName: string) => {
       isShowing.current = false;
     });
 
-    interstitial.addAdEventListener(AdEventType.ERROR, () => {
+    interstitial.addAdEventListener(AdEventType.ERROR, (error) => {
+      console.log('Interstitial ad failed to load/show:', {
+        screenName,
+        code: (error as any)?.code,
+        message: (error as any)?.message,
+      });
       try {
         unsubscribe();
       } catch {}

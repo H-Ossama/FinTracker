@@ -32,11 +32,13 @@ import { useNotification } from '../contexts/NotificationContext';
 import { useQuickActions } from '../contexts/QuickActionsContext';
 import { useAuth } from '../contexts/AuthContext';
 import { useSubscription } from '../contexts/SubscriptionContext';
+import { useAds } from '../contexts/AdContext';
 import { useScreenPerformance } from '../hooks/usePerformance';
 import borrowedMoneyService from '../services/borrowedMoneyService';
 import { useWalletVisibility } from '../hooks/useWalletVisibility';
 import { hybridDataService, HybridWallet, HybridTransaction } from '../services/hybridDataService';
 import { QuickAction } from '../services/quickActionsService';
+import { useInterstitialAd } from '../components/InterstitialAd';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -53,6 +55,8 @@ const HomeScreen = () => {
   const { formatWalletBalance, shouldShowBalance } = useWalletVisibility();
   const { user } = useAuth();
   const { isPro, planId } = useSubscription();
+  const { adsEnabled } = useAds();
+  const { showInterstitialIfNeeded, InterstitialComponent } = useInterstitialAd('AddExpense');
   const insets = useSafeAreaInsets();
   const [isBalanceVisible, setIsBalanceVisible] = useState(true);
   const [monthlyLimit, setMonthlyLimit] = useState(12000);
@@ -82,6 +86,13 @@ const HomeScreen = () => {
   // Animation values for swipeable balance
   const scaleAnim = useRef(new Animated.Value(1)).current;
   const hasAttemptedSampleSeed = useRef(false);
+
+  const openAddExpense = useCallback(() => {
+    if (adsEnabled) {
+      showInterstitialIfNeeded();
+    }
+    setShowAddExpenseModal(true);
+  }, [adsEnabled, showInterstitialIfNeeded]);
 
   useEffect(() => {
     let mounted = true;
@@ -126,10 +137,10 @@ const HomeScreen = () => {
 
   // Register quick actions
   useEffect(() => {
-    quickActions.setTriggerAddExpense(() => setShowAddExpenseModal(true));
+    quickActions.setTriggerAddExpense(openAddExpense);
     quickActions.setTriggerTransfer(() => setShowTransferModal(true));
     // Add wallet functionality is handled by WalletScreen
-  }, [quickActions]);
+  }, [quickActions, openAddExpense]);
 
   // Reload data when screen comes into focus (e.g., after bill payment)
   useFocusEffect(
@@ -928,7 +939,7 @@ const HomeScreen = () => {
             </View>
 
             <View style={styles.actionButtonsRowLight}>
-              <TouchableOpacity style={styles.primaryActionButton} onPress={() => setShowAddExpenseModal(true)}>
+              <TouchableOpacity style={styles.primaryActionButton} onPress={openAddExpense}>
                 <Text style={styles.primaryActionText}>{t('pay') || 'Pay'}</Text>
                 <View style={styles.primaryActionIcon}>
                   <Text style={styles.primaryActionIconText}>$</Text>
@@ -937,11 +948,11 @@ const HomeScreen = () => {
 
               <TouchableOpacity
                 style={styles.primaryActionButton}
-                onPress={() => (navigation as any).navigate('AddIncome')}
+                onPress={() => (navigation as any).navigate('BorrowedMoneyHistory')}
               >
-                <Text style={styles.primaryActionText}>{t('deposit') || 'Deposit'}</Text>
+                <Text style={styles.primaryActionText}>{t('borrowed_money') || 'Borrowed Money'}</Text>
                 <View style={styles.primaryActionIcon}>
-                  <Ionicons name="add" size={14} color="#111827" />
+                  <Ionicons name="people" size={14} color="#111827" />
                 </View>
               </TouchableOpacity>
             </View>
@@ -997,6 +1008,9 @@ const HomeScreen = () => {
         onClose={() => setShowAddExpenseModal(false)}
         onAddExpense={handleAddExpense}
       />
+
+      {/* Interstitial Ad Modal */}
+      <InterstitialComponent />
       <TransferModal
         visible={showTransferModal}
         onClose={() => setShowTransferModal(false)}

@@ -6,7 +6,6 @@ import {
   ScrollView,
   TouchableOpacity,
   Switch,
-  Alert,
   TextInput,
   Platform,
   Linking,
@@ -23,6 +22,7 @@ import { useTheme } from '../contexts/ThemeContext';
 import { useNavigation } from '@react-navigation/native';
 import { useNotification } from '../contexts/NotificationContext';
 import { useLocalization } from '../contexts/LocalizationContext';
+import { useDialog } from '../contexts/DialogContext';
 // Notification service will be lazy loaded
 
 interface NotificationPreferences {
@@ -53,6 +53,7 @@ const NotificationPreferencesScreen = () => {
   const navigation = useNavigation();
   const { addNotification } = useNotification();
   const { t } = useLocalization();
+  const dialog = useDialog();
   const insets = useSafeAreaInsets();
   const [preferences, setPreferences] = useState<NotificationPreferences>({
     enablePushNotifications: true,
@@ -112,23 +113,23 @@ const NotificationPreferencesScreen = () => {
   };
 
   const showComingSoon = (feature: string) => {
-    Alert.alert(
-      '🚧 ' + t('notificationPrefs.comingSoon', { feature }),
-      t('notificationPrefs.comingSoonDesc'),
-      [
+    dialog.show({
+      title: '🚧 ' + t('notificationPrefs.comingSoon', { feature }),
+      message: t('notificationPrefs.comingSoonDesc'),
+      buttons: [
         { text: t('ok'), style: 'default' },
-        { 
-          text: t('notificationPrefs.notifyMe'), 
+        {
+          text: t('notificationPrefs.notifyMe'),
           onPress: () => {
-            Alert.alert(
-              '🔔 ' + t('notificationPrefs.notificationSet'),
-              t('notificationPrefs.notifyWhenAvailable', { feature }),
-              [{ text: t('notificationPrefs.thanks') }]
-            );
-          }
-        }
-      ]
-    );
+            dialog.show({
+              title: '🔔 ' + t('notificationPrefs.notificationSet'),
+              message: t('notificationPrefs.notifyWhenAvailable', { feature }),
+              buttons: [{ text: t('notificationPrefs.thanks'), style: 'default' }],
+            });
+          },
+        },
+      ],
+    });
   };
 
   const handleEmailNotificationToggle = (value: boolean) => {
@@ -180,37 +181,38 @@ const NotificationPreferencesScreen = () => {
   const sendTestNotification = async () => {
     try {
       if (!preferences.enablePushNotifications) {
-        Alert.alert(
-          t('notificationPrefs.pushDisabled'),
-          t('notificationPrefs.enablePushFirst'),
-          [
-            { text: t('cancel'), style: 'cancel' },
-            { 
-              text: t('notificationPrefs.enable'), 
-              onPress: () => updatePreference('enablePushNotifications', true)
-            }
-          ]
-        );
+        dialog.confirm({
+          title: t('notificationPrefs.pushDisabled'),
+          message: t('notificationPrefs.enablePushFirst'),
+          cancelText: t('cancel'),
+          confirmText: t('notificationPrefs.enable'),
+          onConfirm: () => updatePreference('enablePushNotifications', true),
+        });
         return;
       }
 
       // Check if we're in quiet hours
       if (preferences.quietHours.enabled && isInQuietHours()) {
-        Alert.alert(
-          t('notificationPrefs.quietHoursActive'),
-          t('notificationPrefs.quietHoursTestWarning'),
-          [
-            { text: t('cancel'), style: 'cancel' },
-            { text: t('notificationPrefs.sendAnyway'), onPress: () => doSendTestNotification() }
-          ]
-        );
+        dialog.confirm({
+          title: t('notificationPrefs.quietHoursActive'),
+          message: t('notificationPrefs.quietHoursTestWarning'),
+          cancelText: t('cancel'),
+          confirmText: t('notificationPrefs.sendAnyway'),
+          onConfirm: () => doSendTestNotification(),
+        });
         return;
       }
 
       await doSendTestNotification();
     } catch (error) {
       console.error('Test notification error:', error);
-      Alert.alert(t('error'), t('notificationPrefs.testNotificationFailed'));
+      dialog.show({
+        title: t('error'),
+        message: t('notificationPrefs.testNotificationFailed'),
+        icon: 'alert-circle',
+        iconColor: '#EF4444',
+        buttons: [{ text: t('ok'), style: 'default' }],
+      });
     }
   };
 
@@ -221,11 +223,13 @@ const NotificationPreferencesScreen = () => {
       testNotificationText || t('notificationPrefs.testNotificationDefault'),
       2
     );
-    Alert.alert(
-      '✅ ' + t('notificationPrefs.testSent'),
-      t('notificationPrefs.testWillAppear'),
-      [{ text: t('notificationPrefs.gotIt') }]
-    );
+    dialog.show({
+      title: '✅ ' + t('notificationPrefs.testSent'),
+      message: t('notificationPrefs.testWillAppear'),
+      icon: 'checkmark-circle',
+      iconColor: '#22C55E',
+      buttons: [{ text: t('notificationPrefs.gotIt'), style: 'default' }],
+    });
   };
 
   const isInQuietHours = (): boolean => {
@@ -251,23 +255,19 @@ const NotificationPreferencesScreen = () => {
     if (key === 'enablePushNotifications' && value === true) {
       const permissionStatus = await Notifications.requestPermissionsAsync();
       if (!permissionStatus.granted) {
-        Alert.alert(
-          t('notificationPrefs.permissionRequired'),
-          t('notificationPrefs.enableInSettings'),
-          [
-            { text: t('cancel'), style: 'cancel' },
-            { 
-              text: t('notificationPrefs.openSettings'), 
-              onPress: () => {
-                if (Platform.OS === 'ios') {
-                  Linking.openURL('app-settings:');
-                } else {
-                  Alert.alert(t('settings'), t('notificationPrefs.androidSettingsInstructions'));
-                }
-              }
+        dialog.confirm({
+          title: t('notificationPrefs.permissionRequired'),
+          message: t('notificationPrefs.enableInSettings'),
+          cancelText: t('cancel'),
+          confirmText: t('notificationPrefs.openSettings'),
+          onConfirm: () => {
+            if (Platform.OS === 'ios') {
+              Linking.openURL('app-settings:');
+            } else {
+              dialog.alert(t('settings'), t('notificationPrefs.androidSettingsInstructions'), t('ok'));
             }
-          ]
-        );
+          },
+        });
         return;
       }
     }
@@ -288,9 +288,21 @@ const NotificationPreferencesScreen = () => {
     // Show feedback for certain changes
     if (key === 'enablePushNotifications') {
       if (value) {
-        Alert.alert('✅ ' + t('notificationPrefs.pushEnabledAlert'), t('notificationPrefs.willReceivePush'));
+        dialog.show({
+          title: '✅ ' + t('notificationPrefs.pushEnabledAlert'),
+          message: t('notificationPrefs.willReceivePush'),
+          icon: 'checkmark-circle',
+          iconColor: '#22C55E',
+          buttons: [{ text: t('ok'), style: 'default' }],
+        });
       } else {
-        Alert.alert('🔕 ' + t('notificationPrefs.pushDisabled'), t('notificationPrefs.wontReceivePush'));
+        dialog.show({
+          title: '🔕 ' + t('notificationPrefs.pushDisabled'),
+          message: t('notificationPrefs.wontReceivePush'),
+          icon: 'information-circle',
+          iconColor: '#64748B',
+          buttons: [{ text: t('ok'), style: 'default' }],
+        });
       }
     }
   };
@@ -427,7 +439,13 @@ const NotificationPreferencesScreen = () => {
         // Ensure notification permissions are still valid
         const permissionStatus = await Notifications.getPermissionsAsync();
         if (!permissionStatus.granted) {
-          Alert.alert('Warning', 'Push notifications are enabled but system permissions are not granted.');
+          dialog.show({
+            title: 'Warning',
+            message: 'Push notifications are enabled but system permissions are not granted.',
+            icon: 'warning',
+            iconColor: '#F59E0B',
+            buttons: [{ text: 'OK', style: 'default' }],
+          });
         }
       }
       
@@ -442,16 +460,19 @@ const NotificationPreferencesScreen = () => {
         .map(([frequency, _]) => frequency)
         .join(', ');
 
-      Alert.alert(
-        '✅ Preferences Saved!',
-        `Your notification settings have been updated:\n\n` +
-        `📱 Push Notifications: ${preferences.enablePushNotifications ? 'Enabled' : 'Disabled'}\n` +
-        `📧 Email Notifications: ${preferences.enableEmailNotifications ? 'Enabled' : 'Disabled'}\n` +
-        `🌙 Quiet Hours: ${preferences.quietHours.enabled ? 'Enabled' : 'Disabled'}\n` +
-        `📂 Active Categories: ${enabledCategories || 'None'}\n` +
-        `📊 Report Frequency: ${enabledReports || 'None'}`,
-        [{ text: 'Perfect!' }]
-      );
+      dialog.show({
+        title: '✅ Preferences Saved!',
+        message:
+          `Your notification settings have been updated:\n\n` +
+          `📱 Push Notifications: ${preferences.enablePushNotifications ? 'Enabled' : 'Disabled'}\n` +
+          `📧 Email Notifications: ${preferences.enableEmailNotifications ? 'Enabled' : 'Disabled'}\n` +
+          `🌙 Quiet Hours: ${preferences.quietHours.enabled ? 'Enabled' : 'Disabled'}\n` +
+          `📂 Active Categories: ${enabledCategories || 'None'}\n` +
+          `📊 Report Frequency: ${enabledReports || 'None'}`,
+        icon: 'checkmark-circle',
+        iconColor: '#22C55E',
+        buttons: [{ text: 'Perfect!', style: 'default' }],
+      });
       
       // Add notification to context to show it was saved
       addNotification({
@@ -463,14 +484,16 @@ const NotificationPreferencesScreen = () => {
       
     } catch (error) {
       console.error('Error saving preferences:', error);
-      Alert.alert(
-        '❌ Save Failed',
-        'Failed to save your preferences. Please check your connection and try again.',
-        [
+      dialog.show({
+        title: '❌ Save Failed',
+        message: 'Failed to save your preferences. Please check your connection and try again.',
+        icon: 'alert-circle',
+        iconColor: '#EF4444',
+        buttons: [
           { text: 'Cancel', style: 'cancel' },
-          { text: 'Retry', onPress: () => savePreferences() }
-        ]
-      );
+          { text: 'Retry', onPress: () => savePreferences(), style: 'default' },
+        ],
+      });
     } finally {
       setIsLoading(false);
     }
@@ -478,45 +501,47 @@ const NotificationPreferencesScreen = () => {
 
   // Add function to reset preferences
   const resetPreferences = () => {
-    Alert.alert(
-      '🔄 Reset Preferences',
-      'Are you sure you want to reset all notification preferences to default values?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Reset',
-          style: 'destructive',
-          onPress: async () => {
-            const defaultPrefs: NotificationPreferences = {
-              enablePushNotifications: true,
-              enableEmailNotifications: false,
-              quietHours: {
-                enabled: false,
-                startTime: '22:00',
-                endTime: '08:00',
-              },
-              categories: {
-                transactions: true,
-                budgets: true,
-                goals: true,
-                reminders: true,
-                alerts: true,
-              },
-              frequency: {
-                dailyDigest: false,
-                weeklyReport: true,
-                monthlyReport: true,
-              },
-              testNotifications: true,
-            };
-            
-            setPreferences(defaultPrefs);
-            await AsyncStorage.setItem('notificationPreferences', JSON.stringify(defaultPrefs));
-            Alert.alert('✅ Reset Complete', 'All notification preferences have been reset to default values.');
-          }
-        }
-      ]
-    );
+    dialog.confirm({
+      title: '🔄 Reset Preferences',
+      message: 'Are you sure you want to reset all notification preferences to default values?',
+      cancelText: 'Cancel',
+      confirmText: 'Reset',
+      destructive: true,
+      onConfirm: async () => {
+        const defaultPrefs: NotificationPreferences = {
+          enablePushNotifications: true,
+          enableEmailNotifications: false,
+          quietHours: {
+            enabled: false,
+            startTime: '22:00',
+            endTime: '08:00',
+          },
+          categories: {
+            transactions: true,
+            budgets: true,
+            goals: true,
+            reminders: true,
+            alerts: true,
+          },
+          frequency: {
+            dailyDigest: false,
+            weeklyReport: true,
+            monthlyReport: true,
+          },
+          testNotifications: true,
+        };
+
+        setPreferences(defaultPrefs);
+        await AsyncStorage.setItem('notificationPreferences', JSON.stringify(defaultPrefs));
+        dialog.show({
+          title: '✅ Reset Complete',
+          message: 'All notification preferences have been reset to default values.',
+          icon: 'checkmark-circle',
+          iconColor: '#22C55E',
+          buttons: [{ text: 'OK', style: 'default' }],
+        });
+      },
+    });
   };
 
   return (

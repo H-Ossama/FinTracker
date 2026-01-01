@@ -5,7 +5,6 @@ import {
   StyleSheet,
   ScrollView,
   TouchableOpacity,
-  Alert,
   RefreshControl,
   ActivityIndicator,
   StatusBar,
@@ -25,6 +24,7 @@ import { useQuickActions } from '../contexts/QuickActionsContext';
 import { useAuth } from '../contexts/AuthContext';
 import { hybridDataService } from '../services/hybridDataService';
 import { withOptimizedMemo } from '../utils/componentOptimization';
+import { useDialog } from '../contexts/DialogContext';
 
 const WalletScreen = () => {
   const { theme } = useTheme();
@@ -34,6 +34,7 @@ const WalletScreen = () => {
   const navigation = useNavigation();
   const { user } = useAuth();
   const insets = useSafeAreaInsets();
+  const dialog = useDialog();
 
   const PREFERRED_WALLET_KEY = 'preferredWalletId';
   
@@ -70,7 +71,7 @@ const WalletScreen = () => {
       await calculateMonthlySpending();
     } catch (error) {
       console.error('Error loading wallets:', error);
-      Alert.alert(t('error'), t('wallet_screen_error_loading'));
+      dialog.error(t('error'), t('wallet_screen_error_loading'));
     } finally {
       setLoading(false);
     }
@@ -136,10 +137,10 @@ const WalletScreen = () => {
       // Refresh the wallet list
       await loadWallets();
       
-      Alert.alert(t('success'), t('wallet_screen_success_created'));
+      dialog.success(t('success'), t('wallet_screen_success_created'));
     } catch (error) {
       console.error('Error creating wallet:', error);
-      Alert.alert(t('error'), t('wallet_screen_error_create'));
+      dialog.error(t('error'), t('wallet_screen_error_create'));
     }
   };
 
@@ -150,7 +151,7 @@ const WalletScreen = () => {
       const targetWallet = wallets.find(w => w.id === targetWalletId) || selectedWalletForMoney;
       
       if (!targetWalletId || !targetWallet) {
-        Alert.alert(t('error'), t('wallet_screen_select_wallet_error'));
+        dialog.error(t('error'), t('wallet_screen_select_wallet_error'));
         return;
       }
 
@@ -173,13 +174,16 @@ const WalletScreen = () => {
       // Refresh the wallet list to show updated balance
       await loadWallets();
       
-      Alert.alert(t('success'), t('wallet_screen_success_money_added', {
-        amount: formatCurrency(moneyData.amount),
-        wallet: targetWallet.name
-      }));
+      dialog.success(
+        t('success'),
+        t('wallet_screen_success_money_added', {
+          amount: formatCurrency(moneyData.amount),
+          wallet: targetWallet.name,
+        })
+      );
     } catch (error) {
       console.error('Error adding money:', error);
-      Alert.alert(t('error'), t('wallet_screen_error_add_money'));
+      dialog.error(t('error'), t('wallet_screen_error_add_money'));
     }
   };
 
@@ -200,41 +204,36 @@ const WalletScreen = () => {
         })
       : t('wallet_screen_delete_no_balance', { name: walletName });
 
-    Alert.alert(
-      t('wallet_screen_delete_wallet'),
-      confirmationMessage,
-      [
-        {
-          text: t('cancel'),
-          style: 'cancel',
-        },
-        {
-          text: t('delete'),
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              console.log('Deleting wallet:', walletId);
-              await hybridDataService.deleteWallet(walletId);
-              console.log('Wallet deleted successfully');
+    dialog.confirm({
+      title: t('wallet_screen_delete_wallet'),
+      message: confirmationMessage,
+      destructive: true,
+      confirmText: t('delete'),
+      cancelText: t('cancel'),
+      onConfirm: () => {
+        void (async () => {
+          try {
+            console.log('Deleting wallet:', walletId);
+            await hybridDataService.deleteWallet(walletId);
+            console.log('Wallet deleted successfully');
 
-              // If deleted wallet was preferred, clear preference.
-              if (preferredWalletId && preferredWalletId === walletId) {
-                const AsyncStorage = (await import('@react-native-async-storage/async-storage')).default;
-                await AsyncStorage.removeItem(PREFERRED_WALLET_KEY);
-              }
-              
-              // Refresh the wallet list
-              await loadWallets();
-              
-              Alert.alert(t('success'), t('wallet_screen_success_deleted'));
-            } catch (error) {
-              console.error('Error deleting wallet:', error);
-              Alert.alert(t('error'), t('wallet_screen_error_delete'));
+            // If deleted wallet was preferred, clear preference.
+            if (preferredWalletId && preferredWalletId === walletId) {
+              const AsyncStorage = (await import('@react-native-async-storage/async-storage')).default;
+              await AsyncStorage.removeItem(PREFERRED_WALLET_KEY);
             }
-          },
-        },
-      ]
-    );
+
+            // Refresh the wallet list
+            await loadWallets();
+
+            dialog.success(t('success'), t('wallet_screen_success_deleted'));
+          } catch (error) {
+            console.error('Error deleting wallet:', error);
+            dialog.error(t('error'), t('wallet_screen_error_delete'));
+          }
+        })();
+      },
+    });
   };
 
   const getWalletTransactions = async (walletId: string) => {
@@ -252,10 +251,13 @@ const WalletScreen = () => {
       const AsyncStorage = (await import('@react-native-async-storage/async-storage')).default;
       await AsyncStorage.setItem(PREFERRED_WALLET_KEY, walletId);
       setWallets(prev => prev.map(w => ({ ...w, isPreferred: w.id === walletId })));
-      Alert.alert(t('success'), t('wallet set as preferred, this is the default wallet that will be displayed first in Dashboard'));
+      dialog.success(
+        t('success'),
+        t('wallet set as preferred, this is the default wallet that will be displayed first in Dashboard')
+      );
     } catch (error) {
       console.error('Error setting preferred wallet:', error);
-      Alert.alert(t('error'), t('wallet_screen_error_update'));
+      dialog.error(t('error'), t('wallet_screen_error_update'));
     }
   };
 
@@ -428,11 +430,22 @@ const WalletScreen = () => {
                 </View>
                 <Text style={[styles.quickActionText, { color: theme.colors.text }]}>{t('transfer')}</Text>
               </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.quickActionButton}
+                onPress={() => (navigation as any).navigate('AddIncome')}
+              >
+                <View style={[styles.quickActionIcon, { backgroundColor: '#F0FDF4' }]}>
+                  <Ionicons name="arrow-down" size={20} color="#22C55E" />
+                </View>
+                <Text style={[styles.quickActionText, { color: theme.colors.text }]}>{t('income') || 'Income'}</Text>
+              </TouchableOpacity>
+
               <TouchableOpacity 
                 style={styles.quickActionButton}
                 onPress={() => {
                   if (wallets.length === 0) {
-                    Alert.alert(t('wallet_screen_no_wallets'), t('wallet_screen_no_wallets_add_money'));
+                    dialog.alert(t('wallet_screen_no_wallets'), t('wallet_screen_no_wallets_add_money'));
                   } else {
                     setSelectedWalletForMoney(null);
                     setShowAddMoneyModal(true);

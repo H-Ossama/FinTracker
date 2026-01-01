@@ -13,7 +13,7 @@ import { NavigationContainer } from '@react-navigation/native';
 import { createStackNavigator } from '@react-navigation/stack';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
-import { View, Text, ActivityIndicator, StyleSheet, InteractionManager, Animated, Easing, Image } from 'react-native';
+import { View, Text, ActivityIndicator, InteractionManager, Animated, Easing, Image, StyleSheet } from 'react-native';
 
 // Import navigation loading system
 import { NavigationLoadingProvider, useNavigationLoading } from './src/contexts/NavigationLoadingContext';
@@ -39,6 +39,7 @@ const createLazyScreen = (importFn: () => Promise<any>, screenName: string) => {
 
 // Lazy load screens with automatic loading wrappers
 const AddIncomeScreen = createLazyScreen(() => import('./src/screens/AddIncomeScreen'), 'AddIncome');
+const AddBorrowedMoneyScreen = createLazyScreen(() => import('./src/screens/AddBorrowedMoneyScreen'), 'AddBorrowedMoney');
 const BorrowedMoneyHistoryScreen = createLazyScreen(() => import('./src/screens/BorrowedMoneyHistoryScreen'), 'BorrowedMoneyHistory');
 const TransactionsHistoryScreen = createLazyScreen(() => import('./src/screens/TransactionsHistoryScreen'), 'TransactionsHistory');
 const NotificationCenterScreen = createLazyScreen(() => import('./src/screens/NotificationCenterScreen'), 'NotificationCenter');
@@ -72,8 +73,10 @@ import { QuickActionsProvider } from './src/contexts/QuickActionsContext';
 import { SubscriptionProvider } from './src/contexts/SubscriptionContext';
 import { AnalyticsRefreshProvider } from './src/contexts/AnalyticsRefreshContext';
 import { AdProvider } from './src/contexts/AdContext';
+import { DialogProvider } from './src/contexts/DialogContext';
 import ProUpgradeModal from './src/components/ProUpgradeModal';
 import AppOpenAd from './src/components/AppOpenAd';
+import AdBanner from './src/components/AdBanner';
 import { hybridDataService, AppInitResult } from './src/services/hybridDataService';
 import AppLockService from './src/services/appLockService';
 import BatteryOptimizer from './src/utils/batteryOptimizer';
@@ -81,6 +84,8 @@ import BatteryOptimizer from './src/utils/batteryOptimizer';
 const SyncReminderBanner = lazy(() => import('./src/components/SyncReminderBanner'));
 const SyncProgressModal = lazy(() => import('./src/components/SyncProgressModal'));
 import { navigationRef, onNavigationReady } from './src/navigation/navigationService';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useAds } from './src/contexts/AdContext';
 
 const Stack = createStackNavigator();
 
@@ -180,6 +185,9 @@ const AppNavigator = React.memo(() => {
   const { isDark, theme } = useTheme();
   const { isAuthenticated, isLoading: authLoading, accessDenied } = useAuth();
   const { startLoading, isScreenVisited } = useNavigationLoading();
+  const insets = useSafeAreaInsets();
+  const { adsEnabled, shouldShowBanner, bannerHeight } = useAds();
+  const [currentRouteName, setCurrentRouteName] = useState<string>('TabNavigator');
   const [isAppLocked, setIsAppLocked] = useState(false);
   const [appLockInitialized, setAppLockInitialized] = useState(false);
   const isMounted = useRef(false);
@@ -252,8 +260,14 @@ const AppNavigator = React.memo(() => {
     }
 
     const currentRouteName = navigationRef.getCurrentRoute()?.name;
+    if (currentRouteName) {
+      setCurrentRouteName(currentRouteName);
+    }
     previousRouteName.current = currentRouteName;
   }, []);
+
+  const bannerVisible = adsEnabled && shouldShowBanner(currentRouteName);
+  const bannerOffset = bannerVisible ? (bannerHeight + insets.bottom) : 0;
 
   useEffect(() => {
     if (isAuthenticated) {
@@ -300,7 +314,13 @@ const AppNavigator = React.memo(() => {
       <TouchActivityWrapper>
         <NavigationContainer 
           ref={navigationRef} 
-          onReady={onNavigationReady}
+          onReady={() => {
+            onNavigationReady();
+            const routeName = navigationRef.getCurrentRoute()?.name;
+            if (routeName) {
+              setCurrentRouteName(routeName);
+            }
+          }}
           onStateChange={handleNavigationStateChange}
           theme={{
             dark: isDark,
@@ -314,237 +334,258 @@ const AppNavigator = React.memo(() => {
             },
           }}
         >
-          <StatusBar style={isDark ? "light" : "dark"} />
-          <Stack.Navigator 
-            screenOptions={{ 
-              headerShown: false,
-              animationEnabled: true,
-              gestureEnabled: true,
-              cardStyle: { backgroundColor: 'transparent' },
-              // Faster, smoother slide animation
-              transitionSpec: {
-                open: {
-                  animation: 'timing',
-                  config: {
-                    duration: 200,
+          <View style={{ flex: 1, paddingBottom: bannerOffset }}>
+            <StatusBar style={isDark ? "light" : "dark"} />
+            <Stack.Navigator 
+              screenOptions={{ 
+                headerShown: false,
+                animationEnabled: true,
+                gestureEnabled: true,
+                cardStyle: { backgroundColor: 'transparent' },
+                // Faster, smoother slide animation
+                transitionSpec: {
+                  open: {
+                    animation: 'timing',
+                    config: {
+                      duration: 200,
+                    },
+                  },
+                  close: {
+                    animation: 'timing',
+                    config: {
+                      duration: 200,
+                    },
                   },
                 },
-                close: {
-                  animation: 'timing',
-                  config: {
-                    duration: 200,
-                  },
+                cardStyleInterpolator: ({ current, layouts }) => {
+                  return {
+                    cardStyle: {
+                      opacity: current.progress.interpolate({
+                        inputRange: [0, 0.5, 1],
+                        outputRange: [0, 0.8, 1],
+                      }),
+                      transform: [
+                        {
+                          translateX: current.progress.interpolate({
+                            inputRange: [0, 1],
+                            outputRange: [layouts.screen.width * 0.3, 0],
+                          }),
+                        },
+                      ],
+                    },
+                  };
                 },
-              },
-              cardStyleInterpolator: ({ current, layouts }) => {
-                return {
-                  cardStyle: {
-                    opacity: current.progress.interpolate({
-                      inputRange: [0, 0.5, 1],
-                      outputRange: [0, 0.8, 1],
-                    }),
-                    transform: [
-                      {
-                        translateX: current.progress.interpolate({
-                          inputRange: [0, 1],
-                          outputRange: [layouts.screen.width * 0.3, 0],
-                        }),
-                      },
-                    ],
-                  },
-                };
-              },
-            }}
-          >
-            {isAuthenticated ? (
-              // Authenticated user screens
-              <>
-                <Stack.Screen name="TabNavigator" component={SwipeableBottomTabNavigator} />
-                <Stack.Screen name="AddIncome" component={AddIncomeScreen} />
-                <Stack.Screen 
-                  name="BorrowedMoneyHistory" 
-                  component={BorrowedMoneyHistoryScreen}
-                  options={{ 
-                    headerShown: false,
-                  }}
-                />
-                <Stack.Screen 
-                  name="TransactionsHistory" 
-                  component={TransactionsHistoryScreen}
-                  options={{ 
-                    headerShown: false,
-                  }}
-                />
-                <Stack.Screen 
-                  name="NotificationCenter" 
-                  component={NotificationCenterScreen}
-                  options={{ 
-                    headerShown: false,
-                    presentation: 'modal',
-                  }}
-                />
-                <Stack.Screen 
-                  name="NotificationPreferences" 
-                  component={NotificationPreferencesScreen}
-                  options={{ 
-                    headerShown: false,
-                    presentation: 'modal',
-                    gestureEnabled: false,
-                  }}
-                />
-                <Stack.Screen 
-                  name="UserProfile" 
-                  component={UserProfileScreen}
-                  options={{ 
-                    headerShown: false,
-                    presentation: 'modal',
-                    gestureEnabled: false,
-                  }}
-                />
-                <Stack.Screen 
-                  name="Subscription" 
-                  component={SubscriptionScreen}
-                  options={{ 
-                    headerShown: false,
-                    presentation: 'modal',
-                    gestureEnabled: true,
-                  }}
-                />
-                <Stack.Screen 
-                  name="SavingsGoals" 
-                  component={SavingsGoalsScreen}
-                  options={{ 
-                    headerShown: false,
-                  }}
-                />
-                <Stack.Screen 
-                  name="QuickSettings" 
-                  component={QuickSettingsScreen}
-                  options={{ 
-                    headerShown: false,
-                    presentation: 'modal',
-                    gestureEnabled: false,
-                  }}
-                />
-                <Stack.Screen 
-                  name="QuickActionsSettings" 
-                  component={QuickActionsSettingsScreen}
-                  options={{ 
-                    headerShown: false,
-                    presentation: 'modal',
-                    gestureEnabled: false,
-                  }}
-                />
-                <Stack.Screen 
-                  name="AppLockSettings" 
-                  component={AppLockSettingsScreen}
-                  options={{ 
-                    headerShown: false,
-                    presentation: 'modal',
-                  }}
-                />
-                <Stack.Screen 
-                  name="PinSetup" 
-                  component={PinSetupScreen}
-                  options={{ 
-                    headerShown: false,
-                    presentation: 'modal',
-                  }}
-                />
-                <Stack.Screen 
-                  name="BillsReminder" 
-                  component={BillsTrackerScreen}
-                  options={{ 
-                    headerShown: false,
-                  }}
-                />
-                <Stack.Screen 
-                  name="BudgetPlanner" 
-                  component={BudgetPlannerScreen}
-                  options={{ 
-                    headerShown: false,
-                  }}
-                />
-                <Stack.Screen 
-                  name="Reminders" 
-                  component={RemindersScreen}
-                  options={{ 
-                    headerShown: false,
-                  }}
-                />
-                <Stack.Screen 
-                  name="CloudBackup" 
-                  component={CloudBackupScreen}
-                  options={{ 
-                    headerShown: false,
-                  }}
-                />
-                <Stack.Screen 
-                  name="MonthlyReports" 
-                  component={MonthlyReportsScreen}
-                  options={{ 
-                    headerShown: false,
-                  }}
-                />
-                <Stack.Screen 
-                  name="SyncTest" 
-                  component={SyncTestScreen}
-                  options={{ 
-                    headerShown: false,
-                  }}
-                />
-                <Stack.Screen 
-                  name="DevPINEntry" 
-                  component={DevPINScreen}
-                  options={{ 
-                    headerShown: false,
-                    presentation: 'modal',
-                    gestureEnabled: false,
-                  }}
-                />
-                <Stack.Screen 
-                  name="DevelopmentTools" 
-                  component={DevelopmentToolsScreen}
-                  options={{ 
-                    headerShown: false,
-                    presentation: 'modal',
-                  }}
-                />
-                <Stack.Screen 
-                  name="PrivacyPolicy" 
-                  component={PrivacyPolicyScreen}
-                  options={{ 
-                    headerShown: false,
-                    presentation: 'modal',
-                    gestureEnabled: false,
-                  }}
-                />
-                <Stack.Screen 
-                  name="TermsOfUse" 
-                  component={TermsOfUseScreen}
-                  options={{ 
-                    headerShown: false,
-                    presentation: 'modal',
-                    gestureEnabled: false,
-                  }}
-                />
-              </>
-            ) : (
-              // Unauthenticated user screens
-              <>
-                <Stack.Screen 
-                  name="SignIn" 
-                  component={SignInScreen}
-                  options={{ headerShown: false }}
-                />
-                <Stack.Screen 
-                  name="SignUp" 
-                  component={SignUpScreen}
-                  options={{ headerShown: false }}
-                />
-              </>
-            )}
-          </Stack.Navigator>
+              }}
+            >
+              {isAuthenticated ? (
+                // Authenticated user screens
+                <>
+                  <Stack.Screen name="TabNavigator" component={SwipeableBottomTabNavigator} />
+                  <Stack.Screen name="AddIncome" component={AddIncomeScreen} />
+                  <Stack.Screen name="AddBorrowedMoney" component={AddBorrowedMoneyScreen} />
+                  <Stack.Screen 
+                    name="BorrowedMoneyHistory" 
+                    component={BorrowedMoneyHistoryScreen}
+                    options={{ 
+                      headerShown: false,
+                    }}
+                  />
+                  <Stack.Screen 
+                    name="TransactionsHistory" 
+                    component={TransactionsHistoryScreen}
+                    options={{ 
+                      headerShown: false,
+                    }}
+                  />
+                  <Stack.Screen 
+                    name="NotificationCenter" 
+                    component={NotificationCenterScreen}
+                    options={{ 
+                      headerShown: false,
+                      presentation: 'modal',
+                    }}
+                  />
+                  <Stack.Screen 
+                    name="NotificationPreferences" 
+                    component={NotificationPreferencesScreen}
+                    options={{ 
+                      headerShown: false,
+                      presentation: 'modal',
+                      gestureEnabled: false,
+                    }}
+                  />
+                  <Stack.Screen 
+                    name="UserProfile" 
+                    component={UserProfileScreen}
+                    options={{ 
+                      headerShown: false,
+                      presentation: 'modal',
+                      gestureEnabled: false,
+                    }}
+                  />
+                  <Stack.Screen 
+                    name="Subscription" 
+                    component={SubscriptionScreen}
+                    options={{ 
+                      headerShown: false,
+                      presentation: 'modal',
+                      gestureEnabled: true,
+                    }}
+                  />
+                  <Stack.Screen 
+                    name="SavingsGoals" 
+                    component={SavingsGoalsScreen}
+                    options={{ 
+                      headerShown: false,
+                    }}
+                  />
+                  <Stack.Screen 
+                    name="QuickSettings" 
+                    component={QuickSettingsScreen}
+                    options={{ 
+                      headerShown: false,
+                      presentation: 'modal',
+                      gestureEnabled: false,
+                    }}
+                  />
+                  <Stack.Screen 
+                    name="QuickActionsSettings" 
+                    component={QuickActionsSettingsScreen}
+                    options={{ 
+                      headerShown: false,
+                      presentation: 'modal',
+                      gestureEnabled: false,
+                    }}
+                  />
+                  <Stack.Screen 
+                    name="AppLockSettings" 
+                    component={AppLockSettingsScreen}
+                    options={{ 
+                      headerShown: false,
+                      presentation: 'modal',
+                    }}
+                  />
+                  <Stack.Screen 
+                    name="PinSetup" 
+                    component={PinSetupScreen}
+                    options={{ 
+                      headerShown: false,
+                      presentation: 'modal',
+                    }}
+                  />
+                  <Stack.Screen 
+                    name="BillsReminder" 
+                    component={BillsTrackerScreen}
+                    options={{ 
+                      headerShown: false,
+                    }}
+                  />
+                  <Stack.Screen 
+                    name="BudgetPlanner" 
+                    component={BudgetPlannerScreen}
+                    options={{ 
+                      headerShown: false,
+                    }}
+                  />
+                  <Stack.Screen 
+                    name="Reminders" 
+                    component={RemindersScreen}
+                    options={{ 
+                      headerShown: false,
+                    }}
+                  />
+                  <Stack.Screen 
+                    name="CloudBackup" 
+                    component={CloudBackupScreen}
+                    options={{ 
+                      headerShown: false,
+                    }}
+                  />
+                  <Stack.Screen 
+                    name="MonthlyReports" 
+                    component={MonthlyReportsScreen}
+                    options={{ 
+                      headerShown: false,
+                    }}
+                  />
+                  <Stack.Screen 
+                    name="SyncTest" 
+                    component={SyncTestScreen}
+                    options={{ 
+                      headerShown: false,
+                    }}
+                  />
+                  <Stack.Screen 
+                    name="DevPINEntry" 
+                    component={DevPINScreen}
+                    options={{ 
+                      headerShown: false,
+                      presentation: 'modal',
+                      gestureEnabled: false,
+                    }}
+                  />
+                  <Stack.Screen 
+                    name="DevelopmentTools" 
+                    component={DevelopmentToolsScreen}
+                    options={{ 
+                      headerShown: false,
+                      presentation: 'modal',
+                    }}
+                  />
+                  <Stack.Screen 
+                    name="PrivacyPolicy" 
+                    component={PrivacyPolicyScreen}
+                    options={{ 
+                      headerShown: false,
+                      presentation: 'modal',
+                      gestureEnabled: false,
+                    }}
+                  />
+                  <Stack.Screen 
+                    name="TermsOfUse" 
+                    component={TermsOfUseScreen}
+                    options={{ 
+                      headerShown: false,
+                      presentation: 'modal',
+                      gestureEnabled: false,
+                    }}
+                  />
+                </>
+              ) : (
+                // Unauthenticated user screens
+                <>
+                  <Stack.Screen 
+                    name="SignIn" 
+                    component={SignInScreen}
+                    options={{ headerShown: false }}
+                  />
+                  <Stack.Screen 
+                    name="SignUp" 
+                    component={SignUpScreen}
+                    options={{ headerShown: false }}
+                  />
+                </>
+              )}
+            </Stack.Navigator>
+          </View>
+
+          {bannerVisible && (
+            <View
+              pointerEvents="box-none"
+              style={{
+                position: 'absolute',
+                left: 0,
+                right: 0,
+                bottom: 0,
+                paddingBottom: insets.bottom,
+                backgroundColor: isDark ? '#1C1C1E' : '#F5F5F5',
+                borderTopWidth: 1,
+                borderTopColor: isDark ? '#38383A' : '#E0E0E0',
+              }}
+            >
+              <AdBanner screenName={currentRouteName} />
+            </View>
+          )}
         </NavigationContainer>
         <NavigationLoadingOverlay />
         {/* Onboarding Tutorial - shown after first login */}
@@ -731,41 +772,43 @@ export default function App() {
       <LocalizationProvider>
         <ThemeProvider>
           <NavigationLoadingProvider>
-            <SubscriptionProvider>
-              <AdProvider>
-                <AnalyticsRefreshProvider>
-                  <AuthProvider>
-                    <NotificationProvider>
-                      <QuickActionsProvider>
-                        {isLoading ? (
-                        <LoadingScreen />
-                        ) : !initResult?.success ? (
-                          <ErrorScreen 
-                            error={initResult?.error || 'Unknown error'} 
-                            onRetry={initializeApp}
-                          />
-                        ) : (
-                          <View style={styles.appContainer}>
-                            {/* App Open Ad - shown on first launch for free users */}
-                            <AppOpenAd onComplete={() => console.log('App open ad completed')} />
-                            <AppNavigator />
-                            {/* Lazy load sync reminder banner - positioned after navigator to overlay properly */}
-                            <Suspense fallback={null}>
-                              <SyncReminderBanner onSyncComplete={handleSyncComplete} />
-                            </Suspense>
-                            <Suspense fallback={null}>
-                              <SyncProgressModal />
-                            </Suspense>
-                            {/* Pro upgrade modal */}
-                            <ProUpgradeModal />
-                          </View>
-                        )}
-                      </QuickActionsProvider>
-                    </NotificationProvider>
-                  </AuthProvider>
-                </AnalyticsRefreshProvider>
-              </AdProvider>
-            </SubscriptionProvider>
+            <AuthProvider>
+              <SubscriptionProvider>
+                <AdProvider>
+                  <DialogProvider>
+                    <AnalyticsRefreshProvider>
+                      <NotificationProvider>
+                        <QuickActionsProvider>
+                          {isLoading ? (
+                          <LoadingScreen />
+                          ) : !initResult?.success ? (
+                            <ErrorScreen 
+                              error={initResult?.error || 'Unknown error'} 
+                              onRetry={initializeApp}
+                            />
+                          ) : (
+                            <View style={styles.appContainer}>
+                              {/* App Open Ad - shown on first launch for free users */}
+                              <AppOpenAd onComplete={() => console.log('App open ad completed')} />
+                              <AppNavigator />
+                              {/* Lazy load sync reminder banner - positioned after navigator to overlay properly */}
+                              <Suspense fallback={null}>
+                                <SyncReminderBanner onSyncComplete={handleSyncComplete} />
+                              </Suspense>
+                              <Suspense fallback={null}>
+                                <SyncProgressModal />
+                              </Suspense>
+                              {/* Pro upgrade modal */}
+                              <ProUpgradeModal />
+                            </View>
+                          )}
+                        </QuickActionsProvider>
+                      </NotificationProvider>
+                    </AnalyticsRefreshProvider>
+                  </DialogProvider>
+                </AdProvider>
+              </SubscriptionProvider>
+            </AuthProvider>
           </NavigationLoadingProvider>
         </ThemeProvider>
       </LocalizationProvider>

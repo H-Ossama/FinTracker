@@ -5,7 +5,6 @@ import {
   StyleSheet,
   TouchableOpacity,
   FlatList,
-  Alert,
   RefreshControl,
   StatusBar,
 } from 'react-native';
@@ -16,6 +15,7 @@ import { useIsFocused, useNavigation, useRoute } from '@react-navigation/native'
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useTheme } from '../contexts/ThemeContext';
 import { useNotification } from '../contexts/NotificationContext';
+import { useDialog } from '../contexts/DialogContext';
 // Services will be lazy loaded when needed
 import AddReminderModal from '../components/AddReminderModal';
 import ReminderCard from '../components/ReminderCard';
@@ -149,6 +149,7 @@ export default function RemindersScreen() {
   const route = useRoute<any>();
   const isFocused = useIsFocused();
   const insets = useSafeAreaInsets();
+  const dialog = useDialog();
   const [reminders, setReminders] = useState<Reminder[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -216,17 +217,23 @@ export default function RemindersScreen() {
         }
       } else {
         // Show alert explaining they need to enable permissions in settings
-        Alert.alert(
-          'Notification Permission Required',
-          'To receive reminder notifications, please enable notifications for this app in your device settings.',
-          [
+        dialog.show({
+          title: 'Notification Permission Required',
+          message: 'To receive reminder notifications, please enable notifications for this app in your device settings.',
+          icon: 'notifications-off',
+          iconColor: '#F59E0B',
+          buttons: [
             { text: 'Cancel', style: 'cancel' },
-            { text: 'Open Settings', onPress: () => {
-              // This would open device settings - implementation depends on platform
-              console.log('Should open device settings');
-            }},
-          ]
-        );
+            {
+              text: 'Open Settings',
+              style: 'default',
+              onPress: () => {
+                // This would open device settings - implementation depends on platform
+                console.log('Should open device settings');
+              },
+            },
+          ],
+        });
         return false;
       }
     }
@@ -238,7 +245,7 @@ export default function RemindersScreen() {
     try {
       const hasPermissions = await ensureNotificationPermissions();
       if (!hasPermissions) {
-        Alert.alert('Permission Denied', 'Cannot send test notification without permissions');
+        dialog.warning('Permission Denied', 'Cannot send test notification without permissions');
         return;
       }
 
@@ -274,7 +281,7 @@ export default function RemindersScreen() {
 
     } catch (error) {
       console.error('Error in test notifications:', error);
-      Alert.alert('Error', 'Failed to send test notifications');
+      dialog.error('Error', 'Failed to send test notifications');
     }
   };
 
@@ -473,17 +480,15 @@ export default function RemindersScreen() {
 
       // If it's set to auto-create transaction, show confirmation
       if (reminder.autoCreateTransaction && reminder.amount && reminder.transactionType) {
-        Alert.alert(
-          'Create Transaction?',
-          `Would you like to create a ${reminder.transactionType.toLowerCase()} transaction for $${reminder.amount}?`,
-          [
-            { text: 'No', style: 'cancel' },
-            {
-              text: 'Yes',
-              onPress: () => handleCreateTransaction(reminder),
-            },
-          ]
-        );
+        dialog.confirm({
+          title: 'Create Transaction?',
+          message: `Would you like to create a ${reminder.transactionType.toLowerCase()} transaction for $${reminder.amount}?`,
+          confirmText: 'Yes',
+          cancelText: 'No',
+          onConfirm: () => {
+            void handleCreateTransaction(reminder);
+          },
+        });
       }
     } catch (error) {
       console.error('Error completing reminder:', error);
@@ -522,48 +527,46 @@ export default function RemindersScreen() {
   };
 
   const handleDeleteReminder = async (reminder: Reminder) => {
-    Alert.alert(
-      'Delete Reminder',
-      `Are you sure you want to delete "${reminder.title}"?`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              // Cancel notification if exists
-              const notificationId = scheduledNotifications.get(reminder.id);
-              if (notificationId) {
-                try {
-                  await cancelReminder(notificationId);
-                  setScheduledNotifications(prev => {
-                    const newMap = new Map(prev);
-                    newMap.delete(reminder.id);
-                    return newMap;
-                  });
-                } catch (error) {
-                  console.error('Error cancelling notification:', error);
-                }
+    dialog.confirm({
+      title: 'Delete Reminder',
+      message: `Are you sure you want to delete "${reminder.title}"?`,
+      destructive: true,
+      confirmText: 'Delete',
+      cancelText: 'Cancel',
+      onConfirm: () => {
+        void (async () => {
+          try {
+            // Cancel notification if exists
+            const notificationId = scheduledNotifications.get(reminder.id);
+            if (notificationId) {
+              try {
+                await cancelReminder(notificationId);
+                setScheduledNotifications(prev => {
+                  const newMap = new Map(prev);
+                  newMap.delete(reminder.id);
+                  return newMap;
+                });
+              } catch (error) {
+                console.error('Error cancelling notification:', error);
               }
-
-              const updatedReminders = reminders.filter(r => r.id !== reminder.id);
-              setReminders(updatedReminders);
-              await persistReminders(updatedReminders);
-
-            } catch (error) {
-              console.error('Error deleting reminder:', error);
-              addNotification({
-                title: 'Error',
-                message: 'Failed to delete reminder',
-                type: 'error',
-                read: false,
-              });
             }
-          },
-        },
-      ]
-    );
+
+            const updatedReminders = reminders.filter(r => r.id !== reminder.id);
+            setReminders(updatedReminders);
+            await persistReminders(updatedReminders);
+
+          } catch (error) {
+            console.error('Error deleting reminder:', error);
+            addNotification({
+              title: 'Error',
+              message: 'Failed to delete reminder',
+              type: 'error',
+              read: false,
+            });
+          }
+        })();
+      },
+    });
   };
 
   const handleCreateTransaction = async (reminder: Reminder) => {

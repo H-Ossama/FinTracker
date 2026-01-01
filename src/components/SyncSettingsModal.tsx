@@ -4,7 +4,6 @@ import {
   Text,
   TouchableOpacity,
   StyleSheet,
-  Alert,
   Modal,
   ActivityIndicator,
   Switch,
@@ -18,6 +17,7 @@ import { hybridDataService } from '../services/hybridDataService';
 import { useTheme } from '../contexts/ThemeContext';
 import { useAuth } from '../contexts/AuthContext';
 import { syncProgressService } from '../services/syncProgressService';
+import { useDialog } from '../contexts/DialogContext';
 
 interface SyncProgress {
   stage: 'uploading' | 'downloading' | 'processing' | 'complete' | string;
@@ -39,6 +39,7 @@ export const SyncSettingsModal: React.FC<SyncSettingsProps> = ({
 }) => {
   const { theme } = useTheme();
   const { user } = useAuth();
+  const dialog = useDialog();
   const insets = useSafeAreaInsets();
   const isMountedRef = React.useRef(true);
   const [syncStatus, setSyncStatus] = useState({
@@ -133,36 +134,44 @@ export const SyncSettingsModal: React.FC<SyncSettingsProps> = ({
   };
 
   const handleLogout = async () => {
-    Alert.alert(
-      'Logout',
-      'Are you sure you want to logout? This will disable cloud sync.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Logout',
-          style: 'destructive',
-          onPress: async () => {
-            setIsLoading(true);
-            try {
-              await hybridDataService.logoutUser();
-              await loadSyncStatus();
-              Alert.alert('Success', 'Logged out successfully');
-            } catch (error) {
-              Alert.alert('Error', 'Logout failed');
-            } finally {
-              setIsLoading(false);
-            }
-          },
-        },
-      ]
-    );
+    dialog.confirm({
+      title: 'Logout',
+      message: 'Are you sure you want to logout? This will disable cloud sync.',
+      cancelText: 'Cancel',
+      confirmText: 'Logout',
+      destructive: true,
+      onConfirm: async () => {
+        setIsLoading(true);
+        try {
+          await hybridDataService.logoutUser();
+          await loadSyncStatus();
+          dialog.show({
+            title: 'Success',
+            message: 'Logged out successfully',
+            icon: 'checkmark-circle',
+            iconColor: '#22C55E',
+            buttons: [{ text: 'OK', style: 'default' }],
+          });
+        } catch (error) {
+          dialog.show({
+            title: 'Error',
+            message: 'Logout failed',
+            icon: 'alert-circle',
+            iconColor: '#EF4444',
+            buttons: [{ text: 'OK', style: 'default' }],
+          });
+        } finally {
+          setIsLoading(false);
+        }
+      },
+    });
   };
 
   const handleEnableSyncAndSync = async () => {
     console.log('🚀 Starting enable sync and sync process');
     if (!user) {
       console.log('❌ No user found for sync');
-      Alert.alert('Error', 'Please sign in to sync your data');
+      dialog.alert('Error', 'Please sign in to sync your data', 'OK');
       return;
     }
 
@@ -215,7 +224,13 @@ export const SyncSettingsModal: React.FC<SyncSettingsProps> = ({
             message += `\n🕒 Synced at: ${new Date().toLocaleString()}`;
           }
           
-          Alert.alert('Sync Complete', message);
+          dialog.show({
+            title: 'Sync Complete',
+            message,
+            icon: 'checkmark-circle',
+            iconColor: '#22C55E',
+            buttons: [{ text: 'OK', style: 'default' }],
+          });
           await loadSyncStatus();
           onSyncComplete?.();
         } else {
@@ -223,11 +238,23 @@ export const SyncSettingsModal: React.FC<SyncSettingsProps> = ({
         }
       } else {
         console.log('❌ Enable sync failed:', enableResult.error);
-        Alert.alert('Error', enableResult.error || 'Failed to enable cloud sync');
+        dialog.show({
+          title: 'Error',
+          message: enableResult.error || 'Failed to enable cloud sync',
+          icon: 'alert-circle',
+          iconColor: '#EF4444',
+          buttons: [{ text: 'OK', style: 'default' }],
+        });
       }
     } catch (error) {
       console.error('❌ Error in handleEnableSyncAndSync:', error);
-      Alert.alert('Error', `Failed to enable sync and sync data: ${error.message || 'Unknown error'}`);
+      dialog.show({
+        title: 'Error',
+        message: `Failed to enable sync and sync data: ${error.message || 'Unknown error'}`,
+        icon: 'alert-circle',
+        iconColor: '#EF4444',
+        buttons: [{ text: 'OK', style: 'default' }],
+      });
     } finally {
       setIsLoading(false);
       if (!progressError) {
@@ -239,7 +266,7 @@ export const SyncSettingsModal: React.FC<SyncSettingsProps> = ({
 
   const handleManualSync = async () => {
     if (!user) {
-      Alert.alert('Error', 'Please sign in to sync your data');
+      dialog.alert('Error', 'Please sign in to sync your data', 'OK');
       return;
     }
 
@@ -278,8 +305,14 @@ export const SyncSettingsModal: React.FC<SyncSettingsProps> = ({
         
         // Save sync details
         await hybridDataService.saveLastSyncDetails(syncData);
-        
-        Alert.alert('Sync Complete', message);
+
+        dialog.show({
+          title: 'Sync Complete',
+          message,
+          icon: 'checkmark-circle',
+          iconColor: '#22C55E',
+          buttons: [{ text: 'OK', style: 'default' }],
+        });
         await loadSyncStatus();
         onSyncComplete?.();
       } else {
@@ -289,17 +322,23 @@ export const SyncSettingsModal: React.FC<SyncSettingsProps> = ({
       console.error('Manual sync error:', error);
       // Check if it's an authentication error
       if (error.message && error.message.includes('authenticated')) {
-        Alert.alert(
-          'Authentication Error', 
-          'Your session has expired. Please sign out and sign back in to sync your data.',
-          [
+        dialog.show({
+          title: 'Authentication Error',
+          message: 'Your session has expired. Please sign out and sign back in to sync your data.',
+          icon: 'alert-circle',
+          iconColor: '#F59E0B',
+          buttons: [
             { text: 'Cancel', style: 'cancel' },
-            { text: 'Sign Out', onPress: () => {
-              // You might want to add a sign out function here
-              Alert.alert('Please sign out and sign back in from the main app.');
-            }}
-          ]
-        );
+            {
+              text: 'Sign Out',
+              style: 'default',
+              onPress: () => {
+                // You might want to add a sign out function here
+                dialog.alert('Please sign out and sign back in from the main app.', undefined, 'OK');
+              },
+            },
+          ],
+        });
       } else {
         setProgressError('Sync failed. Please try again.');
       }
@@ -313,14 +352,16 @@ export const SyncSettingsModal: React.FC<SyncSettingsProps> = ({
 
   const handleRestoreFromCloud = async () => {
     if (!user) {
-      Alert.alert('Error', 'Please sign in to restore your data');
+      dialog.alert('Error', 'Please sign in to restore your data', 'OK');
       return;
     }
 
-    Alert.alert(
-      'Restore from Cloud',
-      'This will replace local data on this device with your latest cloud backup. Continue?',
-      [
+    dialog.show({
+      title: 'Restore from Cloud',
+      message: 'This will replace local data on this device with your latest cloud backup. Continue?',
+      icon: 'warning',
+      iconColor: '#F59E0B',
+      buttons: [
         { text: 'Cancel', style: 'cancel' },
         {
           text: 'Restore',
@@ -340,15 +381,21 @@ export const SyncSettingsModal: React.FC<SyncSettingsProps> = ({
               setShowProgress(false);
               setSyncProgress(null);
               await loadSyncStatus();
-              Alert.alert('Restore Complete', 'Your cloud backup has been restored on this device.');
+              dialog.show({
+                title: 'Restore Complete',
+                message: 'Your cloud backup has been restored on this device.',
+                icon: 'checkmark-circle',
+                iconColor: '#22C55E',
+                buttons: [{ text: 'OK', style: 'default' }],
+              });
               onSyncComplete?.();
             } else {
               setProgressError(result.error || 'Restore failed');
             }
           },
         },
-      ]
-    );
+      ],
+    });
   };
 
   const handleCancelProgress = () => {
@@ -378,7 +425,13 @@ export const SyncSettingsModal: React.FC<SyncSettingsProps> = ({
       setShowProgress(false);
       setSyncProgress(null);
       await loadSyncStatus();
-      Alert.alert('Restore Complete', 'Your cloud backup has been restored on this device.');
+      dialog.show({
+        title: 'Restore Complete',
+        message: 'Your cloud backup has been restored on this device.',
+        icon: 'checkmark-circle',
+        iconColor: '#22C55E',
+        buttons: [{ text: 'OK', style: 'default' }],
+      });
       onSyncComplete?.();
       return;
     }
@@ -407,49 +460,59 @@ export const SyncSettingsModal: React.FC<SyncSettingsProps> = ({
           
           if (result.success) {
             await loadSyncStatus();
-            Alert.alert('Success', 'Cloud sync has been enabled for your account!');
+            dialog.show({
+              title: 'Success',
+              message: 'Cloud sync has been enabled for your account!',
+              icon: 'checkmark-circle',
+              iconColor: '#22C55E',
+              buttons: [{ text: 'OK', style: 'default' }],
+            });
           } else {
-            Alert.alert('Error', result.error || 'Failed to enable sync');
+            dialog.show({
+              title: 'Error',
+              message: result.error || 'Failed to enable sync',
+              icon: 'alert-circle',
+              iconColor: '#EF4444',
+              buttons: [{ text: 'OK', style: 'default' }],
+            });
           }
         } catch (error) {
-          Alert.alert('Error', 'Failed to enable sync. Please try again.');
+          dialog.show({
+            title: 'Error',
+            message: 'Failed to enable sync. Please try again.',
+            icon: 'alert-circle',
+            iconColor: '#EF4444',
+            buttons: [{ text: 'OK', style: 'default' }],
+          });
         } finally {
           setIsLoading(false);
         }
       } else {
         // This shouldn't happen if authentication is working correctly
-        Alert.alert('Error', 'Please sign in to your account first');
+        dialog.alert('Error', 'Please sign in to your account first', 'OK');
       }
       return;
     }
 
     if (!enabled) {
-      Alert.alert(
-        'Disable Sync',
-        'Are you sure you want to disable cloud sync? Your data will remain on this device only.',
-        [
-          { text: 'Cancel', style: 'cancel' },
-          {
-            text: 'Disable',
-            style: 'destructive',
-            onPress: async () => {
-              await hybridDataService.disableCloudSync();
-              await loadSyncStatus();
-            },
-          },
-        ]
-      );
+      dialog.confirm({
+        title: 'Disable Sync',
+        message: 'Are you sure you want to disable cloud sync? Your data will remain on this device only.',
+        cancelText: 'Cancel',
+        confirmText: 'Disable',
+        destructive: true,
+        onConfirm: async () => {
+          await hybridDataService.disableCloudSync();
+          await loadSyncStatus();
+        },
+      });
     }
   };
 
   const handleAutoSyncToggle = async (enabled: boolean) => {
     // Prevent enabling auto-sync if cloud sync is not enabled
     if (enabled && !syncStatus.enabled) {
-      Alert.alert(
-        'Cloud Sync Required',
-        'Please enable cloud sync first before setting up auto-sync.',
-        [{ text: 'OK' }]
-      );
+      dialog.alert('Cloud Sync Required', 'Please enable cloud sync first before setting up auto-sync.', 'OK');
       return;
     }
 
@@ -540,11 +603,13 @@ export const SyncSettingsModal: React.FC<SyncSettingsProps> = ({
       
       if (disabled) {
         // Show confirmation that popups are disabled
-        Alert.alert(
-          'Sync Reminders Disabled',
-          'You will no longer see sync reminder popups. You can manually sync from the sync settings at any time.',
-          [{ text: 'OK' }]
-        );
+        dialog.show({
+          title: 'Sync Reminders Disabled',
+          message: 'You will no longer see sync reminder popups. You can manually sync from the sync settings at any time.',
+          icon: 'information-circle',
+          iconColor: '#64748B',
+          buttons: [{ text: 'OK', style: 'default' }],
+        });
       }
     } catch (error) {
       console.error('Error updating sync reminders disabled setting:', error);

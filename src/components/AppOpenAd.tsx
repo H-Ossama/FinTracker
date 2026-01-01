@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, memo } from 'react';
 import { AppOpenAd as RNAppOpenAd, AdEventType } from 'react-native-google-mobile-ads';
 import { useAds } from '../contexts/AdContext';
-import { getAdUnitId } from '../services/adService';
+import { getAdRequestConfig, getAdUnitId } from '../services/adService';
 
 interface AppOpenAdProps {
   onComplete: () => void;
@@ -21,17 +21,18 @@ const AppOpenAdComponent: React.FC<AppOpenAdProps> = memo(({ onComplete }) => {
   useEffect(() => {
     if (hasShown.current) return;
 
-    if (!adsEnabled || !shouldShowAppOpenAd()) {
+    // If ads are not enabled yet (e.g. subscription state still loading),
+    // don't permanently skip the app-open ad; let the effect re-run.
+    if (!adsEnabled) return;
+
+    if (!shouldShowAppOpenAd()) {
       onComplete();
       return;
     }
 
     hasShown.current = true;
 
-    const appOpenAd = RNAppOpenAd.createForAdRequest(getAdUnitId('appOpen'), {
-      requestNonPersonalizedAdsOnly: false,
-      keywords: ['finance', 'budgeting', 'saving', 'banking', 'family'],
-    });
+    const appOpenAd = RNAppOpenAd.createForAdRequest(getAdUnitId('appOpen'), getAdRequestConfig());
 
     const unsubscribeClosed = appOpenAd.addAdEventListener(AdEventType.CLOSED, () => {
       unsubscribeClosed();
@@ -39,7 +40,11 @@ const AppOpenAdComponent: React.FC<AppOpenAdProps> = memo(({ onComplete }) => {
       onComplete();
     });
 
-    appOpenAd.addAdEventListener(AdEventType.ERROR, () => {
+    appOpenAd.addAdEventListener(AdEventType.ERROR, (error) => {
+      console.log('App open ad failed:', {
+        code: (error as any)?.code,
+        message: (error as any)?.message,
+      });
       try {
         unsubscribeClosed();
       } catch {}

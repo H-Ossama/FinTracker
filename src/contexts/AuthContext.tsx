@@ -9,6 +9,7 @@ import { syncProgressService } from '../services/syncProgressService';
 import { backendAuthService, BackendUser } from '../services/backendAuthService';
 import { simpleCloudBackupService } from '../services/simpleCloudBackupService';
 import { localStorageService } from '../services/localStorageService';
+import { SUBSCRIPTION_STORAGE_KEYS, normalizeUserKey } from '../services/subscriptionStorage';
 
 // Types
 export interface User {
@@ -857,6 +858,27 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       // Clear demo mode flags
       await AsyncStorage.removeItem('is_demo_account');
       await AsyncStorage.removeItem('seed_demo_data');
+
+      // Clear subscription flags (legacy + user-scoped)
+      try {
+        const currentUserKey = normalizeUserKey(state.user?.id || state.user?.email);
+        const keysToRemove = [
+          SUBSCRIPTION_STORAGE_KEYS.legacy.PRO_STATUS,
+          SUBSCRIPTION_STORAGE_KEYS.legacy.DEV_OVERRIDE,
+          SUBSCRIPTION_STORAGE_KEYS.legacy.BILLING_PERIOD,
+          SUBSCRIPTION_STORAGE_KEYS.legacy.OWNER_USER_ID,
+        ];
+        if (currentUserKey) {
+          keysToRemove.push(
+            SUBSCRIPTION_STORAGE_KEYS.proStatus(currentUserKey),
+            SUBSCRIPTION_STORAGE_KEYS.devOverride(currentUserKey),
+            SUBSCRIPTION_STORAGE_KEYS.billingPeriod(currentUserKey)
+          );
+        }
+        await AsyncStorage.multiRemove(keysToRemove);
+      } catch (e) {
+        console.warn('Subscription cleanup failed (ignored):', e);
+      }
       
       // Clear database by calling the service
       const { hybridDataService } = await import('../services/hybridDataService');
@@ -1217,9 +1239,17 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       const firebaseAuthed = simpleCloudBackupService.isAuthenticated();
       await AsyncStorage.setItem(STORAGE_KEYS.CLOUD_SYNC_ENABLED, firebaseAuthed ? 'true' : 'false');
 
+      // Auto-restore should be a Pro-only experience.
+      const currentUserKey = normalizeUserKey(user?.id || user?.email);
+      const [storedProStatus, storedDevOverride] = await Promise.all([
+        currentUserKey ? AsyncStorage.getItem(SUBSCRIPTION_STORAGE_KEYS.proStatus(currentUserKey)) : Promise.resolve(null),
+        currentUserKey ? AsyncStorage.getItem(SUBSCRIPTION_STORAGE_KEYS.devOverride(currentUserKey)) : Promise.resolve(null),
+      ]);
+      const isProForUser = storedProStatus === 'true' || storedDevOverride === 'true';
+
       // Auto-restore on first login on this device (safe mode): only if local data is empty.
       try {
-        if (firebaseAuthed && !hasLoggedInBefore) {
+        if (firebaseAuthed && !hasLoggedInBefore && isProForUser) {
           const [wallets, transactions] = await Promise.all([
             localStorageService.getWallets(),
             localStorageService.getTransactions(),

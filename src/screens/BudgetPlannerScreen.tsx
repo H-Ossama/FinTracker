@@ -6,7 +6,6 @@ import {
   ScrollView,
   TouchableOpacity,
   RefreshControl,
-  Alert,
   Modal,
   TextInput,
   Dimensions,
@@ -24,8 +23,8 @@ import { budgetService } from '../services/budgetService';
 import { Budget, BudgetCategory, MonthlyBudgetSummary } from '../types';
 import { useFocusEffect } from '@react-navigation/native';
 import { useInterstitialAd } from '../components/InterstitialAd';
-import AdBanner from '../components/AdBanner';
 import { useAds } from '../contexts/AdContext';
+import { useDialog } from '../contexts/DialogContext';
 
 const { width: screenWidth } = Dimensions.get('window');
 
@@ -34,8 +33,9 @@ const BudgetPlannerScreen = ({ navigation }: any) => {
   const { formatCurrency } = useLocalization();
   const { user } = useAuth();
   const insets = useSafeAreaInsets();
-  const { adsEnabled, shouldShowBanner } = useAds();
+  const { adsEnabled } = useAds();
   const { showInterstitialIfNeeded, InterstitialComponent } = useInterstitialAd('BudgetPlanner');
+  const dialog = useDialog();
   const [budgets, setBudgets] = useState<Budget[]>([]);
   const [categories, setCategories] = useState<BudgetCategory[]>([]);
   const [monthlySummary, setMonthlySummary] = useState<MonthlyBudgetSummary | null>(null);
@@ -62,7 +62,7 @@ const BudgetPlannerScreen = ({ navigation }: any) => {
       loadData();
       // Show interstitial ad on first visit (free users only)
       showInterstitialIfNeeded();
-    }, [selectedMonth])
+    }, [selectedMonth, adsEnabled, showInterstitialIfNeeded])
   );
 
   const loadData = async () => {
@@ -116,7 +116,13 @@ const BudgetPlannerScreen = ({ navigation }: any) => {
       setAnalytics(result.analyticsData);
     } catch (error) {
       console.error('❌ Error loading budget data:', error);
-      Alert.alert('Error', 'Failed to load budget data: ' + (error instanceof Error ? error.message : 'Unknown error'));
+      dialog.show({
+        title: 'Error',
+        message: 'Failed to load budget data: ' + (error instanceof Error ? error.message : 'Unknown error'),
+        icon: 'alert-circle',
+        iconColor: '#EF4444',
+        buttons: [{ text: 'OK', style: 'default' }],
+      });
       
       // Set empty data to prevent infinite loading
       setBudgets([]);
@@ -140,13 +146,13 @@ const BudgetPlannerScreen = ({ navigation }: any) => {
   const handleAddBudget = async () => {
     try {
       if (!newBudget.categoryId || !newBudget.budgetAmount) {
-        Alert.alert('Error', 'Please select a category and enter a budget amount');
+        dialog.alert('Error', 'Please select a category and enter a budget amount', 'OK');
         return;
       }
 
       const category = categories.find(c => c.id === newBudget.categoryId);
       if (!category) {
-        Alert.alert('Error', 'Please select a valid category');
+        dialog.alert('Error', 'Please select a valid category', 'OK');
         return;
       }
 
@@ -162,34 +168,54 @@ const BudgetPlannerScreen = ({ navigation }: any) => {
       setShowAddModal(false);
       resetForm();
       await loadData();
-      Alert.alert('Success', 'Budget created successfully!');
+      dialog.show({
+        title: 'Success',
+        message: 'Budget created successfully!',
+        icon: 'checkmark-circle',
+        iconColor: '#22C55E',
+        buttons: [{ text: 'OK', style: 'default' }],
+      });
     } catch (error) {
       console.error('Error adding budget:', error);
-      Alert.alert('Error', error instanceof Error ? error.message : 'Failed to add budget');
+      dialog.show({
+        title: 'Error',
+        message: error instanceof Error ? error.message : 'Failed to add budget',
+        icon: 'alert-circle',
+        iconColor: '#EF4444',
+        buttons: [{ text: 'OK', style: 'default' }],
+      });
     }
   };
 
   const handleDeleteBudget = async (budget: Budget) => {
     try {
-      Alert.alert(
-        'Delete Budget',
-        `Are you sure you want to delete the budget for "${budget.categoryName}"?`,
-        [
-          { text: 'Cancel', style: 'cancel' },
-          {
-            text: 'Delete',
-            style: 'destructive',
-            onPress: async () => {
-              await budgetService.deleteBudget(budget.id);
-              await loadData();
-              Alert.alert('Success', 'Budget deleted!');
-            }
-          }
-        ]
-      );
+      dialog.confirm({
+        title: 'Delete Budget',
+        message: `Are you sure you want to delete the budget for "${budget.categoryName}"?`,
+        cancelText: 'Cancel',
+        confirmText: 'Delete',
+        destructive: true,
+        onConfirm: async () => {
+          await budgetService.deleteBudget(budget.id);
+          await loadData();
+          dialog.show({
+            title: 'Success',
+            message: 'Budget deleted!',
+            icon: 'checkmark-circle',
+            iconColor: '#22C55E',
+            buttons: [{ text: 'OK', style: 'default' }],
+          });
+        },
+      });
     } catch (error) {
       console.error('Error deleting budget:', error);
-      Alert.alert('Error', 'Failed to delete budget');
+      dialog.show({
+        title: 'Error',
+        message: 'Failed to delete budget',
+        icon: 'alert-circle',
+        iconColor: '#EF4444',
+        buttons: [{ text: 'OK', style: 'default' }],
+      });
     }
   };
 
@@ -199,7 +225,13 @@ const BudgetPlannerScreen = ({ navigation }: any) => {
       await loadData();
     } catch (error) {
       console.error('Error updating budget:', error);
-      Alert.alert('Error', 'Failed to update budget');
+      dialog.show({
+        title: 'Error',
+        message: 'Failed to update budget',
+        icon: 'alert-circle',
+        iconColor: '#EF4444',
+        buttons: [{ text: 'OK', style: 'default' }],
+      });
     }
   };
 
@@ -491,9 +523,21 @@ const BudgetPlannerScreen = ({ navigation }: any) => {
             try {
               await budgetService.copyBudgetsToNextMonth(prevMonthStr, selectedMonth);
               await loadData();
-              Alert.alert('Success', 'Budgets copied from previous month!');
+              dialog.show({
+                title: 'Success',
+                message: 'Budgets copied from previous month!',
+                icon: 'checkmark-circle',
+                iconColor: '#22C55E',
+                buttons: [{ text: 'OK', style: 'default' }],
+              });
             } catch (error) {
-              Alert.alert('Error', 'Failed to copy budgets');
+              dialog.show({
+                title: 'Error',
+                message: 'Failed to copy budgets',
+                icon: 'alert-circle',
+                iconColor: '#EF4444',
+                buttons: [{ text: 'OK', style: 'default' }],
+              });
             }
           }}
         >
@@ -789,13 +833,6 @@ const BudgetPlannerScreen = ({ navigation }: any) => {
       {renderAddBudgetModal()}
       {renderMonthPicker()}
 
-      {/* Banner Ad for free users */}
-      {adsEnabled && shouldShowBanner('BudgetPlanner') && (
-        <View style={styles.bannerAdContainer}>
-          <AdBanner screenName="BudgetPlanner" />
-        </View>
-      )}
-
       {/* Interstitial Ad Modal */}
       <InterstitialComponent />
     </View>
@@ -805,12 +842,6 @@ const BudgetPlannerScreen = ({ navigation }: any) => {
 const createStyles = (theme: any) => StyleSheet.create({
   container: {
     flex: 1,
-  },
-  bannerAdContainer: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
   },
   darkHeader: {
     paddingHorizontal: 20,

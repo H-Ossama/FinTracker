@@ -1,9 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback, useRef } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-
-const PRO_STATUS_KEY = 'pro_subscription_status';
-const DEV_PRO_OVERRIDE_KEY = 'dev_pro_override';
-const BILLING_PERIOD_KEY = 'subscription_billing_period';
+import { useAuth } from './AuthContext';
+import { SUBSCRIPTION_STORAGE_KEYS, normalizeUserKey } from '../services/subscriptionStorage';
 
 export type SubscriptionPlanId = 'free' | 'pro';
 export type BillingPeriod = 'monthly' | 'yearly';
@@ -168,6 +166,7 @@ interface SubscriptionProviderProps {
 }
 
 export const SubscriptionProvider: React.FC<SubscriptionProviderProps> = ({ children }) => {
+  const { user, isAuthenticated } = useAuth();
   const [isPro, setIsPro] = useState(false);
   const [planId, setPlanId] = useState<SubscriptionPlanId>('free');
   const [billingPeriod, setBillingPeriodState] = useState<BillingPeriod>('yearly');
@@ -179,48 +178,100 @@ export const SubscriptionProvider: React.FC<SubscriptionProviderProps> = ({ chil
   // Session-based tracking for paywalls shown
   const shownPaywallsThisSession = useRef<Set<FeatureType>>(new Set());
 
-  // Load subscription status on mount
-  useEffect(() => {
-    loadSubscriptionStatus();
-  }, []);
-
-  const loadSubscriptionStatus = async () => {
+  const loadSubscriptionStatus = useCallback(async () => {
     try {
-      // Check for dev override first
-      const devOverride = await AsyncStorage.getItem(DEV_PRO_OVERRIDE_KEY);
-      if (devOverride === 'true') {
-        setIsPro(true);
-        setPlanId('pro');
-        setIsLoading(false);
+      const userKey = normalizeUserKey(user?.id || user?.email);
+
+      // If not authenticated, always fall back to Free.
+      if (!isAuthenticated || !userKey) {
+        setIsPro(false);
+        setPlanId('free');
+        setBillingPeriodState('yearly');
         return;
       }
 
-      // Check actual subscription status
-      const proStatus = await AsyncStorage.getItem(PRO_STATUS_KEY);
+      // Reset session paywall tracking on account switch.
+      shownPaywallsThisSession.current = new Set();
+
+      const ownerUserKey = await AsyncStorage.getItem(SUBSCRIPTION_STORAGE_KEYS.legacy.OWNER_USER_ID);
+
+      // User-scoped keys
+      const devOverrideKey = SUBSCRIPTION_STORAGE_KEYS.devOverride(userKey);
+      const proStatusKey = SUBSCRIPTION_STORAGE_KEYS.proStatus(userKey);
+      const billingPeriodKey = SUBSCRIPTION_STORAGE_KEYS.billingPeriod(userKey);
+
+      // Migration path (from old device-wide keys): only migrate if owner matches current user.
+      const [existingDevOverride, existingProStatus, existingBillingPeriod] = await AsyncStorage.multiGet([
+        devOverrideKey,
+        proStatusKey,
+        billingPeriodKey,
+      ]);
+
+      const hasAnyUserScopedValue =
+        existingDevOverride[1] !== null || existingProStatus[1] !== null || existingBillingPeriod[1] !== null;
+
+      if (!hasAnyUserScopedValue && ownerUserKey && ownerUserKey === userKey) {
+        const [legacyDevOverride, legacyProStatus, legacyBilling] = await AsyncStorage.multiGet([
+          SUBSCRIPTION_STORAGE_KEYS.legacy.DEV_OVERRIDE,
+          SUBSCRIPTION_STORAGE_KEYS.legacy.PRO_STATUS,
+          SUBSCRIPTION_STORAGE_KEYS.legacy.BILLING_PERIOD,
+        ]);
+
+        const toSet: Array<[string, string]> = [];
+        if (legacyDevOverride[1] !== null) toSet.push([devOverrideKey, legacyDevOverride[1]]);
+        if (legacyProStatus[1] !== null) toSet.push([proStatusKey, legacyProStatus[1]]);
+        if (legacyBilling[1] !== null) toSet.push([billingPeriodKey, legacyBilling[1]]);
+
+        if (toSet.length > 0) {
+          await AsyncStorage.multiSet(toSet);
+        }
+      }
+
+      // Check for dev override first (user-scoped)
+      const devOverride = await AsyncStorage.getItem(devOverrideKey);
+      if (devOverride === 'true') {
+        setIsPro(true);
+        setPlanId('pro');
+        return;
+      }
+
+      // Check subscription status (user-scoped)
+      const proStatus = await AsyncStorage.getItem(proStatusKey);
       const nextIsPro = proStatus === 'true';
       setIsPro(nextIsPro);
       setPlanId(nextIsPro ? 'pro' : 'free');
-      
-      // Load billing period preference
-      const savedBillingPeriod = await AsyncStorage.getItem(BILLING_PERIOD_KEY);
+
+      // Load billing period preference (user-scoped)
+      const savedBillingPeriod = await AsyncStorage.getItem(billingPeriodKey);
       if (savedBillingPeriod === 'monthly' || savedBillingPeriod === 'yearly') {
         setBillingPeriodState(savedBillingPeriod);
+      } else {
+        setBillingPeriodState('yearly');
       }
     } catch (error) {
       console.error('Error loading subscription status:', error);
       setIsPro(false);
       setPlanId('free');
+      setBillingPeriodState('yearly');
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [isAuthenticated, user?.email, user?.id]);
+
+  // Load subscription status on mount and when user changes
+  useEffect(() => {
+    setIsLoading(true);
+    loadSubscriptionStatus();
+  }, [loadSubscriptionStatus]);
 
   const limits = isPro ? PRO_LIMITS : FREE_LIMITS;
   
   const setBillingPeriod = useCallback((period: BillingPeriod) => {
     setBillingPeriodState(period);
-    AsyncStorage.setItem(BILLING_PERIOD_KEY, period).catch(console.error);
-  }, []);
+    const userKey = normalizeUserKey(user?.id || user?.email);
+    if (!isAuthenticated || !userKey) return;
+    AsyncStorage.setItem(SUBSCRIPTION_STORAGE_KEYS.billingPeriod(userKey), period).catch(console.error);
+  }, [isAuthenticated, user?.email, user?.id]);
 
   const hasFeature = useCallback((feature: 'cloudBackup' | 'exportData' | 'advancedInsights' | 'customCategories' | 'multiCurrency'): boolean => {
     return limits[feature];
@@ -300,10 +351,21 @@ export const SubscriptionProvider: React.FC<SubscriptionProviderProps> = ({ chil
     // TODO: Integrate with actual payment system (RevenueCat, Stripe, etc.)
     // For now, just store locally for UI/demo purposes.
     try {
+      const userKey = normalizeUserKey(user?.id || user?.email);
+      if (!isAuthenticated || !userKey) {
+        // App does not support subscriptions while logged out.
+        setIsPro(false);
+        setPlanId('free');
+        return;
+      }
+
+      // Track which user owns legacy device-wide subscription flags (for safe migrations).
+      await AsyncStorage.setItem(SUBSCRIPTION_STORAGE_KEYS.legacy.OWNER_USER_ID, userKey);
+
       // Clear dev override when explicitly selecting a plan.
-      await AsyncStorage.setItem(DEV_PRO_OVERRIDE_KEY, 'false');
+      await AsyncStorage.setItem(SUBSCRIPTION_STORAGE_KEYS.devOverride(userKey), 'false');
       const nextIsPro = nextPlanId === 'pro';
-      await AsyncStorage.setItem(PRO_STATUS_KEY, nextIsPro ? 'true' : 'false');
+      await AsyncStorage.setItem(SUBSCRIPTION_STORAGE_KEYS.proStatus(userKey), nextIsPro ? 'true' : 'false');
       setIsPro(nextIsPro);
       setPlanId(nextPlanId);
       setUpgradeModalVisible(false);
@@ -311,7 +373,7 @@ export const SubscriptionProvider: React.FC<SubscriptionProviderProps> = ({ chil
       console.error('Error setting subscription plan:', error);
       throw error;
     }
-  }, []);
+  }, [isAuthenticated, user?.email, user?.id]);
 
   const upgradeToPro = useCallback(async (): Promise<void> => {
     await setPlan('pro');
@@ -319,14 +381,18 @@ export const SubscriptionProvider: React.FC<SubscriptionProviderProps> = ({ chil
 
   const toggleProForTesting = useCallback(async (): Promise<void> => {
     try {
+      const userKey = normalizeUserKey(user?.id || user?.email);
+      if (!isAuthenticated || !userKey) return;
+
       const newStatus = !isPro;
-      await AsyncStorage.setItem(DEV_PRO_OVERRIDE_KEY, newStatus ? 'true' : 'false');
+      await AsyncStorage.setItem(SUBSCRIPTION_STORAGE_KEYS.legacy.OWNER_USER_ID, userKey);
+      await AsyncStorage.setItem(SUBSCRIPTION_STORAGE_KEYS.devOverride(userKey), newStatus ? 'true' : 'false');
       setIsPro(newStatus);
       setPlanId(newStatus ? 'pro' : 'free');
     } catch (error) {
       console.error('Error toggling pro for testing:', error);
     }
-  }, [isPro]);
+  }, [isAuthenticated, isPro, user?.email, user?.id]);
 
   const showUpgradeModal = useCallback((feature?: FeatureType, message?: string) => {
     // Session-based tracking: don't show same paywall twice per session

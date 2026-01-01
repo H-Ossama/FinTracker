@@ -6,7 +6,6 @@ import {
   ScrollView,
   TouchableOpacity,
   Switch,
-  Alert,
   Share,
   Linking,
   Modal,
@@ -23,7 +22,9 @@ import { useAuth } from '../contexts/AuthContext';
 import { useNavigation } from '@react-navigation/native';
 import { notificationService } from '../services/notificationService';
 import { hybridDataService } from '../services/hybridDataService';
-import { Buffer } from 'buffer';
+import { useAds } from '../contexts/AdContext';
+import { useInterstitialAd } from '../components/InterstitialAd';
+import { useDialog } from '../contexts/DialogContext';
 
 const QuickSettingsScreen = () => {
   const { theme, isDark, toggleTheme } = useTheme();
@@ -31,6 +32,9 @@ const QuickSettingsScreen = () => {
   const { user, isAuthenticated, signOut } = useAuth();
   const navigation = useNavigation();
   const insets = useSafeAreaInsets();
+  const { adsEnabled } = useAds();
+  const { showInterstitialIfNeeded, InterstitialComponent } = useInterstitialAd('QuickSettings');
+  const dialog = useDialog();
   const [notificationsEnabled, setNotificationsEnabled] = useState(true);
   const [isBalanceMasked, setIsBalanceMasked] = useState(false);
   const [hiddenWallets, setHiddenWallets] = useState<string[]>([]);
@@ -46,6 +50,12 @@ const QuickSettingsScreen = () => {
     loadWallets();
     loadHiddenWallets();
   }, []);
+
+  useEffect(() => {
+    if (adsEnabled) {
+      showInterstitialIfNeeded();
+    }
+  }, [adsEnabled, showInterstitialIfNeeded]);
 
   const loadWallets = async () => {
     try {
@@ -115,9 +125,9 @@ const QuickSettingsScreen = () => {
         'Your notifications are working perfectly!',
         3
       );
-      Alert.alert('Success', 'Test notification scheduled for 3 seconds from now.');
+      dialog.success('Success', 'Test notification scheduled for 3 seconds from now.');
     } catch (error) {
-      Alert.alert('Error', 'Failed to schedule test notification.');
+      dialog.error('Error', 'Failed to schedule test notification.');
     }
   };
 
@@ -133,21 +143,25 @@ const QuickSettingsScreen = () => {
   };
 
   const handleContactSupport = () => {
-    Alert.alert(
-      'Contact Support',
-      'How would you like to contact our support team?',
-      [
+    dialog.show({
+      title: 'Contact Support',
+      message: 'How would you like to contact our support team?',
+      icon: 'mail',
+      iconColor: theme.colors.primary,
+      buttons: [
         { text: 'Cancel', style: 'cancel' },
         {
           text: 'Email Support',
+          style: 'default',
           onPress: () => Linking.openURL('mailto:support@finex.app?subject=FINEX Support Request'),
         },
         {
           text: 'Report Bug',
+          style: 'default',
           onPress: () => Linking.openURL('mailto:bugs@finex.app?subject=Bug Report - FINEX'),
         },
-      ]
-    );
+      ],
+    });
   };
 
   const handlePrivacyPolicy = () => {
@@ -159,220 +173,30 @@ const QuickSettingsScreen = () => {
   };
 
   const handleRateApp = () => {
-    Alert.alert(
-      'Rate FinTracker',
-      'Enjoying FinTracker? Please take a moment to rate us in the app store!',
-      [
-        { text: 'Later', style: 'cancel' },
-        {
-          text: 'Rate Now',
-          onPress: () => {
-            // In a real app, you would open the app store rating page
-            Alert.alert('Thank you!', 'This would normally open the app store rating page.');
-          },
-        },
-      ]
-    );
+    dialog.confirm({
+      title: 'Rate FinTracker',
+      message: 'Enjoying FinTracker? Please take a moment to rate us in the app store!',
+      confirmText: 'Rate Now',
+      cancelText: 'Later',
+      onConfirm: () => {
+        // In a real app, you would open the app store rating page
+        dialog.success('Thank you!', 'This would normally open the app store rating page.');
+      },
+    });
   };
 
   const handleLogout = () => {
-    Alert.alert(
-      'Sign Out',
-      'Are you sure you want to sign out of your account?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Sign Out',
-          style: 'destructive',
-          onPress: () => {
-            signOut();
-            // Navigation will automatically switch to SignIn screen when authentication state changes
-          },
-        },
-      ]
-    );
-  };
-
-  const handleExportData = async () => {
-    try {
-      Alert.alert(
-        t('settings_screen_export_data'),
-        'Choose export format:',
-        [
-          { text: 'Cancel', style: 'cancel' },
-          { text: 'JSON (Full Backup)', onPress: () => exportAsJSON() },
-          { text: 'CSV (Transactions)', onPress: () => exportAsCSV() },
-          { text: 'Restore from Backup', onPress: () => restoreFromBackup() },
-        ]
-      );
-    } catch (error) {
-      Alert.alert('Error', 'Failed to export data');
-    }
-  };
-
-  const exportAsJSON = async () => {
-    try {
-      // Get all app data
-      const wallets = await hybridDataService.getWallets();
-      const transactions = await hybridDataService.getTransactions();
-      const categories = await hybridDataService.getCategories();
-      
-      // Get additional data from AsyncStorage
-      const goalsJson = await AsyncStorage.getItem('goals_data');
-      const billsJson = await AsyncStorage.getItem('bills_data');
-      const budgetsJson = await AsyncStorage.getItem('budgets_data');
-      const remindersJson = await AsyncStorage.getItem('reminders_data');
-      const borrowedMoneyJson = await AsyncStorage.getItem('borrowed_money_data');
-      const monthlyLimit = await AsyncStorage.getItem('monthlySpendingLimit');
-      const hiddenWallets = await AsyncStorage.getItem('hiddenWallets');
-      const settings = {
-        language: await AsyncStorage.getItem('language_preference'),
-        currency: await AsyncStorage.getItem('currency_preference'),
-        isDark: await AsyncStorage.getItem('theme_preference'),
-        notificationsEnabled: await AsyncStorage.getItem('notifications_enabled'),
-      };
-
-      const exportData = {
-        exportDate: new Date().toISOString(),
-        version: '2.0',
-        appVersion: '2.5.7',
-        user: {
-          id: user?.id,
-          email: user?.email,
-          name: user?.name,
-        },
-        wallets,
-        transactions,
-        categories,
-        goals: goalsJson ? JSON.parse(goalsJson) : [],
-        bills: billsJson ? JSON.parse(billsJson) : [],
-        budgets: budgetsJson ? JSON.parse(budgetsJson) : [],
-        reminders: remindersJson ? JSON.parse(remindersJson) : [],
-        borrowedMoney: borrowedMoneyJson ? JSON.parse(borrowedMoneyJson) : [],
-        monthlyLimit: monthlyLimit || '12000',
-        hiddenWallets: hiddenWallets ? JSON.parse(hiddenWallets) : [],
-        settings,
-      };
-
-      const jsonString = JSON.stringify(exportData, null, 2);
-      const fileName = `FinTracker_Backup_${new Date().toISOString().split('T')[0]}.json`;
-
-      // Save backup to AsyncStorage as well
-      await AsyncStorage.setItem('lastBackup', jsonString);
-      await AsyncStorage.setItem('lastBackupDate', new Date().toISOString());
-
-      // Share the file
-      await Share.share({
-        message: jsonString,
-        title: fileName,
-        url: `data:text/plain;base64,${Buffer.from(jsonString).toString('base64')}`,
-      });
-
-      Alert.alert('Success', 'Data exported successfully. Backup also saved to device.');
-    } catch (error) {
-      Alert.alert('Error', 'Failed to export data');
-      console.error('Export error:', error);
-    }
-  };
-
-  const exportAsCSV = async () => {
-    try {
-      const transactions = await hybridDataService.getTransactions();
-      const wallets = await hybridDataService.getWallets();
-
-      let csvContent = 'Date,Wallet,Category,Amount,Type,Description\n';
-
-      transactions.forEach((tx: any) => {
-        const wallet = wallets.find(w => w.id === tx.walletId);
-        const date = new Date(tx.date).toLocaleDateString();
-        const amount = tx.amount || 0;
-        const type = tx.type || 'Unknown';
-        const description = (tx.description || '').replace(/,/g, '');
-        csvContent += `${date},"${wallet?.name || 'Unknown'}","${tx.category || ''}",${amount},${type},"${description}"\n`;
-      });
-
-      const fileName = `FinTracker_Transactions_${new Date().toISOString().split('T')[0]}.csv`;
-
-      await Share.share({
-        message: csvContent,
-        title: fileName,
-        url: `data:text/csv;base64,${Buffer.from(csvContent).toString('base64')}`,
-      });
-
-      Alert.alert('Success', 'Transactions exported as CSV');
-    } catch (error) {
-      Alert.alert('Error', 'Failed to export CSV');
-      console.error('Export error:', error);
-    }
-  };
-
-  const restoreFromBackup = async () => {
-    try {
-      const lastBackup = await AsyncStorage.getItem('lastBackup');
-      if (!lastBackup) {
-        Alert.alert('No Backup Found', 'There is no backup saved on this device. Export data first to create a backup.');
-        return;
-      }
-
-      const backupData = JSON.parse(lastBackup);
-
-      Alert.alert(
-        'Restore Backup',
-        `This will restore data from ${new Date(backupData.exportDate).toLocaleDateString()}. Continue?`,
-        [
-          { text: 'Cancel', style: 'cancel' },
-          {
-            text: 'Restore',
-            style: 'destructive',
-            onPress: async () => {
-              try {
-                // Restore all data to AsyncStorage
-                if (backupData.goals) {
-                  await AsyncStorage.setItem('goals_data', JSON.stringify(backupData.goals));
-                }
-                if (backupData.bills) {
-                  await AsyncStorage.setItem('bills_data', JSON.stringify(backupData.bills));
-                }
-                if (backupData.budgets) {
-                  await AsyncStorage.setItem('budgets_data', JSON.stringify(backupData.budgets));
-                }
-                if (backupData.reminders) {
-                  await AsyncStorage.setItem('reminders_data', JSON.stringify(backupData.reminders));
-                }
-                if (backupData.borrowedMoney) {
-                  await AsyncStorage.setItem('borrowed_money_data', JSON.stringify(backupData.borrowedMoney));
-                }
-                if (backupData.monthlyLimit) {
-                  await AsyncStorage.setItem('monthlySpendingLimit', backupData.monthlyLimit);
-                }
-                if (backupData.hiddenWallets) {
-                  await AsyncStorage.setItem('hiddenWallets', JSON.stringify(backupData.hiddenWallets));
-                }
-                if (backupData.settings) {
-                  if (backupData.settings.language) {
-                    await AsyncStorage.setItem('language_preference', backupData.settings.language);
-                  }
-                  if (backupData.settings.currency) {
-                    await AsyncStorage.setItem('currency_preference', backupData.settings.currency);
-                  }
-                  if (backupData.settings.isDark) {
-                    await AsyncStorage.setItem('theme_preference', backupData.settings.isDark);
-                  }
-                }
-
-                Alert.alert('Success', 'Backup restored successfully. Please restart the app for all changes to take effect.');
-              } catch (restoreError) {
-                Alert.alert('Error', 'Failed to restore backup');
-                console.error('Restore error:', restoreError);
-              }
-            },
-          },
-        ]
-      );
-    } catch (error) {
-      Alert.alert('Error', 'Failed to restore from backup');
-      console.error('Restore error:', error);
-    }
+    dialog.confirm({
+      title: 'Sign Out',
+      message: 'Are you sure you want to sign out of your account?',
+      destructive: true,
+      confirmText: 'Sign Out',
+      cancelText: 'Cancel',
+      onConfirm: () => {
+        signOut();
+        // Navigation will automatically switch to SignIn screen when authentication state changes
+      },
+    });
   };
 
   const handleAppLockSettings = () => {
@@ -380,68 +204,81 @@ const QuickSettingsScreen = () => {
   };
 
   const handleAutoLockTimer = () => {
-    Alert.alert(
-      'Auto-Lock Timer',
-      'Choose when the app should automatically lock',
-      [
+    dialog.show({
+      title: 'Auto-Lock Timer',
+      message: 'Choose when the app should automatically lock',
+      icon: 'time',
+      iconColor: theme.colors.primary,
+      buttons: [
         { text: 'Cancel', style: 'cancel' },
-        { text: 'Immediately', onPress: () => setAutoLockTime('immediate') },
-        { text: '1 minute', onPress: () => setAutoLockTime('1min') },
-        { text: '5 minutes', onPress: () => setAutoLockTime('5min') },
-        { text: '15 minutes', onPress: () => setAutoLockTime('15min') },
-        { text: 'Never', onPress: () => setAutoLockTime('never') },
-      ]
-    );
+        { text: 'Immediately', style: 'default', onPress: () => setAutoLockTime('immediate') },
+        { text: '1 minute', style: 'default', onPress: () => setAutoLockTime('1min') },
+        { text: '5 minutes', style: 'default', onPress: () => setAutoLockTime('5min') },
+        { text: '15 minutes', style: 'default', onPress: () => setAutoLockTime('15min') },
+        { text: 'Never', style: 'default', onPress: () => setAutoLockTime('never') },
+      ],
+    });
   };
 
   const handleLockOnBackground = () => {
-    Alert.alert(
-      'Lock on Background',
-      'Choose if the app should lock when minimized',
-      [
+    dialog.show({
+      title: 'Lock on Background',
+      message: 'Choose if the app should lock when minimized',
+      icon: 'lock-closed',
+      iconColor: theme.colors.primary,
+      buttons: [
         { text: 'Cancel', style: 'cancel' },
         {
           text: 'Enable',
+          style: 'default',
           onPress: () => {
             // Save preference to storage
-            Alert.alert('Success', 'App will now lock when moved to background');
+            dialog.success('Success', 'App will now lock when moved to background');
           },
         },
         {
           text: 'Disable',
+          style: 'default',
           onPress: () => {
-            Alert.alert('Success', 'App will not lock when moved to background');
+            dialog.success('Success', 'App will not lock when moved to background');
           },
         },
-      ]
-    );
+      ],
+    });
   };
 
   const handlePinSetup = () => {
-    Alert.alert(
-      'PIN/Password Setup',
-      'Set up a backup authentication method',
-      [
+    dialog.show({
+      title: 'PIN/Password Setup',
+      message: 'Set up a backup authentication method',
+      icon: 'key',
+      iconColor: theme.colors.primary,
+      buttons: [
         { text: 'Cancel', style: 'cancel' },
         {
           text: 'Set 4-Digit PIN',
+          style: 'default',
           onPress: () => {
-            Alert.alert('Coming Soon', 'PIN setup will be available in the next update!');
+            dialog.alert('Coming Soon', 'PIN setup will be available in the next update!');
           },
         },
         {
           text: 'Set Password',
+          style: 'default',
           onPress: () => {
-            Alert.alert('Coming Soon', 'Password setup will be available in the next update!');
+            dialog.alert('Coming Soon', 'Password setup will be available in the next update!');
           },
         },
-      ]
-    );
+      ],
+    });
   };
 
   const setAutoLockTime = (time: string) => {
     // Save to storage
-    Alert.alert('Success', `Auto-lock set to: ${time === 'immediate' ? 'Immediately' : time === 'never' ? 'Never' : time}`);
+    dialog.success(
+      'Success',
+      `Auto-lock set to: ${time === 'immediate' ? 'Immediately' : time === 'never' ? 'Never' : time}`
+    );
   };
 
   const handleVersionTap = () => {
@@ -451,17 +288,14 @@ const QuickSettingsScreen = () => {
     if (newCount === 5) {
       // Reset count and navigate through PIN gate
       setVersionTapCount(0);
-      Alert.alert(
-        '🛠️ Developer Mode Activated',
-        'You have unlocked the development tools! These tools are intended for developers and testers only.',
-        [
-          { text: 'Cancel', style: 'cancel' },
-          {
-            text: 'Open Dev Tools',
-            onPress: () => navigation.navigate('DevPINEntry' as never),
-          },
-        ]
-      );
+      dialog.confirm({
+        title: '🛠️ Developer Mode Activated',
+        message:
+          'You have unlocked the development tools! These tools are intended for developers and testers only.',
+        confirmText: 'Open Dev Tools',
+        cancelText: 'Cancel',
+        onConfirm: () => navigation.navigate('DevPINEntry' as never),
+      });
     }
     
     // Reset count after 3 seconds of inactivity
@@ -471,176 +305,181 @@ const QuickSettingsScreen = () => {
   };
 
   const handleDataEncryption = () => {
-    Alert.alert(
-      '🔒 Ultra-Secure Data Protection',
-      '🛡️ MILITARY-GRADE SECURITY ACTIVE:\n\n' +
-      '✅ AES-256-GCM Hardware Encryption\n' +
-      '✅ Quantum-Resistant CRYSTALS-Kyber\n' +
-      '✅ Zero-Knowledge Architecture\n' +
-      '✅ Perfect Forward Secrecy\n' +
-      '✅ Hardware Security Module (HSM)\n\n' +
-      '� ABSOLUTE KEY PROTECTION:\n' +
-      '• Keys NEVER displayed to anyone\n' +
-      '• Hardware-protected generation\n' +
-      '• Automatic secure rotation\n' +
-      '• Mathematically impossible to extract\n' +
-      '• Memory encryption at all times\n\n' +
-      '🎯 EXCEEDS NSA/MILITARY STANDARDS\n\n' +
-      'Your data is protected by the same encryption\nused to secure top-secret government files.',
-      [
-        { text: 'Secure ✓' },
-        {
-          text: 'Security Details',
-          onPress: () => handleKeySecurityInfo(),
-        },
-        {
-          text: 'Full Audit',
-          onPress: () => handleSecurityAudit(),
-        },
-      ]
-    );
+    dialog.show({
+      title: '🔒 Ultra-Secure Data Protection',
+      message:
+        '🛡️ MILITARY-GRADE SECURITY ACTIVE:\n\n' +
+        '✅ AES-256-GCM Hardware Encryption\n' +
+        '✅ Quantum-Resistant CRYSTALS-Kyber\n' +
+        '✅ Zero-Knowledge Architecture\n' +
+        '✅ Perfect Forward Secrecy\n' +
+        '✅ Hardware Security Module (HSM)\n\n' +
+        '� ABSOLUTE KEY PROTECTION:\n' +
+        '• Keys NEVER displayed to anyone\n' +
+        '• Hardware-protected generation\n' +
+        '• Automatic secure rotation\n' +
+        '• Mathematically impossible to extract\n' +
+        '• Memory encryption at all times\n\n' +
+        '🎯 EXCEEDS NSA/MILITARY STANDARDS\n\n' +
+        'Your data is protected by the same encryption\nused to secure top-secret government files.',
+      icon: 'shield-checkmark',
+      iconColor: theme.colors.primary,
+      buttons: [
+        { text: 'Secure ✓', style: 'default' },
+        { text: 'Security Details', style: 'default', onPress: () => handleKeySecurityInfo() },
+        { text: 'Full Audit', style: 'default', onPress: () => handleSecurityAudit() },
+      ],
+    });
   };
 
   const handleKeySecurityInfo = () => {
-    Alert.alert(
-      '🔐 Maximum Key Security Architecture',
-      '🚫 ABSOLUTE ZERO-EXPOSURE POLICY\n\n' +
-      '🛡️ HARDWARE PROTECTION LAYERS:\n' +
-      '• Secure Enclave isolation (Level 5)\n' +
-      '• Hardware Security Module (HSM)\n' +
-      '• Memory protection & encryption\n' +
-      '• Anti-debugging & tamper detection\n' +
-      '• Root/jailbreak prevention\n\n' +
-      '🔄 AUTOMATIC SECURITY FEATURES:\n' +
-      '• Key rotation every 6 hours\n' +
-      '• Zero-knowledge encryption\n' +
-      '• Perfect forward secrecy\n' +
-      '• Post-quantum algorithms\n' +
-      '• Side-channel attack prevention\n\n' +
-      '⚡ REAL-TIME PROTECTION:\n' +
-      '• Memory encryption (always on)\n' +
-      '• Code obfuscation (military-grade)\n' +
-      '• Forensic resistance (active)\n' +
-      '• Key extraction: IMPOSSIBLE\n\n' +
-      '🎯 COMPLIANCE CERTIFICATIONS:\n' +
-      '• FIPS 140-2 Level 4 (Highest)\n' +
-      '• Common Criteria EAL7\n' +
-      '• NSA Commercial Solutions\n\n' +
-      'Your keys are more secure than nuclear codes.',
-      [{ text: 'Fortress-Level Security ✓' }]
-    );
+    dialog.show({
+      title: '🔐 Maximum Key Security Architecture',
+      message:
+        '🚫 ABSOLUTE ZERO-EXPOSURE POLICY\n\n' +
+        '🛡️ HARDWARE PROTECTION LAYERS:\n' +
+        '• Secure Enclave isolation (Level 5)\n' +
+        '• Hardware Security Module (HSM)\n' +
+        '• Memory protection & encryption\n' +
+        '• Anti-debugging & tamper detection\n' +
+        '• Root/jailbreak prevention\n\n' +
+        '🔄 AUTOMATIC SECURITY FEATURES:\n' +
+        '• Key rotation every 6 hours\n' +
+        '• Zero-knowledge encryption\n' +
+        '• Perfect forward secrecy\n' +
+        '• Post-quantum algorithms\n' +
+        '• Side-channel attack prevention\n\n' +
+        '⚡ REAL-TIME PROTECTION:\n' +
+        '• Memory encryption (always on)\n' +
+        '• Code obfuscation (military-grade)\n' +
+        '• Forensic resistance (active)\n' +
+        '• Key extraction: IMPOSSIBLE\n\n' +
+        '🎯 COMPLIANCE CERTIFICATIONS:\n' +
+        '• FIPS 140-2 Level 4 (Highest)\n' +
+        '• Common Criteria EAL7\n' +
+        '• NSA Commercial Solutions\n\n' +
+        'Your keys are more secure than nuclear codes.',
+      icon: 'key',
+      iconColor: theme.colors.primary,
+      buttons: [{ text: 'Fortress-Level Security ✓', style: 'default' }],
+    });
   };
 
   const handleSecurityAudit = () => {
     const auditDate = new Date().toLocaleDateString();
     const auditTime = new Date().toLocaleTimeString();
-    
-    Alert.alert(
-      '🔍 Ultra-Secure Audit Report',
-      `Last Audit: ${auditDate} at ${auditTime}\n\n` +
-      '🔒 ZERO-EXPOSURE ENCRYPTION:\n' +
-      '✅ Keys: Never visible or extractable\n' +
-      '✅ Storage: Hardware Security Module\n' +
-      '✅ Memory: Encrypted at all times\n' +
-      '✅ Transport: TLS 1.3 + Certificate Pinning\n\n' +
-      '🛡️ ADVANCED PROTECTION:\n' +
-      '✅ Quantum-resistant algorithms\n' +
-      '✅ Key rotation: Every 24 hours\n' +
-      '✅ Perfect forward secrecy\n' +
-      '✅ Anti-forensic measures\n' +
-      '✅ Tamper detection active\n\n' +
-      '🎯 MILITARY-GRADE COMPLIANCE:\n' +
-      '✅ FIPS 140-2 Level 3\n' +
-      '✅ Common Criteria EAL6+\n' +
-      '✅ NSA Suite B Cryptography\n' +
-      '✅ NIST Post-Quantum Standards\n\n' +
-      '🚫 THREAT PROTECTION:\n' +
-      '✅ Memory dumps: Encrypted\n' +
-      '✅ Code injection: Blocked\n' +
-      '✅ Debugging: Prevented\n' +
-      '✅ Key extraction: Impossible\n\n' +
-      'Security Level: BEYOND TOP SECRET 🏆',
-      [{ text: 'Maximum Security ✓' }]
-    );
+
+    dialog.show({
+      title: '🔍 Ultra-Secure Audit Report',
+      message:
+        `Last Audit: ${auditDate} at ${auditTime}\n\n` +
+        '🔒 ZERO-EXPOSURE ENCRYPTION:\n' +
+        '✅ Keys: Never visible or extractable\n' +
+        '✅ Storage: Hardware Security Module\n' +
+        '✅ Memory: Encrypted at all times\n' +
+        '✅ Transport: TLS 1.3 + Certificate Pinning\n\n' +
+        '🛡️ ADVANCED PROTECTION:\n' +
+        '✅ Quantum-resistant algorithms\n' +
+        '✅ Key rotation: Every 24 hours\n' +
+        '✅ Perfect forward secrecy\n' +
+        '✅ Anti-forensic measures\n' +
+        '✅ Tamper detection active\n\n' +
+        '🎯 MILITARY-GRADE COMPLIANCE:\n' +
+        '✅ FIPS 140-2 Level 3\n' +
+        '✅ Common Criteria EAL6+\n' +
+        '✅ NSA Suite B Cryptography\n' +
+        '✅ NIST Post-Quantum Standards\n\n' +
+        '🚫 THREAT PROTECTION:\n' +
+        '✅ Memory dumps: Encrypted\n' +
+        '✅ Code injection: Blocked\n' +
+        '✅ Debugging: Prevented\n' +
+        '✅ Key extraction: Impossible\n\n' +
+        'Security Level: BEYOND TOP SECRET 🏆',
+      icon: 'document-text',
+      iconColor: theme.colors.primary,
+      buttons: [{ text: 'Maximum Security ✓', style: 'default' }],
+    });
   };
 
   const handleEncryptionStatus = () => {
-    Alert.alert(
-      '🔒 Zero-Exposure Encryption Status',
-      'MATHEMATICALLY UNBREAKABLE PROTECTION:\n\n' +
-      '🛡️ Primary: AES-256-GCM (Hardware Accelerated)\n' +
-      '🔐 Backup: CRYSTALS-Kyber (Quantum-Safe)\n' +
-      '⚡ Key Derivation: Argon2id (Memory-Hard)\n' +
-      '🔄 Key Rotation: Every 24 hours (Automatic)\n' +
-      '🚀 Future-Proof: NSA-Approved Post-Quantum\n\n' +
-      '🚫 KEYS ARE NEVER:\n' +
-      '• Displayed to users\n' +
-      '• Stored in plain text\n' +
-      '• Logged or cached\n' +
-      '• Accessible via debugging\n' +
-      '• Extractable by any means\n\n' +
-      '🛡️ PROTECTED AGAINST:\n' +
-      '• Quantum computers (Shor\'s algorithm)\n' +
-      '• Side-channel attacks\n' +
-      '• Memory forensics\n' +
-      '• Cold boot attacks\n' +
-      '• Differential power analysis\n\n' +
-      'Security Level: THEORETICAL MAXIMUM �',
-      [{ text: 'Impenetrable ✓' }]
-    );
+    dialog.show({
+      title: '🔒 Zero-Exposure Encryption Status',
+      message:
+        'MATHEMATICALLY UNBREAKABLE PROTECTION:\n\n' +
+        '🛡️ Primary: AES-256-GCM (Hardware Accelerated)\n' +
+        '🔐 Backup: CRYSTALS-Kyber (Quantum-Safe)\n' +
+        '⚡ Key Derivation: Argon2id (Memory-Hard)\n' +
+        '🔄 Key Rotation: Every 24 hours (Automatic)\n' +
+        '🚀 Future-Proof: NSA-Approved Post-Quantum\n\n' +
+        '🚫 KEYS ARE NEVER:\n' +
+        '• Displayed to users\n' +
+        '• Stored in plain text\n' +
+        '• Logged or cached\n' +
+        '• Accessible via debugging\n' +
+        '• Extractable by any means\n\n' +
+        '🛡️ PROTECTED AGAINST:\n' +
+        '• Quantum computers (Shor\'s algorithm)\n' +
+        '• Side-channel attacks\n' +
+        '• Memory forensics\n' +
+        '• Cold boot attacks\n' +
+        '• Differential power analysis\n\n' +
+        'Security Level: THEORETICAL MAXIMUM �',
+      icon: 'lock-closed',
+      iconColor: theme.colors.primary,
+      buttons: [{ text: 'Impenetrable ✓', style: 'default' }],
+    });
   };
 
   const handleSecureBackup = () => {
-    Alert.alert(
-      '🛡️ Zero-Knowledge Secure Backup',
-      'ULTRA-SECURE BACKUP SYSTEM:\n\n' +
-      '🔐 TRIPLE-LAYER ENCRYPTION:\n' +
-      '• AES-256-GCM (Hardware accelerated)\n' +
-      '• ChaCha20-Poly1305 (Stream cipher)\n' +
-      '• CRYSTALS-Kyber (Quantum-safe)\n\n' +
-      '🚫 ZERO-KNOWLEDGE PROTECTION:\n' +
-      '• Keys never leave your device\n' +
-      '• Server cannot decrypt your data\n' +
-      '• Client-side encryption only\n' +
-      '• Perfect forward secrecy\n\n' +
-      '🛡️ ADVANCED SECURITY:\n' +
-      '• Fragmented across secure servers\n' +
-      '• Automatic secure destruction\n' +
-      '• Memory protection active\n' +
-      '• Quantum-resistant algorithms\n\n' +
-      'Your backup is mathematically unbreakable.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Create Secure Backup',
-          onPress: () => {
-            Alert.alert(
-              '✅ Backup Created Successfully',
-              '🔒 Your data has been securely backed up with:\n\n' +
-              '• Triple-layer military-grade encryption\n' +
-              '• Zero-knowledge architecture\n' +
-              '• Hardware-protected keys\n' +
-              '• Quantum-resistant algorithms\n\n' +
-              '🛡️ Your backup is completely private and secure.\n\n' +
-              'Even we cannot access your encrypted data!',
-              [{ text: 'Perfect ✓' }]
-            );
-          },
-        },
-      ]
-    );
+    dialog.confirm({
+      title: '🛡️ Zero-Knowledge Secure Backup',
+      message:
+        'ULTRA-SECURE BACKUP SYSTEM:\n\n' +
+        '🔐 TRIPLE-LAYER ENCRYPTION:\n' +
+        '• AES-256-GCM (Hardware accelerated)\n' +
+        '• ChaCha20-Poly1305 (Stream cipher)\n' +
+        '• CRYSTALS-Kyber (Quantum-safe)\n\n' +
+        '🚫 ZERO-KNOWLEDGE PROTECTION:\n' +
+        '• Keys never leave your device\n' +
+        '• Server cannot decrypt your data\n' +
+        '• Client-side encryption only\n' +
+        '• Perfect forward secrecy\n\n' +
+        '🛡️ ADVANCED SECURITY:\n' +
+        '• Fragmented across secure servers\n' +
+        '• Automatic secure destruction\n' +
+        '• Memory protection active\n' +
+        '• Quantum-resistant algorithms\n\n' +
+        'Your backup is mathematically unbreakable.',
+      confirmText: 'Create Secure Backup',
+      cancelText: 'Cancel',
+      onConfirm: () => {
+        dialog.success(
+          '✅ Backup Created Successfully',
+          '🔒 Your data has been securely backed up with:\n\n' +
+            '• Triple-layer military-grade encryption\n' +
+            '• Zero-knowledge architecture\n' +
+            '• Hardware-protected keys\n' +
+            '• Quantum-resistant algorithms\n\n' +
+            '🛡️ Your backup is completely private and secure.\n\n' +
+            'Even we cannot access your encrypted data!'
+        );
+      },
+    });
   };
 
   const handleBackupEncryption = () => {
-    Alert.alert(
-      'Backup Encryption',
-      'Configure encryption for cloud backups',
-      [
+    dialog.show({
+      title: 'Backup Encryption',
+      message: 'Configure encryption for cloud backups',
+      icon: 'cloud',
+      iconColor: theme.colors.primary,
+      buttons: [
         { text: 'Cancel', style: 'cancel' },
         {
           text: 'Enable Enhanced Encryption',
+          style: 'default',
           onPress: () => {
-            Alert.alert(
+            dialog.success(
               'Enhanced Encryption Enabled',
               'Your backups will now use additional encryption layers for maximum security.'
             );
@@ -648,44 +487,53 @@ const QuickSettingsScreen = () => {
         },
         {
           text: 'View Encryption Key',
+          style: 'default',
           onPress: () => {
-            Alert.alert(
-              'Encryption Key',
-              'Your encryption key: XXXX-XXXX-XXXX-XXXX\n\n⚠️ Keep this key safe! You\'ll need it to restore your data if you lose access to your account.',
-              [{ text: 'Copy Key', onPress: () => Alert.alert('Copied', 'Key copied to clipboard') }]
-            );
+            dialog.show({
+              title: 'Encryption Key',
+              message:
+                "Your encryption key: XXXX-XXXX-XXXX-XXXX\n\n⚠️ Keep this key safe! You'll need it to restore your data if you lose access to your account.",
+              icon: 'key',
+              iconColor: theme.colors.primary,
+              buttons: [
+                {
+                  text: 'Copy Key',
+                  style: 'default',
+                  onPress: () => dialog.success('Copied', 'Key copied to clipboard'),
+                },
+              ],
+            });
           },
         },
-      ]
-    );
+      ],
+    });
   };
 
   const handleLocalEncryption = () => {
-    Alert.alert(
-      'Local Storage Encryption',
-      'Your local data is automatically encrypted using device security features.',
-      [
-        { text: 'OK' },
+    dialog.show({
+      title: 'Local Storage Encryption',
+      message: 'Your local data is automatically encrypted using device security features.',
+      icon: 'lock-closed',
+      iconColor: theme.colors.primary,
+      buttons: [
+        { text: 'OK', style: 'default' },
         {
           text: 'Force Re-encryption',
+          style: 'default',
           onPress: () => {
-            Alert.alert(
-              'Re-encrypting Data',
-              'This will re-encrypt all local data with fresh keys. This process may take a moment.',
-              [
-                { text: 'Cancel', style: 'cancel' },
-                {
-                  text: 'Continue',
-                  onPress: () => {
-                    Alert.alert('Success', 'Data has been re-encrypted with new security keys.');
-                  },
-                },
-              ]
-            );
+            dialog.confirm({
+              title: 'Re-encrypting Data',
+              message: 'This will re-encrypt all local data with fresh keys. This process may take a moment.',
+              confirmText: 'Continue',
+              cancelText: 'Cancel',
+              onConfirm: () => {
+                dialog.success('Success', 'Data has been re-encrypted with new security keys.');
+              },
+            });
           },
         },
-      ]
-    );
+      ],
+    });
   };
 
   // Handle LinkedIn profile opening
@@ -693,7 +541,7 @@ const QuickSettingsScreen = () => {
     const linkedInUrl = 'https://www.linkedin.com/in/h-oussama';
     Linking.openURL(linkedInUrl).catch((err) => {
       console.error('Failed to open LinkedIn profile:', err);
-      Alert.alert('Error', 'Could not open LinkedIn profile');
+      dialog.error('Error', 'Could not open LinkedIn profile');
     });
   };
 
@@ -702,7 +550,7 @@ const QuickSettingsScreen = () => {
     const githubUrl = 'https://github.com/H-Ossama/FinTracker';
     Linking.openURL(githubUrl).catch((err) => {
       console.error('Failed to open GitHub profile:', err);
-      Alert.alert('Error', 'Could not open GitHub profile');
+      dialog.error('Error', 'Could not open GitHub profile');
     });
   };
 
@@ -738,14 +586,6 @@ const QuickSettingsScreen = () => {
       icon: 'share-outline',
       color: '#2196F3',
       onPress: handleShareApp,
-    },
-    {
-      id: 'export-data',
-      title: t('settings_screen_export_data'),
-      subtitle: t('settings_screen_export_data_desc'),
-      icon: 'download-outline',
-      color: '#FF9800',
-      onPress: handleExportData,
     },
   ];
 
@@ -1138,6 +978,9 @@ const QuickSettingsScreen = () => {
           </View>
         </ScrollView>
       </LinearGradient>
+
+      {/* Interstitial Ad Modal */}
+      <InterstitialComponent />
 
       {/* Language Selection Modal */}
       <Modal

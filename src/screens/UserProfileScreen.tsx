@@ -9,7 +9,6 @@ import {
   ActivityIndicator,
   Image,
   Switch,
-  Alert,
   KeyboardAvoidingView,
   Platform,
   StatusBar,
@@ -23,8 +22,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { useTheme } from '../contexts/ThemeContext';
 import { useLocalization } from '../contexts/LocalizationContext';
 import { useSubscription } from '../contexts/SubscriptionContext';
-import { useCustomAlert } from '../hooks/useCustomAlert';
-import CustomAlert from '../components/CustomAlert';
+import { useDialog } from '../contexts/DialogContext';
 import { FullScreenLoader } from '../components/ScreenLoadingIndicator';
 
 interface ProfileFormData {
@@ -64,7 +62,7 @@ const UserProfileScreen: React.FC<UserProfileScreenProps> = ({ navigation }) => 
   const { t } = useLocalization();
   const insets = useSafeAreaInsets();
   const { planId, isPro } = useSubscription();
-  const { alertState, hideAlert, showSuccess, showError, showDestructive } = useCustomAlert();
+  const dialog = useDialog();
   const {
     user,
     updateProfile,
@@ -108,12 +106,12 @@ const UserProfileScreen: React.FC<UserProfileScreenProps> = ({ navigation }) => 
           name: data.name,
           email: data.email,
         });
-        showSuccess(t('profile_screen_profile_updated'), t('profile_screen_profile_updated_success'));
+        dialog.success(t('profile_screen_profile_updated'), t('profile_screen_profile_updated_success'));
       } else {
-        showError(t('profile_screen_update_failed'), result.error || t('profile_screen_update_failed'));
+        dialog.error(t('profile_screen_update_failed'), result.error || t('profile_screen_update_failed'));
       }
     } catch (error) {
-      showError(t('error'), t('profile_screen_unexpected_error'));
+      dialog.error(t('error'), t('profile_screen_unexpected_error'));
     } finally {
       setIsLoading(false);
     }
@@ -128,36 +126,36 @@ const UserProfileScreen: React.FC<UserProfileScreenProps> = ({ navigation }) => 
       if (result.success) {
         setShowChangePassword(false);
         passwordForm.reset();
-        Alert.alert(t('success'), t('profile_screen_password_changed'));
+        dialog.success(t('success'), t('profile_screen_password_changed'));
       } else {
-        Alert.alert(t('profile_screen_password_change_failed'), result.error || t('profile_screen_password_change_failed'));
+        dialog.error(t('profile_screen_password_change_failed'), result.error || t('profile_screen_password_change_failed'));
       }
     } catch (error) {
-      Alert.alert(t('error'), t('profile_screen_unexpected_error'));
+      dialog.error(t('error'), t('profile_screen_unexpected_error'));
     } finally {
       setIsLoading(false);
     }
   };
 
   const handleDeleteAccount = () => {
-    Alert.alert(
-      t('profile_screen_delete_account_title'),
-      t('profile_screen_delete_account_warning') + '\n\n' + 
-      '⚠️ This action will:\n' +
-      '• Delete all your financial data\n' + 
-      '• Remove all transactions and wallets\n' +
-      '• Clear all reminders and goals\n' +
-      '• Sign you out permanently\n\n' +
-      'This cannot be undone!',
-      [
-        { text: t('cancel'), style: 'cancel' },
-        {
-          text: t('profile_screen_delete_account'),
-          style: 'destructive',
-          onPress: confirmDeleteAccount,
-        },
-      ]
-    );
+    dialog.confirm({
+      title: t('profile_screen_delete_account_title'),
+      message:
+        t('profile_screen_delete_account_warning') +
+        '\n\n' +
+        '⚠️ This action will:\n' +
+        '• Delete all your financial data\n' +
+        '• Remove all transactions and wallets\n' +
+        '• Clear all reminders and goals\n' +
+        '• Sign you out permanently\n\n' +
+        'This cannot be undone!',
+      destructive: true,
+      confirmText: t('profile_screen_delete_account'),
+      cancelText: t('cancel'),
+      onConfirm: () => {
+        void confirmDeleteAccount();
+      },
+    });
   };
 
   const confirmDeleteAccount = async () => {
@@ -168,28 +166,15 @@ const UserProfileScreen: React.FC<UserProfileScreenProps> = ({ navigation }) => 
       const result = await deleteAccount();
 
       if (result.success) {
-        Alert.alert(
+        dialog.success(
           '✅ Account Deleted',
-          'Your account and all data have been permanently deleted. Thank you for using FINEX.',
-          [
-            {
-              text: t('ok'),
-              style: 'default',
-              // Navigation will be handled automatically by auth state change
-            },
-          ]
+          'Your account and all data have been permanently deleted. Thank you for using FINEX.'
         );
       } else {
-        Alert.alert(
-          'Deletion Failed', 
-          result.error || 'Failed to delete account. Please try again.'
-        );
+        dialog.error('Deletion Failed', result.error || 'Failed to delete account. Please try again.');
       }
     } catch (error) {
-      Alert.alert(
-        'Error', 
-        'An unexpected error occurred while deleting your account. Please try again.'
-      );
+      dialog.error('Error', 'An unexpected error occurred while deleting your account. Please try again.');
     } finally {
       if (isMountedRef.current) {
         setIsLoading(false);
@@ -199,16 +184,18 @@ const UserProfileScreen: React.FC<UserProfileScreenProps> = ({ navigation }) => 
   };
 
   const handleSignOut = () => {
-    showDestructive(
-      t('profile_screen_sign_out'),
-      t('profile_screen_sign_out_confirmation'),
-      async () => {
-        await signOut();
-        // Navigation will be handled automatically by auth state change
+    dialog.confirm({
+      title: t('profile_screen_sign_out'),
+      message: t('profile_screen_sign_out_confirmation'),
+      confirmText: t('profile_screen_sign_out'),
+      cancelText: t('cancel'),
+      onConfirm: () => {
+        void (async () => {
+          await signOut();
+          // Navigation will be handled automatically by auth state change
+        })();
       },
-      undefined,
-      t('profile_screen_sign_out')
-    );
+    });
   };
 
   const getInitials = (name: string) => {
@@ -521,16 +508,6 @@ const UserProfileScreen: React.FC<UserProfileScreenProps> = ({ navigation }) => 
       </ScrollView>
       </KeyboardAvoidingView>
       </View>
-      
-      <CustomAlert
-        visible={alertState.visible}
-        title={alertState.title}
-        message={alertState.message}
-        buttons={alertState.buttons}
-        icon={alertState.icon as any}
-        iconColor={alertState.iconColor}
-        onDismiss={hideAlert}
-      />
     </View>
   );
 };

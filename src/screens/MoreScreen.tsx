@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   View,
   Text,
@@ -7,7 +7,6 @@ import {
   TouchableOpacity,
   Switch,
   Image,
-  Alert,
   ActionSheetIOS,
   Platform,
   ActivityIndicator,
@@ -27,17 +26,21 @@ import { billsService } from '../services/billsService';
 import { budgetService } from '../services/budgetService';
 import { dataInitializationService } from '../services/dataInitializationService';
 import { dataExportService } from '../services/dataExportService';
+import ExportDataModal, { ExportOption } from '../components/ExportDataModal';
 import { Goal, Bill } from '../types';
+import { useDialog } from '../contexts/DialogContext';
 
 const MoreScreen = () => {
   const { theme } = useTheme();
   const { formatCurrency, t } = useLocalization();
   const { user, isAuthenticated, biometricEnabled } = useAuth();
-  const { isPro, planId } = useSubscription();
+  const { isPro, planId, hasFeature, showUpgradeModal } = useSubscription();
   const navigation = useNavigation();
   const insets = useSafeAreaInsets();
+  const dialog = useDialog();
   const [isBalanceMasked, setIsBalanceMasked] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
+  const [exportModalVisible, setExportModalVisible] = useState(false);
   const [goals, setGoals] = useState<Goal[]>([]);
   const [goalsLoading, setGoalsLoading] = useState(true);
   const [bills, setBills] = useState<Bill[]>([]);
@@ -209,6 +212,39 @@ const MoreScreen = () => {
     },
   ];
 
+  const bottomScrollPadding = useMemo(() => {
+    // This screen sits under an absolute bottom tab bar + (optional) banner.
+    // Give enough padding so the last items can scroll above them.
+    return insets.bottom + 240;
+  }, [insets.bottom]);
+
+  const runExport = async (option: ExportOption) => {
+    if (!hasFeature('exportData')) {
+      showUpgradeModal('exportData', t('subscription_pro_export') || 'Export is available on Pro.');
+      return;
+    }
+
+    if (isExporting) return;
+
+    try {
+      setIsExporting(true);
+      const result =
+        option === 'pdf'
+          ? await dataExportService.exportAsPdf()
+          : option === 'excel'
+            ? await dataExportService.exportAsExcel()
+            : await dataExportService.exportAsJson();
+
+      if (result.success) {
+        dialog.success('Export Ready', 'Your export file is ready to share.');
+      } else {
+        dialog.error('Export Failed', result.error || 'Unknown error');
+      }
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
   const renderMenuItem = (item: any) => (
     <TouchableOpacity 
       key={item.id} 
@@ -224,25 +260,19 @@ const MoreScreen = () => {
         } else if (item.id === 'budget') {
           navigation.navigate('BudgetPlanner' as never);
         } else if (item.id === 'backup') {
+          if (!hasFeature('cloudBackup')) {
+            showUpgradeModal('cloudBackup', t('subscription_pro_backup') || 'Cloud backup is available on Pro.');
+            return;
+          }
           navigation.navigate('CloudBackup' as never);
         } else if (item.id === 'reports') {
           navigation.navigate('MonthlyReports' as never);
         } else if (item.id === 'export') {
-          if (isExporting) return;
-
-          (async () => {
-            try {
-              setIsExporting(true);
-              const result = await dataExportService.exportAsJson();
-              if (result.success) {
-                Alert.alert('Export Ready', 'Your export file is ready to share.');
-              } else {
-                Alert.alert('Export Failed', result.error || 'Unknown error');
-              }
-            } finally {
-              setIsExporting(false);
-            }
-          })();
+          if (!hasFeature('exportData')) {
+            showUpgradeModal('exportData', t('subscription_pro_export') || 'Export is available on Pro.');
+            return;
+          }
+          setExportModalVisible(true);
         }
         // Add other navigation handlers here as needed
       }}
@@ -497,7 +527,11 @@ const MoreScreen = () => {
 
       {/* White Content Section */}
       <View style={[styles.contentContainer, { backgroundColor: theme.colors.background }]}>
-        <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
+        <ScrollView
+          style={styles.scrollView}
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={{ paddingBottom: bottomScrollPadding }}
+        >
           {/* Quick Overview Cards */}
           <View style={styles.overviewSection}>
             <View style={[styles.overviewCard, { backgroundColor: theme.colors.card }]}>
@@ -710,9 +744,18 @@ const MoreScreen = () => {
             </View>
           ))}
           
-          <View style={{ height: 100 }} />
         </ScrollView>
       </View>
+
+      <ExportDataModal
+        visible={exportModalVisible}
+        isProcessing={isExporting}
+        onClose={() => setExportModalVisible(false)}
+        onSelect={async (option) => {
+          setExportModalVisible(false);
+          await runExport(option);
+        }}
+      />
 
     </View>
   );

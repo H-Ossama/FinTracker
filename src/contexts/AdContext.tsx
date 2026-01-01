@@ -130,6 +130,9 @@ export const AdProvider: React.FC<AdProviderProps> = ({ children }) => {
     mobileAds()
       .setRequestConfiguration({
         maxAdContentRating: MaxAdContentRating.G,
+        ...(typeof __DEV__ !== 'undefined' && __DEV__
+          ? { testDeviceIdentifiers: ['EMULATOR'] }
+          : null),
       })
       .catch(() => {
         // Ignore configuration errors; ads will still attempt to load.

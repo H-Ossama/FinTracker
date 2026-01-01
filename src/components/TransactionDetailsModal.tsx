@@ -6,7 +6,6 @@ import {
   Modal,
   TouchableOpacity,
   ScrollView,
-  Alert,
   Dimensions,
   StatusBar,
 } from 'react-native';
@@ -14,6 +13,7 @@ import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../contexts/ThemeContext';
 import { useLocalization } from '../contexts/LocalizationContext';
+import { useDialog } from '../contexts/DialogContext';
 import { HybridTransaction } from '../services/hybridDataService';
 
 interface TransactionDetailsModalProps {
@@ -38,6 +38,7 @@ const TransactionDetailsModal: React.FC<TransactionDetailsModalProps> = ({
   const { theme } = useTheme();
   const { formatCurrency, t } = useLocalization();
   const insets = useSafeAreaInsets();
+  const dialog = useDialog();
 
   if (!transaction) return null;
 
@@ -103,21 +104,17 @@ const TransactionDetailsModal: React.FC<TransactionDetailsModalProps> = ({
   };
 
   const handleDelete = () => {
-    Alert.alert(
-      t('delete_transaction'),
-      t('delete_transaction_confirmation'),
-      [
-        { text: t('cancel'), style: 'cancel' },
-        { 
-          text: t('delete'), 
-          style: 'destructive',
-          onPress: () => {
-            onDelete?.(transaction.id);
-            onClose();
-          }
-        },
-      ]
-    );
+    dialog.confirm({
+      title: t('delete_transaction'),
+      message: t('delete_transaction_confirmation'),
+      destructive: true,
+      confirmText: t('delete'),
+      cancelText: t('cancel'),
+      onConfirm: () => {
+        onDelete?.(transaction.id);
+        onClose();
+      },
+    });
   };
 
   const icon = getTransactionIcon(transaction.type, transaction.description);
