@@ -16,24 +16,24 @@ import { Platform } from 'react-native';
 export const AD_UNIT_IDS = {
   android: {
     banner: __DEV__ 
-      ? 'ca-app-pub-2444078085373273/5989616208'
+      ? 'ca-app-pub-3940256099942544/6300978111' // Google Test ID
       : 'YOUR_ANDROID_BANNER_AD_UNIT_ID', // Replace with actual production ID
     interstitial: __DEV__
-      ? 'ca-app-pub-2444078085373273/3116056764'
+      ? 'ca-app-pub-3940256099942544/1033173712' // Google Test ID
       : 'YOUR_ANDROID_INTERSTITIAL_AD_UNIT_ID', // Replace with actual production ID
     appOpen: __DEV__
-      ? 'ca-app-pub-2444078085373273/2050371195'
+      ? 'ca-app-pub-3940256099942544/3419835294' // Google Test ID
       : 'YOUR_ANDROID_APP_OPEN_AD_UNIT_ID', // Replace with actual production ID
   },
   ios: {
     banner: __DEV__
-      ? 'ca-app-pub-2444078085373273/3469256460' 
+      ? 'ca-app-pub-3940256099942544/2934735716' // Google Test ID
       : 'YOUR_IOS_BANNER_AD_UNIT_ID', // Replace with actual production ID
     interstitial: __DEV__
-      ? 'ca-app-pub-2444078085373273/6863730083' 
+      ? 'ca-app-pub-3940256099942544/4411468910' // Google Test ID
       : 'YOUR_IOS_INTERSTITIAL_AD_UNIT_ID', // Replace with actual production ID
     appOpen: __DEV__
-      ? 'ca-app-pub-2444078085373273/3942053271'
+      ? 'ca-app-pub-3940256099942544/5662855259' // Google Test ID
       : 'YOUR_IOS_APP_OPEN_AD_UNIT_ID', // Replace with actual production ID
   },
 };
