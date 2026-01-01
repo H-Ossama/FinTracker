@@ -2,7 +2,7 @@
   "expo": {
     "name": "FINEX",
     "slug": "finex",
-    "version": "2.6.0",
+    "version": "2.7.0",
     "orientation": "portrait",
     "sdkVersion": "54.0.0",
     "icon": "./assets/icon.png",
@@ -35,7 +35,7 @@
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#20C6F7"
       },
-      "versionCode": 12,
+      "versionCode": 13,
       "compileSdkVersion": 34,
       "targetSdkVersion": 34,
       "minSdkVersion": 21,
@@ -66,6 +66,13 @@
           "icon": "./assets/adaptive-icon.png",
           "color": "#20C6F7",
           "defaultChannel": "default"
+        }
+      ],
+      [
+        "react-native-google-mobile-ads",
+        {
+          "androidAppId": "ca-app-pub-2444078085373273~4676550447",
+          "iosAppId": "ca-app-pub-2444078085373273~6181187893"
         }
       ]
     ],

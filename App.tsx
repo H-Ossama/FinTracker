@@ -8,45 +8,72 @@ global.Buffer = Buffer;
 // Import console override first to silence production logs
 import './src/utils/consoleOverride';
 
-import React, { useEffect, useState, useCallback, Suspense, lazy, useRef } from 'react';
+import React, { useEffect, useState, useCallback, Suspense, lazy, useRef, memo } from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { createStackNavigator } from '@react-navigation/stack';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { View, Text, ActivityIndicator, StyleSheet, InteractionManager, Animated, Easing, Image } from 'react-native';
 
+// Import navigation loading system
+import { NavigationLoadingProvider, useNavigationLoading } from './src/contexts/NavigationLoadingContext';
+import NavigationLoadingOverlay from './src/components/NavigationLoadingOverlay';
+import { ScreenLoadingWrapper } from './src/components/withNavigationLoading';
+
+// Import onboarding tutorial
+import { OnboardingTutorial, useOnboardingTutorial } from './src/components/OnboardingTutorial';
+
 // Lazy load components to reduce initial bundle size and improve performance
 const SwipeableBottomTabNavigator = lazy(() => import('./src/components/SwipeableBottomTabNavigator'));
 const TouchActivityWrapper = lazy(() => import('./src/components/TouchActivityWrapper'));
-const AddIncomeScreen = lazy(() => import('./src/screens/AddIncomeScreen'));
-const BorrowedMoneyHistoryScreen = lazy(() => import('./src/screens/BorrowedMoneyHistoryScreen'));
-const TransactionsHistoryScreen = lazy(() => import('./src/screens/TransactionsHistoryScreen'));
-const NotificationCenterScreen = lazy(() => import('./src/screens/NotificationCenterScreen'));
-const NotificationPreferencesScreen = lazy(() => import('./src/screens/NotificationPreferencesScreen'));
-const SignUpScreen = lazy(() => import('./src/screens/SignUpScreen'));
-const SignInScreen = lazy(() => import('./src/screens/SignInScreen'));
+
+// Create wrapped lazy components that trigger loading state
+const createLazyScreen = (importFn: () => Promise<any>, screenName: string) => {
+  const LazyComponent = lazy(importFn);
+  return memo((props: any) => (
+    <ScreenLoadingWrapper screenName={screenName}>
+      <LazyComponent {...props} />
+    </ScreenLoadingWrapper>
+  ));
+};
+
+// Lazy load screens with automatic loading wrappers
+const AddIncomeScreen = createLazyScreen(() => import('./src/screens/AddIncomeScreen'), 'AddIncome');
+const BorrowedMoneyHistoryScreen = createLazyScreen(() => import('./src/screens/BorrowedMoneyHistoryScreen'), 'BorrowedMoneyHistory');
+const TransactionsHistoryScreen = createLazyScreen(() => import('./src/screens/TransactionsHistoryScreen'), 'TransactionsHistory');
+const NotificationCenterScreen = createLazyScreen(() => import('./src/screens/NotificationCenterScreen'), 'NotificationCenter');
+const NotificationPreferencesScreen = createLazyScreen(() => import('./src/screens/NotificationPreferencesScreen'), 'NotificationPreferences');
+const SignUpScreen = createLazyScreen(() => import('./src/screens/SignUpScreen'), 'SignUp');
+const SignInScreen = createLazyScreen(() => import('./src/screens/SignInScreen'), 'SignIn');
 import AccessDeniedScreen from './src/screens/AccessDeniedScreen'; // Import directly instead of lazy loading
-const UserProfileScreen = lazy(() => import('./src/screens/UserProfileScreen'));
-const SavingsGoalsScreen = lazy(() => import('./src/screens/SavingsGoalsScreen'));
-const QuickSettingsScreen = lazy(() => import('./src/screens/QuickSettingsScreen'));
-const QuickActionsSettingsScreen = lazy(() => import('./src/screens/QuickActionsSettingsScreen'));
-const AppLockSettingsScreen = lazy(() => import('./src/screens/AppLockSettingsScreen'));
-const PinSetupScreen = lazy(() => import('./src/screens/PinSetupScreen'));
-const AppLockScreen = lazy(() => import('./src/screens/AppLockScreen'));
-const BillsTrackerScreen = lazy(() => import('./src/screens/BillsTrackerScreen'));
-const BudgetPlannerScreen = lazy(() => import('./src/screens/BudgetPlannerScreen'));
-const RemindersScreen = lazy(() => import('./src/screens/RemindersScreen'));
-const CloudBackupScreen = lazy(() => import('./src/screens/CloudBackupScreen'));
-const MonthlyReportsScreen = lazy(() => import('./src/screens/MonthlyReportsScreen'));
-const SyncTestScreen = lazy(() => import('./src/screens/SyncTestScreen'));
-const DevelopmentToolsScreen = lazy(() => import('./src/screens/DevelopmentToolsScreen'));
-const PrivacyPolicyScreen = lazy(() => import('./src/screens/PrivacyPolicyScreen'));
-const TermsOfUseScreen = lazy(() => import('./src/screens/TermsOfUseScreen'));
+const UserProfileScreen = createLazyScreen(() => import('./src/screens/UserProfileScreen'), 'UserProfile');
+const SavingsGoalsScreen = createLazyScreen(() => import('./src/screens/SavingsGoalsScreen'), 'SavingsGoals');
+const QuickSettingsScreen = createLazyScreen(() => import('./src/screens/QuickSettingsScreen'), 'QuickSettings');
+const QuickActionsSettingsScreen = createLazyScreen(() => import('./src/screens/QuickActionsSettingsScreen'), 'QuickActionsSettings');
+const AppLockSettingsScreen = createLazyScreen(() => import('./src/screens/AppLockSettingsScreen'), 'AppLockSettings');
+const PinSetupScreen = createLazyScreen(() => import('./src/screens/PinSetupScreen'), 'PinSetup');
+const AppLockScreen = lazy(() => import('./src/screens/AppLockScreen')); // Keep this direct for security
+const BillsTrackerScreen = createLazyScreen(() => import('./src/screens/BillsTrackerScreen'), 'BillsReminder');
+const BudgetPlannerScreen = createLazyScreen(() => import('./src/screens/BudgetPlannerScreen'), 'BudgetPlanner');
+const RemindersScreen = createLazyScreen(() => import('./src/screens/RemindersScreen'), 'Reminders');
+const CloudBackupScreen = createLazyScreen(() => import('./src/screens/CloudBackupScreen'), 'CloudBackup');
+const MonthlyReportsScreen = createLazyScreen(() => import('./src/screens/MonthlyReportsScreen'), 'MonthlyReports');
+const SyncTestScreen = createLazyScreen(() => import('./src/screens/SyncTestScreen'), 'SyncTest');
+const DevelopmentToolsScreen = createLazyScreen(() => import('./src/screens/DevelopmentToolsScreen'), 'DevelopmentTools');
+const DevPINScreen = createLazyScreen(() => import('./src/screens/DevPINScreen'), 'DevPINEntry');
+const PrivacyPolicyScreen = createLazyScreen(() => import('./src/screens/PrivacyPolicyScreen'), 'PrivacyPolicy');
+const TermsOfUseScreen = createLazyScreen(() => import('./src/screens/TermsOfUseScreen'), 'TermsOfUse');
+const SubscriptionScreen = createLazyScreen(() => import('./src/screens/SubscriptionScreen'), 'Subscription');
 import { ThemeProvider, useTheme } from './src/contexts/ThemeContext';
 import { LocalizationProvider } from './src/contexts/LocalizationContext';
 import { AuthProvider, useAuth } from './src/contexts/AuthContext';
 import { NotificationProvider } from './src/contexts/NotificationContext';
 import { QuickActionsProvider } from './src/contexts/QuickActionsContext';
+import { SubscriptionProvider } from './src/contexts/SubscriptionContext';
+import { AnalyticsRefreshProvider } from './src/contexts/AnalyticsRefreshContext';
+import { AdProvider } from './src/contexts/AdContext';
+import ProUpgradeModal from './src/components/ProUpgradeModal';
+import AppOpenAd from './src/components/AppOpenAd';
 import { hybridDataService, AppInitResult } from './src/services/hybridDataService';
 import AppLockService from './src/services/appLockService';
 import BatteryOptimizer from './src/utils/batteryOptimizer';
@@ -54,7 +81,6 @@ import BatteryOptimizer from './src/utils/batteryOptimizer';
 const SyncReminderBanner = lazy(() => import('./src/components/SyncReminderBanner'));
 const SyncProgressModal = lazy(() => import('./src/components/SyncProgressModal'));
 import { navigationRef, onNavigationReady } from './src/navigation/navigationService';
-import { FullScreenLoader } from './src/components/ScreenLoadingIndicator';
 
 const Stack = createStackNavigator();
 
@@ -151,15 +177,39 @@ const ScreenWrapper = ({ children }: { children: React.ReactNode }) => {
 };
 
 const AppNavigator = React.memo(() => {
-  const { isDark } = useTheme();
+  const { isDark, theme } = useTheme();
   const { isAuthenticated, isLoading: authLoading, accessDenied } = useAuth();
+  const { startLoading, isScreenVisited } = useNavigationLoading();
   const [isAppLocked, setIsAppLocked] = useState(false);
   const [appLockInitialized, setAppLockInitialized] = useState(false);
-  const [isNavigating, setIsNavigating] = useState(false);
-  const navigationTransitionTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isMounted = useRef(false);
-  const visitedScreens = useRef<Set<string>>(new Set());
   const appLockService = AppLockService.getInstance();
+  const previousRouteName = useRef<string | undefined>(undefined);
+  
+  // Onboarding tutorial state
+  const { shouldShow: shouldShowOnboarding, isLoading: onboardingLoading, completeOnboarding } = useOnboardingTutorial();
+  const [showOnboarding, setShowOnboarding] = useState(false);
+
+  // Show onboarding when authenticated and not completed
+  useEffect(() => {
+    if (isAuthenticated && shouldShowOnboarding && !onboardingLoading) {
+      // Small delay to let the main screen render first
+      const timer = setTimeout(() => {
+        setShowOnboarding(true);
+      }, 500);
+      return () => clearTimeout(timer);
+    }
+  }, [isAuthenticated, shouldShowOnboarding, onboardingLoading]);
+
+  const handleOnboardingComplete = useCallback(async () => {
+    await completeOnboarding();
+    setShowOnboarding(false);
+  }, [completeOnboarding]);
+
+  const handleOnboardingSkip = useCallback(async () => {
+    await completeOnboarding();
+    setShowOnboarding(false);
+  }, [completeOnboarding]);
 
   // ALL HOOKS MUST BE DEFINED BEFORE ANY CONDITIONAL RETURNS
   const initializeAppLock = useCallback(async () => {
@@ -195,51 +245,14 @@ const AppNavigator = React.memo(() => {
     };
   }, []);
 
+  // Handle navigation state changes - trigger loading for new screens
   const handleNavigationStateChange = useCallback(() => {
     if (!navigationRef.isReady() || !isMounted.current) {
       return;
     }
 
     const currentRouteName = navigationRef.getCurrentRoute()?.name;
-    const isNewScreen = currentRouteName && !visitedScreens.current.has(currentRouteName);
-
-    // Only show loader for new screens if the transition is actually slow.
-    if (isNewScreen) {
-      if (navigationTransitionTimeout.current) {
-        clearTimeout(navigationTransitionTimeout.current);
-      }
-
-      // Show a loader quickly so the tap feels responsive on first-open screens.
-      navigationTransitionTimeout.current = setTimeout(() => {
-        if (isMounted.current) {
-          setIsNavigating(true);
-        }
-      }, 50);
-
-      InteractionManager.runAfterInteractions(() => {
-        if (!isMounted.current) {
-          return;
-        }
-        if (navigationTransitionTimeout.current) {
-          clearTimeout(navigationTransitionTimeout.current);
-          navigationTransitionTimeout.current = null;
-        }
-        setIsNavigating(false);
-      });
-    }
-
-    // Mark screen as visited for future navigation
-    if (currentRouteName) {
-      visitedScreens.current.add(currentRouteName);
-    }
-  }, []);
-
-  useEffect(() => {
-    return () => {
-      if (navigationTransitionTimeout.current) {
-        clearTimeout(navigationTransitionTimeout.current);
-      }
-    };
+    previousRouteName.current = currentRouteName;
   }, []);
 
   useEffect(() => {
@@ -308,14 +321,33 @@ const AppNavigator = React.memo(() => {
               animationEnabled: true,
               gestureEnabled: true,
               cardStyle: { backgroundColor: 'transparent' },
+              // Faster, smoother slide animation
+              transitionSpec: {
+                open: {
+                  animation: 'timing',
+                  config: {
+                    duration: 200,
+                  },
+                },
+                close: {
+                  animation: 'timing',
+                  config: {
+                    duration: 200,
+                  },
+                },
+              },
               cardStyleInterpolator: ({ current, layouts }) => {
                 return {
                   cardStyle: {
+                    opacity: current.progress.interpolate({
+                      inputRange: [0, 0.5, 1],
+                      outputRange: [0, 0.8, 1],
+                    }),
                     transform: [
                       {
                         translateX: current.progress.interpolate({
                           inputRange: [0, 1],
-                          outputRange: [layouts.screen.width, 0],
+                          outputRange: [layouts.screen.width * 0.3, 0],
                         }),
                       },
                     ],
@@ -367,6 +399,15 @@ const AppNavigator = React.memo(() => {
                     headerShown: false,
                     presentation: 'modal',
                     gestureEnabled: false,
+                  }}
+                />
+                <Stack.Screen 
+                  name="Subscription" 
+                  component={SubscriptionScreen}
+                  options={{ 
+                    headerShown: false,
+                    presentation: 'modal',
+                    gestureEnabled: true,
                   }}
                 />
                 <Stack.Screen 
@@ -453,6 +494,15 @@ const AppNavigator = React.memo(() => {
                   }}
                 />
                 <Stack.Screen 
+                  name="DevPINEntry" 
+                  component={DevPINScreen}
+                  options={{ 
+                    headerShown: false,
+                    presentation: 'modal',
+                    gestureEnabled: false,
+                  }}
+                />
+                <Stack.Screen 
                   name="DevelopmentTools" 
                   component={DevelopmentToolsScreen}
                   options={{ 
@@ -496,7 +546,13 @@ const AppNavigator = React.memo(() => {
             )}
           </Stack.Navigator>
         </NavigationContainer>
-        <FullScreenLoader visible={isNavigating} message="Loading..." />
+        <NavigationLoadingOverlay />
+        {/* Onboarding Tutorial - shown after first login */}
+        <OnboardingTutorial
+          visible={showOnboarding}
+          onComplete={handleOnboardingComplete}
+          onSkip={handleOnboardingSkip}
+        />
       </TouchActivityWrapper>
     </Suspense>
   );
@@ -674,31 +730,43 @@ export default function App() {
     <SafeAreaProvider>
       <LocalizationProvider>
         <ThemeProvider>
-          <AuthProvider>
-            <NotificationProvider>
-              <QuickActionsProvider>
-                {isLoading ? (
-                  <LoadingScreen />
-                ) : !initResult?.success ? (
-                  <ErrorScreen 
-                    error={initResult?.error || 'Unknown error'} 
-                    onRetry={initializeApp}
-                  />
-                ) : (
-                  <View style={styles.appContainer}>
-                    <AppNavigator />
-                    {/* Lazy load sync reminder banner - positioned after navigator to overlay properly */}
-                    <Suspense fallback={null}>
-                      <SyncReminderBanner onSyncComplete={handleSyncComplete} />
-                    </Suspense>
-                    <Suspense fallback={null}>
-                      <SyncProgressModal />
-                    </Suspense>
-                  </View>
-                )}
-              </QuickActionsProvider>
-            </NotificationProvider>
-          </AuthProvider>
+          <NavigationLoadingProvider>
+            <SubscriptionProvider>
+              <AdProvider>
+                <AnalyticsRefreshProvider>
+                  <AuthProvider>
+                    <NotificationProvider>
+                      <QuickActionsProvider>
+                        {isLoading ? (
+                        <LoadingScreen />
+                        ) : !initResult?.success ? (
+                          <ErrorScreen 
+                            error={initResult?.error || 'Unknown error'} 
+                            onRetry={initializeApp}
+                          />
+                        ) : (
+                          <View style={styles.appContainer}>
+                            {/* App Open Ad - shown on first launch for free users */}
+                            <AppOpenAd onComplete={() => console.log('App open ad completed')} />
+                            <AppNavigator />
+                            {/* Lazy load sync reminder banner - positioned after navigator to overlay properly */}
+                            <Suspense fallback={null}>
+                              <SyncReminderBanner onSyncComplete={handleSyncComplete} />
+                            </Suspense>
+                            <Suspense fallback={null}>
+                              <SyncProgressModal />
+                            </Suspense>
+                            {/* Pro upgrade modal */}
+                            <ProUpgradeModal />
+                          </View>
+                        )}
+                      </QuickActionsProvider>
+                    </NotificationProvider>
+                  </AuthProvider>
+                </AnalyticsRefreshProvider>
+              </AdProvider>
+            </SubscriptionProvider>
+          </NavigationLoadingProvider>
         </ThemeProvider>
       </LocalizationProvider>
     </SafeAreaProvider>

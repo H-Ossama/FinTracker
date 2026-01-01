@@ -82,6 +82,7 @@ def enableMinifyInReleaseBuilds = (findProperty('android.enableMinifyInReleaseBu
 def jscFlavor = 'io.github.react-native-community:jsc-android:2026004.+'
 
 android {
+    buildDir = "b"
     ndkVersion rootProject.ext.ndkVersion
 
     buildToolsVersion rootProject.ext.buildToolsVersion
@@ -92,8 +93,8 @@ android {
         applicationId 'com.oussamaaaaa.finex'
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 10
-        versionName "2.6.0"
+        versionCode 11
+        versionName "2.7.0"
 
         buildConfigField "String", "REACT_NATIVE_RELEASE_LEVEL", "\"${findProperty('reactNativeReleaseLevel') ?: 'stable'}\""
     }

@@ -22,6 +22,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../contexts/AuthContext';
 import { useTheme } from '../contexts/ThemeContext';
 import { useLocalization } from '../contexts/LocalizationContext';
+import { useSubscription } from '../contexts/SubscriptionContext';
 import { useCustomAlert } from '../hooks/useCustomAlert';
 import CustomAlert from '../components/CustomAlert';
 import { FullScreenLoader } from '../components/ScreenLoadingIndicator';
@@ -62,6 +63,7 @@ const UserProfileScreen: React.FC<UserProfileScreenProps> = ({ navigation }) => 
   const { theme } = useTheme();
   const { t } = useLocalization();
   const insets = useSafeAreaInsets();
+  const { planId, isPro } = useSubscription();
   const { alertState, hideAlert, showSuccess, showError, showDestructive } = useCustomAlert();
   const {
     user,
@@ -218,6 +220,8 @@ const UserProfileScreen: React.FC<UserProfileScreenProps> = ({ navigation }) => 
       .slice(0, 2);
   };
 
+  const subscriptionLabel = isPro ? (t('subscription_pro') || 'PRO') : (t('subscription_free') || 'FREE');
+
   return (
     <View style={{ flex: 1, backgroundColor: theme.colors.headerBackground }}>
       <StatusBar barStyle="light-content" backgroundColor={theme.colors.headerBackground} />
@@ -285,9 +289,21 @@ const UserProfileScreen: React.FC<UserProfileScreenProps> = ({ navigation }) => 
             </View>
             
             <View style={styles.userDetails}>
-              <Text style={[styles.displayName, { color: theme.colors.text }]}>
-                {user?.name || 'User'}
-              </Text>
+              <View style={styles.nameRow}>
+                <Text style={[styles.displayName, { color: theme.colors.text }]} numberOfLines={1}>
+                  {user?.name || 'User'}
+                </Text>
+                <View style={[styles.planFlag, { backgroundColor: isPro ? '#FFF7ED' : '#EFF6FF' }]}>
+                  <Ionicons
+                    name={planId === 'pro' ? 'diamond-outline' : 'leaf-outline'}
+                    size={14}
+                    color={isPro ? '#F59E0B' : '#1D4ED8'}
+                  />
+                  <Text style={[styles.planFlagText, { color: isPro ? '#B45309' : '#1D4ED8' }]}>
+                    {subscriptionLabel}
+                  </Text>
+                </View>
+              </View>
               <Text style={[styles.emailAddress, { color: theme.colors.textSecondary }]}>
                 {user?.email || ''}
               </Text>
@@ -316,6 +332,58 @@ const UserProfileScreen: React.FC<UserProfileScreenProps> = ({ navigation }) => 
 
         {/* Modern Menu Sections */}
         <View style={styles.menuSections}>
+          {/* Subscription */}
+          <View style={[styles.menuCard, { backgroundColor: theme.colors.surface }]}>
+            <View style={styles.cardHeader}>
+              <View style={styles.cardTitleRow}>
+                <Ionicons name="diamond-outline" size={20} color="#F59E0B" />
+                <Text style={[styles.cardTitle, { color: theme.colors.text }]}>Subscription</Text>
+              </View>
+
+              <TouchableOpacity
+                style={styles.manageSubscriptionButton}
+                onPress={() => navigation.navigate('Subscription')}
+                activeOpacity={0.85}
+              >
+                <Text style={styles.manageSubscriptionButtonText}>{t('manage') || 'Manage'}</Text>
+                <Ionicons name="chevron-forward" size={16} color="#FFFFFF" />
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.subscriptionInfoRow}>
+              <View style={styles.subscriptionLeft}>
+                <Text style={[styles.subscriptionLabel, { color: theme.colors.textSecondary }]}>Current plan</Text>
+                <Text style={[styles.subscriptionValue, { color: theme.colors.text }]}>{subscriptionLabel}</Text>
+              </View>
+              <View style={styles.subscriptionRight}>
+                <Text style={[styles.subscriptionHint, { color: theme.colors.textSecondary }]}>
+                  {isPro
+                    ? (t('subscription_all_features_unlocked') || 'All features unlocked')
+                    : (t('subscription_upgrade_hint') || 'Upgrade to unlock everything')}
+                </Text>
+              </View>
+            </View>
+
+            <TouchableOpacity
+              style={[styles.switchPlanRow, { borderColor: theme.colors.border }]}
+              onPress={() => navigation.navigate('Subscription')}
+              activeOpacity={0.8}
+            >
+              <View style={styles.settingLeft}>
+                <View style={[styles.settingIcon, { backgroundColor: '#FFF7ED' }]}>
+                  <Ionicons name="swap-horizontal" size={18} color="#F59E0B" />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={[styles.settingLabel, { color: theme.colors.text }]}>Switch plan</Text>
+                  <Text style={[styles.settingDescription, { color: theme.colors.textSecondary }]}>
+                    {t('subscription_switch_plan_subtitle') || 'Compare plans and change your subscription'}
+                  </Text>
+                </View>
+              </View>
+              <Ionicons name="chevron-forward" size={20} color={theme.colors.textSecondary} />
+            </TouchableOpacity>
+          </View>
+
           {/* Personal Information */}
           <View style={[styles.menuCard, { backgroundColor: theme.colors.surface }]}>
             <View style={styles.cardHeader}>
@@ -605,10 +673,29 @@ const createStyles = (theme: any) => StyleSheet.create({
   userDetails: {
     alignItems: 'center',
   },
+  nameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    maxWidth: '100%',
+  },
   displayName: {
     fontSize: 24,
     fontWeight: '700',
     marginBottom: 4,
+  },
+  planFlag: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 999,
+  },
+  planFlagText: {
+    fontSize: 12,
+    fontWeight: '900',
+    letterSpacing: 0.3,
   },
   emailAddress: {
     fontSize: 16,
@@ -812,6 +899,57 @@ const createStyles = (theme: any) => StyleSheet.create({
     shadowOpacity: 0.1,
     shadowRadius: 8,
     elevation: 4,
+  },
+  manageSubscriptionButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#111827',
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+  },
+  manageSubscriptionButtonText: {
+    color: '#FFFFFF',
+    fontSize: 13,
+    fontWeight: '800',
+  },
+  subscriptionInfoRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    gap: 12,
+    marginBottom: 14,
+  },
+  subscriptionLeft: {
+    minWidth: 110,
+  },
+  subscriptionRight: {
+    flex: 1,
+  },
+  subscriptionLabel: {
+    fontSize: 12,
+    fontWeight: '700',
+    marginBottom: 4,
+  },
+  subscriptionValue: {
+    fontSize: 18,
+    fontWeight: '900',
+  },
+  subscriptionHint: {
+    fontSize: 13,
+    lineHeight: 18,
+    textAlign: 'right',
+    marginTop: 2,
+  },
+  switchPlanRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 12,
+    paddingHorizontal: 6,
+    borderRadius: 14,
+    borderWidth: 1,
   },
   cardHeader: {
     flexDirection: 'row',

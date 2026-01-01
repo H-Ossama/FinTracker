@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources xmlns:ns1="http://schemas.android.com/tools">
+    <color name="colorPrimary">#023c69</color>
+    <color name="colorPrimaryDark">#20C6F7</color>
+    <color name="iconBackground">#20C6F7</color>
+    <color name="notification_icon_color">#20C6F7</color>
+    <color name="splashscreen_background">#20C6F7</color>
+    <integer name="react_native_dev_server_port">8081</integer>
+    <string name="app_name">FINEX</string>
+    <string name="expo_splash_screen_resize_mode" translatable="false">contain</string>
+    <string name="expo_splash_screen_status_bar_translucent" translatable="false">false</string>
+    <string name="expo_system_ui_user_interface_style" translatable="false">light</string>
+    <string name="react_native_dev_server_ip" translatable="false">192.168.1.3</string>
+    <style name="AppTheme" parent="Theme.AppCompat.DayNight.NoActionBar">
+    <item name="android:enforceNavigationBarContrast" ns1:targetApi="29">true</item>
+    <item name="android:editTextBackground">@drawable/rn_edit_text_material</item>
+    <item name="colorPrimary">@color/colorPrimary</item>
+    <item name="android:statusBarColor">#20C6F7</item>
+  </style>
+    <style name="Theme.App.SplashScreen" parent="AppTheme">
+    <item name="android:windowBackground">@drawable/ic_launcher_background</item>
+  </style>
+</resources>

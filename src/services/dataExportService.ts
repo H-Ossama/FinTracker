@@ -1,5 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { File, Paths } from 'expo-file-system';
+import { requireOptionalNativeModule } from 'expo-modules-core';
 import { Platform, Share } from 'react-native';
 
 import { localStorageService } from './localStorageService';
@@ -96,17 +97,20 @@ class DataExportService {
       // Prefer native share sheet with file attachment (when available).
       // Note: On some runtimes (e.g., Expo Go / stale native builds), expo-sharing may not be present.
       let didShare = false;
-      try {
-        const Sharing = await import('expo-sharing');
-        if (Sharing?.isAvailableAsync && (await Sharing.isAvailableAsync())) {
-          await Sharing.shareAsync(uri, {
-            mimeType: 'application/json',
-            dialogTitle: 'Export FinTracker Data',
-          });
-          didShare = true;
+      const hasExpoSharingNativeModule = !!requireOptionalNativeModule('ExpoSharing');
+      if (hasExpoSharingNativeModule) {
+        try {
+          const Sharing = await import('expo-sharing');
+          if (Sharing?.isAvailableAsync && (await Sharing.isAvailableAsync())) {
+            await Sharing.shareAsync(uri, {
+              mimeType: 'application/json',
+              dialogTitle: 'Export FinTracker Data',
+            });
+            didShare = true;
+          }
+        } catch {
+          // ignore; fall back below
         }
-      } catch {
-        // ignore; fall back below
       }
 
       if (!didShare) {

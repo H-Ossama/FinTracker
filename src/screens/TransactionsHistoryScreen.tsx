@@ -25,6 +25,9 @@ import { useLocalization } from '../contexts/LocalizationContext';
 import { useAuth } from '../contexts/AuthContext';
 import { hybridDataService, HybridTransaction } from '../services/hybridDataService';
 import TransactionDetailsModal from '../components/TransactionDetailsModal';
+import { useInterstitialAd } from '../components/InterstitialAd';
+import AdBanner from '../components/AdBanner';
+import { useAds } from '../contexts/AdContext';
 
 const { width } = Dimensions.get('window');
 
@@ -49,6 +52,8 @@ const TransactionsHistoryScreen = () => {
   const { formatCurrency, t } = useLocalization();
   const { user } = useAuth();
   const insets = useSafeAreaInsets();
+  const { adsEnabled, shouldShowBanner } = useAds();
+  const { showInterstitialIfNeeded, InterstitialComponent } = useInterstitialAd('TransactionsHistory');
   
   const [transactions, setTransactions] = useState<HybridTransaction[]>([]);
   const [loading, setLoading] = useState(true);
@@ -70,6 +75,8 @@ const TransactionsHistoryScreen = () => {
 
   useEffect(() => {
     loadTransactions();
+    // Show interstitial ad on first visit (free users only)
+    showInterstitialIfNeeded();
   }, []);
 
   const loadTransactions = async () => {
@@ -699,6 +706,16 @@ const TransactionsHistoryScreen = () => {
         onDuplicate={handleDuplicateTransaction}
         onDelete={handleDeleteTransaction}
       />
+
+      {/* Banner Ad for free users */}
+      {adsEnabled && shouldShowBanner('TransactionsHistory') && (
+        <View style={styles.bannerAdContainer}>
+          <AdBanner screenName="TransactionsHistory" />
+        </View>
+      )}
+
+      {/* Interstitial Ad Modal */}
+      <InterstitialComponent />
     </View>
   );
 };
@@ -706,6 +723,12 @@ const TransactionsHistoryScreen = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+  },
+  bannerAdContainer: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
   },
   darkHeader: {
     paddingHorizontal: 20,

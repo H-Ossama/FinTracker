@@ -12,16 +12,19 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useTheme } from '../contexts/ThemeContext';
 import { useLocalization } from '../contexts/LocalizationContext';
 import { useNavigation } from '@react-navigation/native';
 import { dataInitializationService } from '../services/dataInitializationService';
 import { hybridDataService } from '../services/hybridDataService';
+import { useSubscription } from '../contexts/SubscriptionContext';
 
 const DevelopmentToolsScreen = () => {
   const { theme } = useTheme();
   const { t } = useLocalization();
   const navigation = useNavigation();
+  const { isPro, toggleProForTesting } = useSubscription();
   const [isDemoMode, setIsDemoMode] = useState(false);
   const [demoModeLoading, setDemoModeLoading] = useState(false);
   const [clearAllDataLoading, setClearAllDataLoading] = useState(false);
@@ -265,6 +268,30 @@ const DevelopmentToolsScreen = () => {
     );
   };
 
+  const handleResetOnboarding = async () => {
+    try {
+      await AsyncStorage.removeItem('onboarding_tutorial_complete');
+      Alert.alert(
+        'Onboarding Reset',
+        'The onboarding tutorial will show again next time you open the app.',
+        [{ text: 'OK' }]
+      );
+    } catch (error) {
+      Alert.alert('Error', 'Failed to reset onboarding');
+    }
+  };
+
+  const handleTogglePro = async () => {
+    await toggleProForTesting();
+    Alert.alert(
+      isPro ? 'Pro Disabled' : 'Pro Enabled',
+      isPro 
+        ? 'You are now using the free version with limits.'
+        : 'All Pro features are now unlocked for testing!',
+      [{ text: 'OK' }]
+    );
+  };
+
   const developmentOptions = [
     {
       id: 'demo_mode',
@@ -342,6 +369,22 @@ const DevelopmentToolsScreen = () => {
       icon: 'refresh-outline',
       color: '#F59E0B',
       onPress: handleDebugReset,
+    },
+    {
+      id: 'reset_onboarding',
+      title: 'Reset Onboarding Tutorial',
+      subtitle: 'Show the welcome tutorial again',
+      icon: 'school-outline',
+      color: '#06B6D4',
+      onPress: handleResetOnboarding,
+    },
+    {
+      id: 'toggle_pro',
+      title: isPro ? '⭐ Disable Pro (Testing)' : '🔓 Unlock Pro (Testing)',
+      subtitle: isPro ? 'Switch back to free version' : 'Enable all premium features',
+      icon: isPro ? 'lock-closed-outline' : 'diamond-outline',
+      color: isPro ? '#EF4444' : '#F59E0B',
+      onPress: handleTogglePro,
     },
   ];
 

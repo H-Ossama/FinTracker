@@ -902,10 +902,42 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         return { success: false, error: 'Not authenticated' };
       }
 
+      // Delete cloud backup data BEFORE clearing local data
+      try {
+        console.log('🗑️ Deleting cloud backup data...');
+        const deleteResult = await simpleCloudBackupService.deleteBackup();
+        if (deleteResult.success) {
+          console.log('✅ Cloud backup deleted successfully');
+        } else {
+          console.warn('⚠️ Could not delete cloud backup:', deleteResult.error);
+        }
+      } catch (cloudError) {
+        console.warn('⚠️ Error deleting cloud backup:', cloudError);
+        // Continue with local deletion even if cloud fails
+      }
+
       await mockAuthAPI.deleteAccount(token);
       
       // Clear ALL user data from local storage
       await clearAllUserData();
+      
+      // Also clear the registered users list entry for this user
+      try {
+        const storedUsersJson = await AsyncStorage.getItem('registered_users');
+        if (storedUsersJson && state.user?.email) {
+          const storedUsers = JSON.parse(storedUsersJson);
+          const updatedUsers = storedUsers.filter((u: any) => u.email !== state.user?.email);
+          await AsyncStorage.setItem('registered_users', JSON.stringify(updatedUsers));
+          console.log('✅ Removed user from registered_users list');
+        }
+      } catch (regError) {
+        console.warn('⚠️ Error clearing registered user entry:', regError);
+      }
+
+      // Clear onboarding status so new user sees tutorial
+      try {
+        await AsyncStorage.removeItem('onboarding_tutorial_complete');
+      } catch {}
       
       // Sign out user
       setState({

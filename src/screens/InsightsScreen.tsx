@@ -95,17 +95,30 @@ const InsightsScreen = () => {
   };
   
   const getRecommendationTitle = (title: string) => {
+    const humanizeTitle = (value: string) =>
+      value
+        .replace(/_/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+
     // Map common recommendation titles to translation keys
     const titleMap: { [key: string]: string } = {
-      'Consider reducing utility expenses': 'consider_reducing_utility_expenses',
-      'Great progress on subscriptions!': 'great_progress_on_subscriptions',
-      'Try the 50/30/20 rule': 'try_the_50_30_20_rule',
-      'Track your subscriptions': 'track_your_subscriptions',
-      'Higher spending this month': 'higher_spending_this_month',
-      'Great job saving!': 'great_job_saving',
+      'Consider reducing utility expenses': 'consider reducing utility expenses',
+      'Great progress on subscriptions!': 'great progress on subscriptions',
+      'Try the 50/30/20 rule': 'try the 50 30 20 rule',
+      'Track your subscriptions': 'track your subscriptions',
+      'Higher spending this month': 'higher spending this month',
+      'Great job saving!': 'great job saving',
     };
-    
-    return t(titleMap[title] || title.toLowerCase().replace(/[^a-z0-9]/g, '_')) || title;
+
+    const translationKey = titleMap[title] || title.toLowerCase().replace(/[^a-z0-9]/g, '_');
+    const translated = t(translationKey);
+
+    // Some i18n implementations return the key itself when missing.
+    // In that case, fall back to a human-readable title.
+    const resolvedTitle = !translated || translated === translationKey ? title : translated;
+    // Always normalize underscores (some translation values may accidentally contain them)
+    return humanizeTitle(resolvedTitle);
   };
   
   const getRecommendationDescription = (description: string) => {
@@ -515,6 +528,7 @@ const InsightsScreen = () => {
       <ScrollView 
         style={styles.scrollView} 
         showsVerticalScrollIndicator={false}
+        contentContainerStyle={{ paddingBottom: insets.bottom + 200 }}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
@@ -804,7 +818,7 @@ const InsightsScreen = () => {
         <View style={styles.headerTitleSection}>
           <Text style={[styles.screenTitle, { color: theme.colors.headerText }]}>{t('insights_title')}</Text>
           <Text style={[styles.screenSubtitle, { color: theme.colors.headerTextSecondary }]}>
-            {t('analyze_spending') || 'Analyze your spending patterns'}
+            {t('analyze spending') || 'Analyze your spending patterns'}
           </Text>
         </View>
       </View>

@@ -23,6 +23,9 @@ import { useAuth } from '../contexts/AuthContext';
 import { budgetService } from '../services/budgetService';
 import { Budget, BudgetCategory, MonthlyBudgetSummary } from '../types';
 import { useFocusEffect } from '@react-navigation/native';
+import { useInterstitialAd } from '../components/InterstitialAd';
+import AdBanner from '../components/AdBanner';
+import { useAds } from '../contexts/AdContext';
 
 const { width: screenWidth } = Dimensions.get('window');
 
@@ -31,6 +34,8 @@ const BudgetPlannerScreen = ({ navigation }: any) => {
   const { formatCurrency } = useLocalization();
   const { user } = useAuth();
   const insets = useSafeAreaInsets();
+  const { adsEnabled, shouldShowBanner } = useAds();
+  const { showInterstitialIfNeeded, InterstitialComponent } = useInterstitialAd('BudgetPlanner');
   const [budgets, setBudgets] = useState<Budget[]>([]);
   const [categories, setCategories] = useState<BudgetCategory[]>([]);
   const [monthlySummary, setMonthlySummary] = useState<MonthlyBudgetSummary | null>(null);
@@ -55,6 +60,8 @@ const BudgetPlannerScreen = ({ navigation }: any) => {
   useFocusEffect(
     useCallback(() => {
       loadData();
+      // Show interstitial ad on first visit (free users only)
+      showInterstitialIfNeeded();
     }, [selectedMonth])
   );
 
@@ -781,6 +788,16 @@ const BudgetPlannerScreen = ({ navigation }: any) => {
       {/* Modals */}
       {renderAddBudgetModal()}
       {renderMonthPicker()}
+
+      {/* Banner Ad for free users */}
+      {adsEnabled && shouldShowBanner('BudgetPlanner') && (
+        <View style={styles.bannerAdContainer}>
+          <AdBanner screenName="BudgetPlanner" />
+        </View>
+      )}
+
+      {/* Interstitial Ad Modal */}
+      <InterstitialComponent />
     </View>
   );
 };
@@ -788,6 +805,12 @@ const BudgetPlannerScreen = ({ navigation }: any) => {
 const createStyles = (theme: any) => StyleSheet.create({
   container: {
     flex: 1,
+  },
+  bannerAdContainer: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
   },
   darkHeader: {
     paddingHorizontal: 20,

@@ -19,6 +19,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../contexts/ThemeContext';
 import { useLocalization } from '../contexts/LocalizationContext';
 import { useAuth } from '../contexts/AuthContext';
+import { useSubscription } from '../contexts/SubscriptionContext';
 import { useNavigation } from '@react-navigation/native';
 import { notificationService } from '../services/notificationService';
 import { GoalsService } from '../services/goalsService';
@@ -32,6 +33,7 @@ const MoreScreen = () => {
   const { theme } = useTheme();
   const { formatCurrency, t } = useLocalization();
   const { user, isAuthenticated, biometricEnabled } = useAuth();
+  const { isPro, planId } = useSubscription();
   const navigation = useNavigation();
   const insets = useSafeAreaInsets();
   const [isBalanceMasked, setIsBalanceMasked] = useState(false);
@@ -137,6 +139,18 @@ const MoreScreen = () => {
 
   const menuSections = [
     {
+      title: t('subscription management') || 'Account',
+      items: [
+        {
+          id: 'subscription',
+          title: t('subscription_title') || 'Subscription',
+          subtitle: isPro ? (t('subscription_you_are_on_pro') || 'You’re on Pro') : (t('subscription_you_are_on_free') || 'You’re on Free'),
+          icon: 'diamond',
+          color: '#F59E0B',
+        },
+      ],
+    },
+    {
       title: t('more_screen_financial_tools'),
       items: [
         {
@@ -200,6 +214,9 @@ const MoreScreen = () => {
       key={item.id} 
       style={styles.menuItem}
       onPress={() => {
+        if (item.id === 'subscription') {
+          navigation.navigate('Subscription' as never);
+        } else
         if (item.id === 'goals') {
           navigation.navigate('SavingsGoals' as never);
         } else if (item.id === 'bills') {
@@ -435,7 +452,28 @@ const MoreScreen = () => {
                 </View>
               )}
             </View>
-            <Text style={[styles.userName, { color: theme.colors.headerText }]}>{user?.name || 'User'}</Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flexShrink: 1 }}>
+              <Text style={[styles.userName, { color: theme.colors.headerText }]} numberOfLines={1}>
+                {user?.name || 'User'}
+              </Text>
+              <View
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  gap: 6,
+                  backgroundColor: 'rgba(255,255,255,0.10)',
+                  paddingHorizontal: 10,
+                  paddingVertical: 6,
+                  borderRadius: 999,
+                  flexShrink: 0,
+                }}
+              >
+                <Ionicons name={planId === 'pro' ? 'diamond-outline' : 'leaf-outline'} size={14} color={planId === 'pro' ? '#F59E0B' : '#93C5FD'} />
+                <Text style={{ color: theme.colors.headerText, fontSize: 12, fontWeight: '800', letterSpacing: 0.3 }}>
+                  {isPro ? (t('subscription_pro') || 'PRO') : (t('subscription_free') || 'FREE')}
+                </Text>
+              </View>
+            </View>
             <Ionicons name="chevron-forward" size={16} color={theme.colors.headerTextSecondary} style={{ marginLeft: 4 }} />
           </TouchableOpacity>
           <View style={styles.headerActions}>

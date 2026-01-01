@@ -1,5 +1,6 @@
 import { ApiResponse } from '../types';
 import { firebaseAuthService } from './firebaseAuthService';
+import { geminiAIService } from './geminiAIService';
 
 interface SpendingCategory {
   id: string;
@@ -61,6 +62,8 @@ interface RecommendationsData {
     current: Record<string, { amount: number; transactions: number; name: string }>;
     average: Record<string, { amount: number; transactions: number }>;
   };
+  aiGenerated?: boolean;
+  lastUpdated?: string;
 }
 
 class AnalyticsService {
@@ -68,10 +71,15 @@ class AnalyticsService {
   // Later, we can add Firebase Functions for advanced analytics
   private loggedMessages: Set<string> = new Set();
 
+  // Reduce console noise by default.
+  // Set to 'info' temporarily if you want these one-time logs.
+  private readonly logLevel: 'silent' | 'info' = 'silent';
+
   /**
    * Log a message only once to avoid console spam
    */
   private logOnce(message: string, emoji: string = ''): void {
+    if (this.logLevel === 'silent') return;
     const key = `${emoji}${message}`;
     if (!this.loggedMessages.has(key)) {
       console.log(`${emoji} ${message}`.trim());
@@ -85,9 +93,8 @@ class AnalyticsService {
       const isAuth = firebaseAuthService.isAuthenticated();
       
       if (isAuth) {
-        // For now, use local calculations even when authenticated
-        // TODO: Implement Firebase Functions for server-side analytics
-        this.logOnce('Using local analytics (Firebase Functions coming soon...)', '📊');
+        // Use local calculations with optional AI insights
+        this.logOnce('Using local analytics with AI enhancement...', '📊');
         return this.getLocalSpendingByCategory(period);
       } else {
         // Offline mode - use local calculations
@@ -109,8 +116,8 @@ class AnalyticsService {
       const isAuth = firebaseAuthService.isAuthenticated();
       
       if (isAuth) {
-        // For now, use local calculations even when authenticated
-        this.logOnce('Using local trend analysis (Firebase Functions coming soon...)', '📈');
+        // Use local calculations with optional AI insights
+        this.logOnce('Using local trend analysis with AI enhancement...', '📈');
         return this.getLocalTrendData(period, groupBy);
       } else {
         // Offline mode - use local calculations
@@ -123,22 +130,79 @@ class AnalyticsService {
     }
   }
 
-  async getRecommendations(): Promise<ApiResponse<RecommendationsData>> {
+  async getRecommendations(forceRefresh = false): Promise<ApiResponse<RecommendationsData>> {
     try {
       // Check if user is authenticated
       const isAuth = firebaseAuthService.isAuthenticated();
       
       if (isAuth) {
-        // For now, use local calculations even when authenticated
-        this.logOnce('Using local recommendations (Firebase Functions coming soon...)', '💡');
-        return this.getLocalRecommendations();
+        // Use local calculations with AI recommendations
+        this.logOnce('Using AI-powered recommendations (cached)...', '💡');
+        return this.getRecommendationsWithAI(forceRefresh);
       } else {
-        // Offline mode - use local calculations or mock data
+        // Offline mode - use local calculations
         return this.getLocalRecommendations();
       }
     } catch (error) {
       console.error('Error fetching recommendations:', error);
       // Fallback to local data if API fails
+      return this.getLocalRecommendations();
+    }
+  }
+
+  /**
+   * Get recommendations with AI enhancement (cached)
+   */
+  private async getRecommendationsWithAI(forceRefresh = false): Promise<ApiResponse<RecommendationsData>> {
+    try {
+      // Get local spending data for AI
+      const spendingResponse = await this.getLocalSpendingByCategory('month');
+      if (!spendingResponse.success || !spendingResponse.data) {
+        return this.getLocalRecommendations();
+      }
+
+      const spendingData = spendingResponse.data;
+
+      // Get AI recommendations (with caching)
+      const aiRecommendations = await geminiAIService.generateRecommendations(
+        spendingData,
+        forceRefresh
+      );
+
+      // Get local monthly data for summary
+      const currentMonth = new Date().getMonth();
+      const currentYear = new Date().getFullYear();
+      const currentMonthData = await (await import('./hybridDataService')).hybridDataService.getMonthlySpending(currentYear, currentMonth);
+      const previousMonthData = await (await import('./hybridDataService')).hybridDataService.getMonthlySpending(
+        currentMonth === 0 ? currentYear - 1 : currentYear,
+        currentMonth === 0 ? 11 : currentMonth - 1
+      );
+
+      return {
+        success: true,
+        data: {
+          recommendations: aiRecommendations,
+          monthlySummary: {
+            current: {
+              total: {
+                amount: currentMonthData.totalExpenses,
+                transactions: currentMonthData.transactionCount,
+                name: 'Total'
+              }
+            },
+            average: {
+              total: {
+                amount: previousMonthData.totalExpenses,
+                transactions: previousMonthData.transactionCount
+              }
+            }
+          },
+          aiGenerated: true,
+          lastUpdated: new Date().toISOString(),
+        }
+      };
+    } catch (error) {
+      console.error('Error getting AI recommendations:', error);
       return this.getLocalRecommendations();
     }
   }
@@ -553,6 +617,39 @@ class AnalyticsService {
         groupBy,
       },
     };
+  }
+
+  /**
+   * Get AI-powered trend insights (public method for components)
+   */
+  async getTrendInsights(trendData: TrendData, forceRefresh = false): Promise<string> {
+    return await geminiAIService.generateTrendInsights(trendData, forceRefresh);
+  }
+
+  /**
+   * Get AI-powered spending insights (public method for components)
+   */
+  async getSpendingInsights(spendingData: SpendingData, forceRefresh = false): Promise<string> {
+    return await geminiAIService.generateSpendingInsights(spendingData, forceRefresh);
+  }
+
+  /**
+   * Clear all AI caches
+   */
+  async clearAllAICaches(): Promise<void> {
+    // Import cache keys from gemini service
+    const cacheKeys = {
+      RECOMMENDATIONS: 'gemini_cache_recommendations',
+      RECOMMENDATIONS_TIMESTAMP: 'gemini_cache_recommendations_ts',
+      TREND_INSIGHTS: 'gemini_cache_trend_insights',
+      TREND_INSIGHTS_TIMESTAMP: 'gemini_cache_trend_insights_ts',
+      SPENDING_INSIGHTS: 'gemini_cache_spending_insights',
+      SPENDING_INSIGHTS_TIMESTAMP: 'gemini_cache_spending_insights_ts',
+    };
+
+    await geminiAIService.clearCache(cacheKeys.RECOMMENDATIONS, cacheKeys.RECOMMENDATIONS_TIMESTAMP);
+    await geminiAIService.clearCache(cacheKeys.TREND_INSIGHTS, cacheKeys.TREND_INSIGHTS_TIMESTAMP);
+    await geminiAIService.clearCache(cacheKeys.SPENDING_INSIGHTS, cacheKeys.SPENDING_INSIGHTS_TIMESTAMP);
   }
 }
 

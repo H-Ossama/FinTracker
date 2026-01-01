@@ -449,7 +449,7 @@ const QuickSettingsScreen = () => {
     setVersionTapCount(newCount);
     
     if (newCount === 5) {
-      // Reset count and navigate to development tools
+      // Reset count and navigate through PIN gate
       setVersionTapCount(0);
       Alert.alert(
         '🛠️ Developer Mode Activated',
@@ -458,7 +458,7 @@ const QuickSettingsScreen = () => {
           { text: 'Cancel', style: 'cancel' },
           {
             text: 'Open Dev Tools',
-            onPress: () => navigation.navigate('DevelopmentTools' as never),
+            onPress: () => navigation.navigate('DevPINEntry' as never),
           },
         ]
       );
@@ -996,7 +996,7 @@ const QuickSettingsScreen = () => {
                 </View>
                 <View style={styles.settingRight}>
                   <Text style={[styles.settingValue, { color: theme.colors.textSecondary }]}>
-                    {language === 'en' ? t('english') : language === 'de' ? t('german') : t('arabic')}
+                    {language === 'en' ? t('english') : language === 'de' ? t('german') : language === 'fr' ? t('french') : t('arabic')}
                   </Text>
                   <Ionicons name="chevron-forward" size={16} color={theme.colors.textSecondary} />
                 </View>
@@ -1159,6 +1159,7 @@ const QuickSettingsScreen = () => {
               { code: 'en' as Language, name: 'English', native: 'English' },
               { code: 'de' as Language, name: 'German', native: 'Deutsch' },
               { code: 'ar' as Language, name: 'Arabic', native: 'العربية' },
+              { code: 'fr' as Language, name: 'French', native: 'Français' },
             ].map((lang) => (
               <TouchableOpacity
                 key={lang.code}

@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useCallback, lazy, Suspense, useEffect, useRef } from 'react';
+import React, { useState, useMemo, useCallback, lazy, Suspense, useEffect, useRef, memo } from 'react';
 import { View, StyleSheet, Pressable, Dimensions, Text, ActivityIndicator, InteractionManager } from 'react-native';
 import { TabView } from 'react-native-tab-view';
 import { Ionicons } from '@expo/vector-icons';
@@ -16,66 +16,86 @@ const MoreScreen = lazy(loadMoreScreen);
 
 import { useTheme } from '../contexts/ThemeContext';
 import { useLocalization } from '../contexts/LocalizationContext';
-import { FullScreenLoader } from './ScreenLoadingIndicator';
+import { useNavigationLoading } from '../contexts/NavigationLoadingContext';
+import { useAds } from '../contexts/AdContext';
 import QuickActionsOverlay from './QuickActionsOverlay';
+import AdBanner from './AdBanner';
 
 const initialLayout = { width: Dimensions.get('window').width };
 
 // Loading fallback for lazy-loaded screens
-const ScreenLoadingFallback = () => {
+const ScreenLoadingFallback = memo(() => {
   const { theme } = useTheme();
   return (
     <View style={[styles.loadingContainer, { backgroundColor: theme.colors.background }]}>
       <ActivityIndicator size="large" color={theme.colors.primary} />
     </View>
   );
-};
+});
 
 // Screen content wrapper that tracks when content is actually rendered
 interface ScreenContentWrapperProps {
   children: React.ReactNode;
-  onContentReady?: () => void;
+  screenName: string;
 }
 
-const ScreenContentWrapper: React.FC<ScreenContentWrapperProps> = ({ 
+const ScreenContentWrapper: React.FC<ScreenContentWrapperProps> = memo(({ 
   children, 
-  onContentReady 
+  screenName 
 }) => {
+  const { markScreenReady, isScreenVisited, forceStopLoading } = useNavigationLoading();
   const hasNotifiedReady = useRef(false);
+  const isMounted = useRef(true);
+
+  useEffect(() => {
+    isMounted.current = true;
+    
+    // If screen was already visited, force stop loading immediately (no delay)
+    if (isScreenVisited(screenName)) {
+      forceStopLoading();
+    }
+    
+    return () => {
+      isMounted.current = false;
+    };
+  }, [screenName, isScreenVisited, forceStopLoading]);
 
   const notifyReady = useCallback(() => {
-    if (hasNotifiedReady.current) return;
+    if (hasNotifiedReady.current || !isMounted.current) return;
     hasNotifiedReady.current = true;
 
-    // Wait until after layout + the next frame so the screen is actually visible
-    InteractionManager.runAfterInteractions(() => {
-      requestAnimationFrame(() => {
-        onContentReady?.();
-      });
+    // Use requestAnimationFrame for immediate response after layout
+    requestAnimationFrame(() => {
+      if (isMounted.current) {
+        markScreenReady(screenName);
+      }
     });
-  }, [onContentReady]);
+  }, [markScreenReady, screenName]);
 
   return (
     <View style={styles.sceneWrapper} onLayout={notifyReady}>
       {children}
     </View>
   );
-};
+});
 
 const SwipeableBottomTabNavigator = React.memo(() => {
   const { isDark, theme } = useTheme();
   const { t } = useLocalization();
   const insets = useSafeAreaInsets();
+  const { startLoading, isScreenVisited } = useNavigationLoading();
+  const { adsEnabled, shouldShowBanner } = useAds();
   const [index, setIndex] = useState(0);
-  const [isSwitching, setIsSwitching] = useState(false);
   const [quickActionsOpen, setQuickActionsOpen] = useState(false);
-  const tabSwitchTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isMounted = useRef(false);
-  const visitedTabs = useRef<Set<number>>(new Set([0])); // Home tab is visited on mount
+
+  // Tab screen names for tracking
+  const tabScreenNames = useMemo(() => ['TabHome', 'TabInsights', 'TabWallet', 'TabMore'], []);
 
   useEffect(() => {
     isMounted.current = true;
 
+    // Preload other tab screens in the background after initial mount
     const handle = InteractionManager.runAfterInteractions(() => {
       Promise.allSettled([
         loadInsightsScreen(),
@@ -89,14 +109,6 @@ const SwipeableBottomTabNavigator = React.memo(() => {
       handle.cancel();
     };
   }, []);
-
-  useEffect(() => {
-    return () => {
-      if (tabSwitchTimeout.current) {
-        clearTimeout(tabSwitchTimeout.current);
-      }
-    };
-  }, []);
   
   // Memoize routes to prevent unnecessary re-renders
   const routes = useMemo(() => [
@@ -106,19 +118,20 @@ const SwipeableBottomTabNavigator = React.memo(() => {
     { key: 'more', title: t('more') },
   ], [t]);
 
+  const currentTabScreenName = tabScreenNames[index] || 'TabHome';
+  const showBottomBanner = adsEnabled && shouldShowBanner(currentTabScreenName);
+  const bottomBannerHeight = showBottomBanner ? (stylesConst.bannerHeight + insets.bottom) : 0;
+
   // Memoized scene renderer with lazy loading
   const renderScene = useCallback(({ route }: { route: any }) => {
-    const handleContentReady = () => {
-      if (isMounted.current) {
-        setIsSwitching(false);
-      }
-    };
+    const screenIndex = routes.findIndex(r => r.key === route.key);
+    const screenName = tabScreenNames[screenIndex] || route.key;
 
     switch (route.key) {
       case 'home':
         return (
           <Suspense fallback={<ScreenLoadingFallback />}>
-            <ScreenContentWrapper onContentReady={handleContentReady}>
+            <ScreenContentWrapper screenName={screenName}>
               <HomeScreen />
             </ScreenContentWrapper>
           </Suspense>
@@ -126,7 +139,7 @@ const SwipeableBottomTabNavigator = React.memo(() => {
       case 'insights':
         return (
           <Suspense fallback={<ScreenLoadingFallback />}>
-            <ScreenContentWrapper onContentReady={handleContentReady}>
+            <ScreenContentWrapper screenName={screenName}>
               <InsightsScreen />
             </ScreenContentWrapper>
           </Suspense>
@@ -134,7 +147,7 @@ const SwipeableBottomTabNavigator = React.memo(() => {
       case 'wallet':
         return (
           <Suspense fallback={<ScreenLoadingFallback />}>
-            <ScreenContentWrapper onContentReady={handleContentReady}>
+            <ScreenContentWrapper screenName={screenName}>
               <WalletScreen />
             </ScreenContentWrapper>
           </Suspense>
@@ -142,7 +155,7 @@ const SwipeableBottomTabNavigator = React.memo(() => {
       case 'more':
         return (
           <Suspense fallback={<ScreenLoadingFallback />}>
-            <ScreenContentWrapper onContentReady={handleContentReady}>
+            <ScreenContentWrapper screenName={screenName}>
               <MoreScreen />
             </ScreenContentWrapper>
           </Suspense>
@@ -150,7 +163,7 @@ const SwipeableBottomTabNavigator = React.memo(() => {
       default:
         return null;
     }
-  }, []);
+  }, [routes, tabScreenNames]);
 
   // Memoized icon function - using Ionicons to match the design
   const getIconName = useCallback((routeKey: string, focused: boolean) => {
@@ -169,29 +182,6 @@ const SwipeableBottomTabNavigator = React.memo(() => {
   }, []);
 
   const handleIndexChange = useCallback((newIndex: number) => {
-    const isNewTab = !visitedTabs.current.has(newIndex);
-
-    // Only show loader for new/unvisited tabs
-    if (isNewTab && isMounted.current) {
-      setIsSwitching(true);
-
-      if (tabSwitchTimeout.current) {
-        clearTimeout(tabSwitchTimeout.current);
-      }
-
-      // Set a max timeout to prevent infinite loading, but content ready callback will dismiss it first
-      tabSwitchTimeout.current = setTimeout(() => {
-        InteractionManager.runAfterInteractions(() => {
-          if (isMounted.current) {
-            setIsSwitching(false);
-          }
-        });
-      }, 2000); // Increased timeout to give content time to render
-    }
-
-    // Mark tab as visited
-    visitedTabs.current.add(newIndex);
-
     // Update state
     if (isMounted.current) {
       setIndex(newIndex);
@@ -199,7 +189,16 @@ const SwipeableBottomTabNavigator = React.memo(() => {
   }, []);
 
   const renderTabBar = useCallback((props: any) => (
-    <View style={[styles.tabBarWrapper, { paddingBottom: Math.max(insets.bottom, 10) }]} pointerEvents="box-none">
+    <View
+      style={[
+        styles.tabBarWrapper,
+        {
+          paddingBottom: Math.max(insets.bottom, 10),
+          bottom: bottomBannerHeight,
+        },
+      ]}
+      pointerEvents="box-none"
+    >
       <View style={styles.tabBarContainer}>
         <View style={styles.tabBar}>
           {/* Left tabs */}
@@ -289,7 +288,7 @@ const SwipeableBottomTabNavigator = React.memo(() => {
         </View>
       </View>
     </View>
-  ), [getIconName, handleIndexChange, index, insets.bottom, t, theme.colors.primary]);
+  ), [bottomBannerHeight, getIconName, handleIndexChange, index, insets.bottom, t, theme.colors.primary]);
 
   return (
     <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
@@ -303,18 +302,24 @@ const SwipeableBottomTabNavigator = React.memo(() => {
         swipeEnabled={true}
         lazy={true}
         lazyPreloadDistance={1}
-        removeClippedSubviews={true}
-        optimizationsEnabled={true}
         animationEnabled={true}
-        sceneContainerStyle={{ backgroundColor: 'transparent' }}
       />
 
-      <QuickActionsOverlay visible={quickActionsOpen} onClose={() => setQuickActionsOpen(false)} />
+      {/* Banner under the navigation menu (free users only) */}
+      {showBottomBanner && (
+        <View style={[styles.bottomBannerWrapper, { paddingBottom: insets.bottom }]}>
+          <AdBanner screenName={currentTabScreenName} />
+        </View>
+      )}
 
-      <FullScreenLoader visible={isSwitching} message={t('loading') || 'Loading...'} transparent />
+      <QuickActionsOverlay visible={quickActionsOpen} onClose={() => setQuickActionsOpen(false)} />
     </View>
   );
 });
+
+const stylesConst = {
+  bannerHeight: 50,
+};
 
 const styles = StyleSheet.create({
   container: {
@@ -322,6 +327,13 @@ const styles = StyleSheet.create({
   },
   sceneWrapper: {
     flex: 1,
+  },
+  bottomBannerWrapper: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
+    zIndex: 20,
   },
   loadingContainer: {
     flex: 1,

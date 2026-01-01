@@ -31,6 +31,7 @@ import { useLocalization } from '../contexts/LocalizationContext';
 import { useNotification } from '../contexts/NotificationContext';
 import { useQuickActions } from '../contexts/QuickActionsContext';
 import { useAuth } from '../contexts/AuthContext';
+import { useSubscription } from '../contexts/SubscriptionContext';
 import { useScreenPerformance } from '../hooks/usePerformance';
 import borrowedMoneyService from '../services/borrowedMoneyService';
 import { useWalletVisibility } from '../hooks/useWalletVisibility';
@@ -51,6 +52,7 @@ const HomeScreen = () => {
   const quickActions = useQuickActions();
   const { formatWalletBalance, shouldShowBalance } = useWalletVisibility();
   const { user } = useAuth();
+  const { isPro, planId } = useSubscription();
   const insets = useSafeAreaInsets();
   const [isBalanceVisible, setIsBalanceVisible] = useState(true);
   const [monthlyLimit, setMonthlyLimit] = useState(12000);
@@ -791,7 +793,7 @@ const HomeScreen = () => {
       <StatusBar
         barStyle={theme.isDark ? 'light-content' : 'dark-content'}
         backgroundColor="transparent"
-        translucent
+        translucent={true}
       />
       
       {loadingData ? (
@@ -832,9 +834,36 @@ const HomeScreen = () => {
                   </View>
                 )}
               </View>
-              <Text style={[styles.userName, { color: theme.colors.text }]} numberOfLines={1}>
-                {user?.name || t('user')}
-              </Text>
+              <View>
+                <Text style={[styles.userName, { color: theme.colors.text }]} numberOfLines={1}>
+                  {user?.name || t('user')}
+                </Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 4 }}>
+                  <View style={{ 
+                    backgroundColor: isPro ? '#FFF7ED' : '#EFF6FF',
+                    paddingHorizontal: 8,
+                    paddingVertical: 2,
+                    borderRadius: 6,
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    gap: 4
+                  }}>
+                    <Ionicons
+                      name={planId === 'pro' ? 'diamond-outline' : 'leaf-outline'}
+                      size={10}
+                      color={isPro ? '#F59E0B' : '#1D4ED8'}
+                    />
+                    <Text style={{ 
+                      fontSize: 10, 
+                      fontWeight: '700', 
+                      color: isPro ? '#B45309' : '#1D4ED8',
+                      letterSpacing: 0.5
+                    }}>
+                      {isPro ? (t('subscription_pro') || 'PRO') : (t('subscription_free') || 'FREE')}
+                    </Text>
+                  </View>
+                </View>
+              </View>
             </TouchableOpacity>
 
             <View style={styles.headerActions}>

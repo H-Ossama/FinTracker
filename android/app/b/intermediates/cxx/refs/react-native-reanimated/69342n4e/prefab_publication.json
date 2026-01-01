@@ -1,0 +1,41 @@
+{
+  "installationFolder": "C:\\b\\react-native-reanimated\\intermediates\\prefab_package\\debug\\prefab",
+  "gradlePath": ":react-native-reanimated",
+  "packageInfo": {
+    "packageName": "react-native-reanimated",
+    "packageSchemaVersion": 2,
+    "packageDependencies": [],
+    "modules": [
+      {
+        "moduleName": "reanimated",
+        "moduleHeaders": "C:\\b\\react-native-reanimated\\prefab-headers\\reanimated",
+        "moduleExportLibraries": [],
+        "abis": [
+          {
+            "abiName": "arm64-v8a",
+            "abiApi": 24,
+            "abiNdkMajor": 27,
+            "abiStl": "c++_shared",
+            "abiLibrary": "C:\\b\\react-native-reanimated\\intermediates\\cxx\\Debug\\5m566h2x\\obj\\arm64-v8a\\libreanimated.so",
+            "abiAndroidGradleBuildJsonFile": "C:\\Users\\H_Oussama\\Desktop\\Programing\\androidApps\\FinTracker\\node_modules\\react-native-reanimated\\android\\.cxx\\Debug\\5m566h2x\\arm64-v8a\\android_gradle_build.json"
+          }
+        ]
+      },
+      {
+        "moduleName": "worklets",
+        "moduleHeaders": "C:\\b\\react-native-reanimated\\prefab-headers\\worklets",
+        "moduleExportLibraries": [],
+        "abis": [
+          {
+            "abiName": "arm64-v8a",
+            "abiApi": 24,
+            "abiNdkMajor": 27,
+            "abiStl": "c++_shared",
+            "abiLibrary": "C:\\b\\react-native-reanimated\\intermediates\\cxx\\Debug\\5m566h2x\\obj\\arm64-v8a\\libworklets.so",
+            "abiAndroidGradleBuildJsonFile": "C:\\Users\\H_Oussama\\Desktop\\Programing\\androidApps\\FinTracker\\node_modules\\react-native-reanimated\\android\\.cxx\\Debug\\5m566h2x\\arm64-v8a\\android_gradle_build.json"
+          }
+        ]
+      }
+    ]
+  }
+}

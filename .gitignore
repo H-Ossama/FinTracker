@@ -35,6 +35,9 @@ yarn-error.*
 .env*.local
 .env
 
+# Local-only developer secrets/config
+src/constants/devPin.local.ts
+
 # Firebase/Google Services - Contains sensitive API keys and project IDs
 google-services.json
 android/app/google-services.json

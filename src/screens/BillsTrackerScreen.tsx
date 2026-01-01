@@ -24,6 +24,9 @@ import { billsService } from '../services/billsService';
 import { localStorageService } from '../services/localStorageService';
 import { Bill, BillCategory } from '../types';
 import { useFocusEffect } from '@react-navigation/native';
+import { useInterstitialAd } from '../components/InterstitialAd';
+import AdBanner from '../components/AdBanner';
+import { useAds } from '../contexts/AdContext';
 
 const BillsTrackerScreen = ({ navigation, route }: any) => {
   const { theme } = useTheme();
@@ -31,6 +34,8 @@ const BillsTrackerScreen = ({ navigation, route }: any) => {
   const { formatWalletBalance } = useWalletVisibility();
   const { user } = useAuth();
   const insets = useSafeAreaInsets();
+  const { adsEnabled, shouldShowBanner } = useAds();
+  const { showInterstitialIfNeeded, InterstitialComponent } = useInterstitialAd('BillsTracker');
   const [bills, setBills] = useState<Bill[]>([]);
   const [categories, setCategories] = useState<BillCategory[]>([]);
   const [loading, setLoading] = useState(true);
@@ -100,6 +105,8 @@ const BillsTrackerScreen = ({ navigation, route }: any) => {
   useFocusEffect(
     useCallback(() => {
       loadData();
+      // Show interstitial ad on first visit (free users only)
+      showInterstitialIfNeeded();
       
       // Check if we should open the add modal
       if (route?.params?.openAddModal) {
@@ -1327,6 +1334,16 @@ const BillsTrackerScreen = ({ navigation, route }: any) => {
 
       {/* Payment Modal */}
       {renderPaymentModal()}
+
+      {/* Banner Ad for free users */}
+      {adsEnabled && shouldShowBanner('BillsTracker') && (
+        <View style={styles.bannerAdContainer}>
+          <AdBanner screenName="BillsTracker" />
+        </View>
+      )}
+
+      {/* Interstitial Ad Modal */}
+      <InterstitialComponent />
     </View>
   );
 };
@@ -1334,6 +1351,12 @@ const BillsTrackerScreen = ({ navigation, route }: any) => {
 const createStyles = (theme: any) => StyleSheet.create({
   container: {
     flex: 1,
+  },
+  bannerAdContainer: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
   },
   darkHeader: {
     paddingHorizontal: 20,
