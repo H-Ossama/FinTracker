@@ -61,7 +61,8 @@ class DataInitializationService {
           }
         } catch (error) {
           if (__DEV__) {
-            console.warn('Failed to create/update sample budget:', budgetData.categoryName, error.message);
+            const message = error instanceof Error ? error.message : String(error);
+            console.warn('Failed to create/update sample budget:', budgetData.categoryName, message);
           }
         }
       }

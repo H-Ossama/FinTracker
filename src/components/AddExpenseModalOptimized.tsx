@@ -156,10 +156,6 @@ const AddExpenseModal: React.FC<AddExpenseModalProps> = ({
 
   // Memoized styles
   const modalStyles = useStyles(() => ({
-    container: [styles.container, { backgroundColor: theme.colors.background }],
-    header: [styles.header, { backgroundColor: theme.colors.surface, borderBottomColor: theme.colors.border }],
-    headerTitle: [styles.headerTitle, { color: theme.colors.text }],
-    saveButtonText: [styles.saveButtonText, { color: theme.colors.primary }],
     sectionTitle: [styles.sectionTitle, { color: theme.colors.text }],
   }), [theme]);
 

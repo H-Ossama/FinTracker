@@ -1,4 +1,5 @@
-import { useRef, useEffect, useState } from 'react';
+import { useRef, useEffect, useState, createRef } from 'react';
+import type { RefObject } from 'react';
 import { View, findNodeHandle, UIManager } from 'react-native';
 
 export interface ElementPosition {
@@ -9,7 +10,7 @@ export interface ElementPosition {
 }
 
 export const useTutorialElement = (elementName: string) => {
-  const elementRef = useRef<View>(null);
+  const elementRef = useRef<View | null>(null);
   const [position, setPosition] = useState<ElementPosition | null>(null);
 
   const measureElement = () => {
@@ -33,19 +34,22 @@ export const useTutorialElement = (elementName: string) => {
 };
 
 export const useTutorialElements = (currentElementName: string | undefined) => {
-  const elements: Record<string, React.RefObject<View>> = {};
+  const elementsRef = useRef<Record<string, RefObject<View | null>>>({});
   const [positions, setPositions] = useState<Record<string, ElementPosition>>({});
 
   const registerElement = (name: string) => {
-    const ref = useRef<View>(null);
-    elements[name] = ref;
-    return ref;
+    const existing = elementsRef.current[name];
+    if (existing) return existing;
+
+    const created = createRef<View>();
+    elementsRef.current[name] = created;
+    return created;
   };
 
   const measureElements = () => {
     const newPositions: Record<string, ElementPosition> = {};
 
-    Object.entries(elements).forEach(([name, ref]) => {
+    Object.entries(elementsRef.current).forEach(([name, ref]) => {
       if (ref.current) {
         const handle = findNodeHandle(ref.current);
         if (handle) {

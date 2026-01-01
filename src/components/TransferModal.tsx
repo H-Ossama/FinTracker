@@ -481,29 +481,6 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '500',
   },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingVertical: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: '#E5E5E7',
-  },
-  cancelButton: {
-    fontSize: 16,
-    color: '#4A90E2',
-  },
-  title: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#333',
-  },
-  saveButton: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#4A90E2',
-  },
   content: {
     flex: 1,
     paddingHorizontal: 20,

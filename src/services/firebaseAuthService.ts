@@ -1,4 +1,4 @@
-import { signInWithCredential, GoogleAuthProvider, signOut, onAuthStateChanged, User } from 'firebase/auth';
+import { signInWithCredential, GoogleAuthProvider, signOut, onAuthStateChanged, User, getAdditionalUserInfo } from 'firebase/auth';
 import { GoogleSignin } from '@react-native-google-signin/google-signin';
 import { firebaseAuth } from '../config/firebase';
 import { firebaseDataService } from './firebaseDataService';
@@ -61,8 +61,6 @@ class FirebaseAuthService {
       let idToken = null;
       if (result.data?.idToken) {
         idToken = result.data.idToken;
-      } else if (result.idToken) {
-        idToken = result.idToken;
       } else {
         // Try to get tokens separately
         const tokens = await GoogleSignin.getTokens();
@@ -105,7 +103,7 @@ class FirebaseAuthService {
       console.log('✅ Signed in to Firebase:', user.email);
 
       // Create user profile in Firestore if it's a new user
-      if (userCredential.additionalUserInfo?.isNewUser) {
+      if (getAdditionalUserInfo(userCredential)?.isNewUser) {
         console.log('👤 New user detected, creating profile...');
         await firebaseDataService.createUserProfile(
           user.uid,

@@ -168,6 +168,7 @@ export const mockBorrowedMoney: BorrowedMoney[] = [
     borrowedDate: '2024-10-01',
     dueDate: '2024-10-15',
     isPaid: false,
+    walletId: '1',
     notes: 'Promised to pay back by next Friday',
     phoneNumber: '+1234567890',
     email: 'ahmed.ali@email.com'
@@ -180,6 +181,7 @@ export const mockBorrowedMoney: BorrowedMoney[] = [
     borrowedDate: '2024-10-05',
     dueDate: '2024-10-12',
     isPaid: false,
+    walletId: '1',
     notes: 'Work conference expenses',
     phoneNumber: '+0987654321'
   },
@@ -191,6 +193,7 @@ export const mockBorrowedMoney: BorrowedMoney[] = [
     borrowedDate: '2024-09-28',
     dueDate: '2024-10-05',
     isPaid: true,
+    walletId: '2',
     notes: 'Paid back on time'
   },
   {
@@ -201,6 +204,7 @@ export const mockBorrowedMoney: BorrowedMoney[] = [
     borrowedDate: '2024-09-20',
     dueDate: '2024-10-20',
     isPaid: false,
+    walletId: '1',
     notes: 'Will pay back in installments',
     email: 'lisa.brown@email.com'
   }

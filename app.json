@@ -16,10 +16,6 @@
       "assets/**/*",
       "src/**/*.{js,ts,tsx,json}"
     ],
-    "optimization": {
-      "minify": true,
-      "treeshake": true
-    },
     "updates": {
       "fallbackToCacheTimeout": 0
     },
@@ -36,19 +32,9 @@
         "backgroundColor": "#20C6F7"
       },
       "versionCode": 13,
-      "compileSdkVersion": 34,
-      "targetSdkVersion": 34,
-      "minSdkVersion": 21,
-      "buildToolsVersion": "34.0.0",
       "permissions": [
         "SCHEDULE_EXACT_ALARM"
-      ],
-      "enableProguardInReleaseBuilds": true,
-      "enableSeparateBuildPerCPUArchitecture": true,
-      "bundleInRelease": true,
-      "config": {
-        "useCleartextTraffic": false
-      }
+      ]
     },
     "web": {
       "favicon": "./assets/favicon.png"

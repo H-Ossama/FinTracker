@@ -121,7 +121,7 @@ export class PerformanceCollector {
 
 // React hook for performance monitoring
 export const usePerformanceMonitoring = (componentName: string) => {
-  const renderStartTime = useRef<number>();
+  const renderStartTime = useRef<number | null>(null);
   const [renderCount, setRenderCount] = useState(0);
 
   useEffect(() => {
@@ -129,7 +129,7 @@ export const usePerformanceMonitoring = (componentName: string) => {
   });
 
   useEffect(() => {
-    if (renderStartTime.current) {
+    if (renderStartTime.current != null) {
       const renderTime = performance.now() - renderStartTime.current;
       
       PerformanceCollector.addMetric({

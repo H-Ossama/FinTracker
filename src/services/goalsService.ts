@@ -207,14 +207,6 @@ export class GoalsService {
   }
 
   // Clear all goals (for testing/reset purposes)
-  static async clearAllGoals(): Promise<void> {
-    try {
-      await AsyncStorage.removeItem(GOALS_STORAGE_KEY);
-    } catch (error) {
-      console.error('Error clearing goals:', error);
-      throw error;
-    }
-  }
 }
 
 export default GoalsService;

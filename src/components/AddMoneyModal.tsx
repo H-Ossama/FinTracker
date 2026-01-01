@@ -467,6 +467,9 @@ const styles = StyleSheet.create({
   keyboardAvoidingView: {
     flex: 1,
   },
+  scrollView: {
+    flex: 1,
+  },
   scrollContent: {
     paddingHorizontal: 20,
     paddingBottom: 20,

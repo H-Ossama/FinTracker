@@ -18,39 +18,6 @@ const FILES_TO_UPDATE = [
     ]
   },
   {
-    file: 'app.json',
-    updates: [
-      {
-        type: 'json',
-        path: 'expo.version',
-        value: NEW_VERSION
-      },
-      {
-        type: 'json',
-        path: 'expo.android.versionCode',
-        value: (currentVersionCode) => parseInt(currentVersionCode) + 1
-      }
-    ]
-  },
-  {
-    file: 'app.config.js',
-    updates: [
-      {
-        type: 'string',
-        search: /version: "[^"]*"/g,
-        replace: `version: "${NEW_VERSION}"`
-      },
-      {
-        type: 'string',
-        search: /versionCode: \d+/g,
-        replace: (match) => {
-          const currentCode = parseInt(match.split(': ')[1]);
-          return `versionCode: ${currentCode + 1}`;
-        }
-      }
-    ]
-  },
-  {
     file: 'src/contexts/NotificationContext.tsx',
     updates: [
       {

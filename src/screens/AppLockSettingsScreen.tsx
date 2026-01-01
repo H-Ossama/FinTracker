@@ -112,7 +112,7 @@ const AppLockSettingsScreen = () => {
           { 
             text: t('appLock.setupPin'), 
             onPress: () => {
-              navigation.navigate('PinSetup' as never, { mode: 'setup' } as never);
+              (navigation as any).navigate('PinSetup', { mode: 'setup' });
             }
           }
         ]
@@ -149,7 +149,7 @@ const AppLockSettingsScreen = () => {
   };
 
   const handleSetupPin = () => {
-    navigation.navigate('PinSetup' as never, { mode: 'setup' } as never);
+    (navigation as any).navigate('PinSetup', { mode: 'setup' });
   };
 
   const handleChangePinOrPassword = () => {
@@ -166,7 +166,7 @@ const AppLockSettingsScreen = () => {
         {
           text: t('appLock.changePin'),
           onPress: () => {
-            navigation.navigate('PinSetup' as never, { mode: 'change' } as never);
+            (navigation as any).navigate('PinSetup', { mode: 'change' });
           },
         },
         {

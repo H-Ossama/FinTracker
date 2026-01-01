@@ -3,6 +3,7 @@ type ProgressPayload = {
   stage?: string;
   progress?: number; // 0-100
   message?: string;
+  itemsCount?: number;
   complete?: boolean;
   syncedData?: any;
   cancelled?: boolean;

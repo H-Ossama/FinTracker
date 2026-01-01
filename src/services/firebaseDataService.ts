@@ -1,6 +1,6 @@
 import { collection, doc, setDoc, getDoc, updateDoc, serverTimestamp, Timestamp } from 'firebase/firestore';
 import { db } from '../config/firebase';
-import { Wallet, Transaction, Goal, Reminder, Category, Budget } from '../types';
+import { Wallet, Transaction, Goal, Reminder, SpendingCategory, Budget } from '../types';
 
 export interface FirebaseUserData {
   userId: string;
@@ -11,7 +11,7 @@ export interface FirebaseUserData {
   transactions: Transaction[];
   goals: Goal[];
   reminders: Reminder[];
-  categories: Category[];
+  categories: SpendingCategory[];
   budgets: Budget[];
 }
 

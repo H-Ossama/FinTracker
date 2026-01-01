@@ -2,6 +2,7 @@ import React, { createContext, useContext, useReducer, useEffect, useState, Reac
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Alert, Linking, Platform, InteractionManager } from 'react-native';
 import Constants from 'expo-constants';
+import { hybridDataService } from '../services/hybridDataService';
 
 let notificationServiceModulePromise: Promise<typeof import('../services/notificationService')> | null = null;
 const getNotificationService = async () => {
@@ -579,6 +580,7 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
         },
       };
 
+      const NotificationService = await getNotificationService();
       const notificationId = await NotificationService.scheduleLocalNotification(
         title,
         body,
@@ -602,6 +604,7 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
 
   const cancelReminder = async (id: string) => {
     try {
+      const NotificationService = await getNotificationService();
       await NotificationService.cancelNotification(id);
     } catch (error) {
       console.error('Error cancelling reminder:', error);
@@ -610,6 +613,7 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
 
   const testNotification = async () => {
     try {
+      const NotificationService = await getNotificationService();
       await NotificationService.testNotification();
       addNotification({
         title: 'Test Notification',

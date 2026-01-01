@@ -558,32 +558,6 @@ const createStyles = (theme: any) => StyleSheet.create({
   keyboardAvoidingView: {
     flex: 1,
   },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 20,
-    paddingVertical: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: theme.colors.border,
-    elevation: 2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
-  },
-  backButton: {
-    padding: 8,
-    borderRadius: 8,
-  },
-  headerTitle: {
-    fontSize: 20,
-    fontWeight: '700',
-  },
-  headerAction: {
-    padding: 8,
-    borderRadius: 8,
-  },
   scrollContent: {
     paddingBottom: 32,
   },

@@ -1,9 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-const GEMINI_API_KEY = 'AIzaSyDozwYHwpEHUM7JOE4FtsNy5o8xlcN6JP4';
-// Using gemini-2.5-flash - latest model from Google Gemini API
-const GEMINI_MODEL = 'gemini-2.5-flash';
-const GEMINI_API_URL = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`;
+import { getBackendApiRoot } from '../config/apiConfig';
 
 type AILogLevel = 'silent' | 'info' | 'debug';
 
@@ -224,36 +221,28 @@ class GeminiAIService {
     }
 
     try {
-      aiLogDebug(`📡 Calling Gemini API with model: ${GEMINI_MODEL}`);
-      aiLogDebug(`📡 API URL: ${GEMINI_API_URL}`);
+      const apiRoot = getBackendApiRoot();
+      const url = `${apiRoot}/ai/gemini`;
+
+      aiLogDebug('📡 Calling backend AI proxy');
+      aiLogDebug(`📡 URL: ${url}`);
 
       const responseMimeType = options?.responseMimeType ?? 'text/plain';
       const temperature = options?.temperature ?? 0.7;
       const maxOutputTokens = options?.maxOutputTokens ?? 500;
 
-      const response = await fetch(GEMINI_API_URL, {
+      const response = await fetch(url, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'x-goog-api-key': GEMINI_API_KEY,
         },
         body: JSON.stringify({
-          contents: [
-            {
-              parts: [
-                {
-                  text: prompt,
-                },
-              ],
-            },
-          ],
-          generationConfig: {
-            temperature,
-            topK: 40,
-            topP: 0.95,
-            maxOutputTokens,
+          prompt,
+          options: {
             responseMimeType,
-          },
+            temperature,
+            maxOutputTokens,
+          }
         }),
       });
 
@@ -266,17 +255,20 @@ class GeminiAIService {
       }
 
       if (!response.ok) {
-        const error = await response.json();
-        console.error('❌ Gemini API error:', error);
-        throw new Error(error.error?.message || `API error (${response.status})`);
+        let message = `API error (${response.status})`;
+        try {
+          const errorBody: any = await response.json();
+          message = errorBody?.error || errorBody?.message || message;
+        } catch {
+          // ignore
+        }
+        console.error('❌ AI proxy error:', message);
+        throw new Error(message);
       }
 
-      const data = await response.json();
-      const content = data.candidates?.[0]?.content?.parts?.[0]?.text;
-
-      if (!content) {
-        throw new Error('No content in response');
-      }
+      const data: any = await response.json();
+      const content = data?.content;
+      if (typeof content !== 'string' || !content) throw new Error('No content in response');
 
       aiLogDebug('✅ Gemini API response received successfully');
       return content;

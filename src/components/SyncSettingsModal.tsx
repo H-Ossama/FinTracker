@@ -248,9 +248,10 @@ export const SyncSettingsModal: React.FC<SyncSettingsProps> = ({
       }
     } catch (error) {
       console.error('❌ Error in handleEnableSyncAndSync:', error);
+      const message = error instanceof Error ? error.message : 'Unknown error';
       dialog.show({
         title: 'Error',
-        message: `Failed to enable sync and sync data: ${error.message || 'Unknown error'}`,
+        message: `Failed to enable sync and sync data: ${message}`,
         icon: 'alert-circle',
         iconColor: '#EF4444',
         buttons: [{ text: 'OK', style: 'default' }],
@@ -320,8 +321,9 @@ export const SyncSettingsModal: React.FC<SyncSettingsProps> = ({
       }
     } catch (error) {
       console.error('Manual sync error:', error);
+      const message = error instanceof Error ? error.message : '';
       // Check if it's an authentication error
-      if (error.message && error.message.includes('authenticated')) {
+      if (message && message.includes('authenticated')) {
         dialog.show({
           title: 'Authentication Error',
           message: 'Your session has expired. Please sign out and sign back in to sync your data.',
@@ -1211,6 +1213,8 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 18,
     fontWeight: '600',
+    marginBottom: 4,
+  },
   progressActionsRow: {
     width: '100%',
     flexDirection: 'row',
@@ -1237,8 +1241,6 @@ const styles = StyleSheet.create({
   progressCancelText: {
     fontSize: 14,
     fontWeight: '600',
-  },
-    marginBottom: 4,
   },
   sectionDescription: {
     fontSize: 14,

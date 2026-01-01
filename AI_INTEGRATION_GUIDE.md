@@ -20,8 +20,12 @@ The app now uses **Google's Gemini AI API** to provide intelligent financial rec
 
 ```
 Components → useAIInsights hook → analyticsService → geminiAIService
-                                                    ↓
-                                            AsyncStorage (Cache)
+                ↓
+            FinTracker Backend (/api/ai/gemini)
+                ↓
+              Gemini API (server-side key)
+                ↓
+              AsyncStorage (Cache)
 ```
 
 ### 2. Cache Strategy
@@ -118,14 +122,21 @@ const { data: freshRecommendations } = await analyticsService.getRecommendations
 ## API Details
 
 ### Endpoint
+
+For security, the mobile app should NOT call Gemini directly.
+Instead, it calls the FinTracker backend, which calls Gemini using a server-side API key.
+
+Example (backend):
 ```
-POST https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent
+POST /api/ai/gemini
 ```
 
 ### API Key
-```
-AIzaSyDozwYHwpEHUM7JOE4FtsNy5o8xlcN6JP4
-```
+
+Never hardcode or commit AI API keys.
+
+- Set the Gemini key on the backend only (e.g. `GEMINI_API_KEY` in `backend/.env` or Railway/EAS secrets)
+- The mobile app must not contain the key
 
 ### Rate Limiting
 - The service handles rate limiting gracefully
@@ -232,7 +243,6 @@ const CACHE_DURATION_MS = 60 * 1000; // 1 minute for testing
 
 ## Security Notes
 
-- ⚠️ API key is visible in frontend (browser inspection)
-- ✅ API key is restricted by Google to only this app
-- ✅ No sensitive data sent to external API
-- ✅ All caching is local (device storage only)
+- ✅ Gemini API key is stored server-side (backend env var) and never shipped to the client
+- ✅ No sensitive data should be sent to external APIs (only anonymized aggregates)
+- ✅ All caching remains local (device storage only)

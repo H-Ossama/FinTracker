@@ -1144,69 +1144,6 @@ const createStyles = (theme: any) => StyleSheet.create({
     fontSize: 16,
     color: theme.colors.text,
   },
-  // Profile section styles
-  profileSection: {
-    backgroundColor: theme.colors.card,
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 24,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 2,
-  },
-  profileInfo: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flex: 1,
-  },
-  avatarContainer: {
-    marginRight: 12,
-  },
-  avatar: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
-  },
-  avatarPlaceholder: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
-    backgroundColor: '#3B82F6',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  avatarText: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#FFF',
-  },
-  profileText: {
-    flex: 1,
-  },
-  profileName: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: theme.colors.text,
-    marginBottom: 2,
-  },
-  profileEmail: {
-    fontSize: 14,
-    color: theme.colors.textSecondary,
-    marginBottom: 4,
-  },
-  profileStatus: {
-    fontSize: 12,
-    color: '#34C759',
-    fontWeight: '500',
-  },
-  profileActions: {
-    padding: 4,
-  },
   // New styles for enhanced goals functionality
   goalFooter: {
     flexDirection: 'row',

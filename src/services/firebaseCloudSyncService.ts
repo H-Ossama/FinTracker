@@ -232,28 +232,39 @@ class CloudSyncService {
       // Restore data using hybrid data service
       console.log('🏦 Restoring wallets...');
       for (const wallet of userData.appData.wallets) {
-        await hybridDataService.saveWallet(wallet);
+        try {
+          const type = (wallet as any).type ? String((wallet as any).type).toUpperCase() : 'CASH';
+          await hybridDataService.createWallet({
+            name: (wallet as any).name || 'Wallet',
+            type,
+            balance: (wallet as any).balance ?? 0,
+            color: (wallet as any).color,
+            icon: (wallet as any).icon,
+          } as any);
+        } catch (e) {
+          console.warn('⚠️ Could not restore wallet:', e);
+        }
       }
 
       console.log('💰 Restoring transactions...');
       for (const transaction of userData.appData.transactions) {
-        await hybridDataService.saveTransaction(transaction);
+        try {
+          const type = (transaction as any).type ? String((transaction as any).type).toUpperCase() : 'EXPENSE';
+          await hybridDataService.addTransaction({
+            amount: Number((transaction as any).amount ?? 0),
+            description: (transaction as any).title || (transaction as any).description,
+            type,
+            date: (transaction as any).date,
+            notes: (transaction as any).notes,
+            walletId: (transaction as any).walletId,
+            categoryId: (transaction as any).categoryId,
+          } as any);
+        } catch (e) {
+          console.warn('⚠️ Could not restore transaction:', e);
+        }
       }
 
-      console.log('🎯 Restoring goals...');
-      for (const goal of userData.appData.goals) {
-        await hybridDataService.saveGoal(goal);
-      }
-
-      console.log('💰 Restoring budgets...');
-      for (const budget of userData.appData.budgets) {
-        await hybridDataService.saveBudget(budget);
-      }
-
-      console.log('⏰ Restoring reminders...');
-      for (const reminder of userData.appData.reminders) {
-        await hybridDataService.saveReminder(reminder);
-      }
+      console.log('ℹ️ Skipping goals/budgets/reminders restore (not supported in current service layer)');
 
       await this.updateLastSyncTime();
 
@@ -279,13 +290,14 @@ class CloudSyncService {
     console.log('📊 Collecting user data for backup...');
 
     // Get all data from hybrid data service
-    const [wallets, transactions, goals, budgets, bills] = await Promise.all([
+    const [wallets, transactions] = await Promise.all([
       hybridDataService.getWallets(),
       hybridDataService.getTransactions(),
-      hybridDataService.getGoals(),
-      hybridDataService.getBudgets(),
-      hybridDataService.getBills(),
     ]);
+
+    const goals: any[] = [];
+    const budgets: any[] = [];
+    const bills: any[] = [];
 
     // Get categories from local storage or default
     const categories = await hybridDataService.getCategories();

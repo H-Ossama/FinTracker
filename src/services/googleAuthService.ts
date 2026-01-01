@@ -13,7 +13,8 @@ try {
   GoogleSigninButton = googleSignInModule.GoogleSigninButton;
   statusCodes = googleSignInModule.statusCodes;
 } catch (error) {
-  console.warn('Google Sign-In module not available:', error.message);
+  const message = error instanceof Error ? error.message : String(error);
+  console.warn('Google Sign-In module not available:', message);
 }
 
 export interface GoogleUser {
@@ -256,6 +257,12 @@ class GoogleAuthService {
         photo: user.user.photo || undefined,
         idToken: user.idToken || tokens.idToken,
         accessToken: tokens.accessToken,
+        user: {
+          id: user.user.id,
+          email: user.user.email,
+          name: user.user.name || user.user.email,
+          photo: user.user.photo || undefined,
+        },
       };
     } catch (error) {
       console.error('❌ Error getting current Google user:', error);

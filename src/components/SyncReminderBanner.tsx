@@ -35,6 +35,30 @@ export const SyncReminderBanner: React.FC<SyncReminderProps> = React.memo(({ onS
   const translateX = useMemo(() => new Animated.Value(0), []);
   const screenWidth = Dimensions.get('window').width;
 
+  // Mounted ref to avoid state updates after unmount
+  const mountedRef = React.useRef(true);
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => { mountedRef.current = false; };
+  }, []);
+
+  const handleDismiss = useCallback(async () => {
+    try {
+      await hybridDataService.markSyncReminderShown();
+
+      // Optimize animation with native driver
+      Animated.timing(fadeAnim, {
+        toValue: 0,
+        duration: 300,
+        useNativeDriver: true,
+      }).start(() => {
+        if (mountedRef.current) setVisible(false);
+      });
+    } catch (error) {
+      console.error('Error dismissing reminder:', error);
+    }
+  }, [fadeAnim]);
+
   // Pan responder for swipe-to-dismiss
   const panResponder = useMemo(
     () =>
@@ -113,29 +137,7 @@ export const SyncReminderBanner: React.FC<SyncReminderProps> = React.memo(({ onS
     };
   }, [fadeAnim, isAuthenticated, authLoading]);
 
-  // Mounted ref to avoid state updates after unmount
-  const mountedRef = React.useRef(true);
-  useEffect(() => {
-    mountedRef.current = true;
-    return () => { mountedRef.current = false; };
-  }, []);
 
-  const handleDismiss = useCallback(async () => {
-    try {
-      await hybridDataService.markSyncReminderShown();
-      
-      // Optimize animation with native driver
-      Animated.timing(fadeAnim, {
-        toValue: 0,
-        duration: 300,
-        useNativeDriver: true,
-      }).start(() => {
-        if (mountedRef.current) setVisible(false);
-      });
-    } catch (error) {
-      console.error('Error dismissing reminder:', error);
-    }
-  }, [fadeAnim]);
 
   const handleSyncNow = useCallback(async () => {
     if (mountedRef.current) setIsLoading(true);

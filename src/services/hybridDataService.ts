@@ -404,6 +404,7 @@ class HybridDataService {
   // Sync Operations
   async enableCloudSync(email?: string, password?: string): Promise<{ success: boolean; error?: string }> {
     try {
+      const { cloudSyncService } = await import('./cloudSyncService');
       if (email && password) {
         // Login if credentials provided
         const result = await cloudSyncService.login(email, password);
@@ -422,16 +423,16 @@ class HybridDataService {
     }
   }
 
-  async disableCloudSync(): Promise<void> {
-    try {
-      const { cloudSyncService } = await import('./cloudSyncService');
-      await cloudSyncService.disableSync();
-    } catch (error) {
-      console.log('Could not disable cloud sync:', error);
-    }
-  }
-
-  async performManualSync(onProgress?: (progress: any) => void): Promise<{ success: boolean; error?: string }> {
+  async performManualSync(onProgress?: (progress: any) => void): Promise<{
+    success: boolean;
+    error?: string;
+    syncedData?: {
+      wallets: number;
+      transactions: number;
+      categories: number;
+      errors?: string[];
+    };
+  }> {
     try {
       if (!simpleCloudBackupService.isAuthenticated()) {
         return { success: false, error: 'Sign in with Google to backup to cloud' };
@@ -531,7 +532,7 @@ class HybridDataService {
         nextReminderDue: null,
       };
     } catch (error) {
-      return { enabled: false, authenticated: false, pendingItems: 0, lastSync: null, unsyncedItems: 0, nextReminderDue: null };
+      return { enabled: false, authenticated: false, lastSync: null, unsyncedItems: 0, nextReminderDue: null };
     }
   }
 
@@ -1114,6 +1115,7 @@ class HybridDataService {
   }): Promise<void> {
     try {
       // Try to register with backend if online
+      const { cloudSyncService } = await import('./cloudSyncService');
       await cloudSyncService.registerPushToken(tokenData);
     } catch (error) {
       console.log('Could not register push token with backend:', error);

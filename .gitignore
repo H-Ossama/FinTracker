@@ -35,6 +35,10 @@ yarn-error.*
 .env*.local
 .env
 
+# Expo config backups (keep out of git)
+app.json.static.bak
+app.json*.bak
+
 # Local-only developer secrets/config
 src/constants/devPin.local.ts
 

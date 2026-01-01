@@ -22,6 +22,7 @@ import notificationRoutes from './routes/notifications';
 import recurringTransactionRoutes from './routes/recurringTransactions';
 import smartAlertRoutes from './routes/smartAlerts';
 import syncRoutes from './routes/sync';
+import aiRoutes from './routes/ai';
 import { PrismaClient } from '@prisma/client';
 import { ReminderSchedulerService } from './services/reminderSchedulerService';
 
@@ -106,6 +107,7 @@ app.use('/api/notifications', notificationRoutes);
 app.use('/api/recurring-transactions', recurringTransactionRoutes);
 app.use('/api/smart-alerts', smartAlertRoutes);
 app.use('/api/sync', syncRoutes);
+app.use('/api/ai', aiRoutes);
 
 // Root endpoint - served by landing route
 app.use('/', landingRoutes);

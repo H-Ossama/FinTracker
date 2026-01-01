@@ -58,6 +58,9 @@ docker ps
    JWT_SECRET=your-secret-key-here
    NODE_ENV=development
    PORT=3001
+
+   # Gemini AI (server-side only)
+   GEMINI_API_KEY=your-gemini-api-key
    ```
 
 4. **Generate Prisma client:**

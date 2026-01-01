@@ -987,26 +987,6 @@ function createStyles(isDark: boolean) {
       fontWeight: '600',
       color: isDark ? '#FFFFFF' : '#1F2937',
     },
-    headerButtons: {
-      flexDirection: 'row',
-      gap: 8,
-    },
-    testButton: {
-      backgroundColor: '#F59E0B',
-      width: 40,
-      height: 40,
-      borderRadius: 20,
-      justifyContent: 'center',
-      alignItems: 'center',
-    },
-    addButton: {
-      backgroundColor: '#3B82F6',
-      width: 40,
-      height: 40,
-      borderRadius: 20,
-      justifyContent: 'center',
-      alignItems: 'center',
-    },
     filterContainer: {
       flexDirection: 'row',
       paddingHorizontal: 20,

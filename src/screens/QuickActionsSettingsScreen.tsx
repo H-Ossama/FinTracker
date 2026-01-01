@@ -651,15 +651,18 @@ const createStyles = (theme: any) =>
       borderTopRightRadius: 28,
       overflow: 'hidden',
     },
-    searchContainer: {
-      paddingHorizontal: 20,
+    scrollView: {
+      flex: 1,
     },
     scrollViewContent: {
       paddingBottom: 40,
       flexGrow: 1,
     },
-    contentContainer: {
-      flex: 1,
+    searchContainer: {
+      paddingHorizontal: 20,
+      paddingVertical: 12,
+      borderBottomWidth: 1,
+      borderBottomColor: theme.colors.border,
     },
     sectionListContent: {
       paddingHorizontal: 20,
@@ -922,12 +925,6 @@ const createStyles = (theme: any) =>
     sectionSeparator: {
       height: 8,
       backgroundColor: theme.colors.card,
-    },
-    searchContainer: {
-      paddingHorizontal: 20,
-      paddingVertical: 12,
-      borderBottomWidth: 1,
-      borderBottomColor: theme.colors.border,
     },
     searchInputContainer: {
       flexDirection: 'row',
