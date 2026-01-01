@@ -1,5 +1,6 @@
 import * as SecureStore from 'expo-secure-store';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import Constants from 'expo-constants';
 import { firebaseAuthService } from './firebaseAuthService';
 
 // Conditionally import Google Sign-In to prevent bundling issues
@@ -52,22 +53,37 @@ class GoogleAuthService {
         return;
       }
 
-      const webClientId = process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID || '1034435232632-cfdpko20rk29mphsbo1o7i5pvk9lq1dq.apps.googleusercontent.com';
-      const iosClientId = process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID;
+      const extra: any = Constants.expoConfig?.extra ?? (Constants.manifest as any)?.extra ?? {};
+
+      const webClientId =
+        extra?.google?.webClientId ||
+        process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID ||
+        '';
+
+      const iosClientId =
+        extra?.google?.iosClientId ||
+        process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID ||
+        undefined;
       
       console.log('🔧 Configuring Google Sign-In...');
-      console.log('📱 Web Client ID:', webClientId.substring(0, 30) + '...');
-      console.log('📦 Expected package: com.oussamaaaaa.finex');
-      console.log('🔑 Expected SHA-1: 5E:8F:16:06:2E:A3:CD:2C:4A:0D:54:78:76:BA:A6:F3:8C:AB:F6:25');
+      console.log('📦 Android package:', 'com.oussamaaaaa.finex');
       
       // Validate configuration before proceeding
       if (!webClientId) {
-        throw new Error('Invalid or missing Web Client ID');
+        const message =
+          'Missing Google Web Client ID. Set EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID for EAS preview/production builds.';
+
+        // In dev we keep Google optional, but in production builds this is a hard error.
+        if (typeof __DEV__ !== 'undefined' && __DEV__) {
+          console.warn('⚠️ ' + message);
+          this.isConfigured = false;
+          return;
+        }
+
+        throw new Error(message);
       }
       
-      if (webClientId.includes('123456789') || webClientId.includes('abcdefg')) {
-        console.warn('⚠️ Using placeholder Web Client ID - this will not work for production');
-      }
+      console.log('📱 Web Client ID:', webClientId.substring(0, 30) + '...');
       
       if (iosClientId) {
         console.log('🍎 iOS Client ID:', iosClientId.substring(0, 20) + '...');
@@ -88,17 +104,17 @@ class GoogleAuthService {
 
       this.isConfigured = true;
       console.log('✅ Google Sign-In configured successfully');
-      console.log('📋 Configuration validated for package: com.oussamaaaaa.finex');
+      console.log('📋 Configuration validated');
     } catch (error) {
       console.error('❌ Error configuring Google Sign-In:', error);
       
-      // Make Google Sign-In optional - don't throw error
-      console.log('⚠️ Google Sign-In configuration failed, but app will continue without it');
-      console.log('🔍 Troubleshooting tips:');
-      console.log('   1. Verify package name: com.oussamaaaaa.finex');
-      console.log('   2. Verify SHA-1: 5E:8F:16:06:2E:A3:CD:2C:4A:0D:54:78:76:BA:A6:F3:8C:AB:F6:25');
-      console.log('   3. Check google-services.json in android/app/');
-      console.log('   4. Verify Web Client ID in .env file');
+      // Keep Google optional for dev builds, but fail clearly in production.
+      const isDev = typeof __DEV__ !== 'undefined' && __DEV__;
+      if (isDev) {
+        console.log('⚠️ Google Sign-In configuration failed, but app will continue without it (dev)');
+      } else {
+        console.log('🚨 Google Sign-In configuration failed for this build. Fix build-time env + rebuild.');
+      }
       this.isConfigured = false;
     }
   }
@@ -182,14 +198,13 @@ class GoogleAuthService {
       } else if (error.message?.includes('DEVELOPER_ERROR')) {
         errorMessage = 'Google Sign-In configuration error. Configuration mismatch detected.';
         console.log('🚨 DEVELOPER_ERROR Details:');
-        console.log('🔍 Debug info: Expected package: com.oussamaaaaa.finex');
-        console.log('🔍 Debug info: Expected SHA-1: 5E:8F:16:06:2E:A3:CD:2C:4A:0D:54:78:76:BA:A6:F3:8C:AB:F6:25');
-        console.log('🔍 Debug info: Web Client ID should be: 1034435232632-cfdpko...');
-        console.log('📝 Troubleshooting steps:');
-        console.log('   1. Rebuild the app with: npx expo run:android');
-        console.log('   2. Verify google-services.json is in android/app/');
-        console.log('   3. Check Firebase Console for package name and SHA-1');
-        console.log('   4. Ensure debug keystore matches SHA-1 fingerprint');
+        console.log('🔍 Common causes:');
+        console.log('   1) Wrong/missing Web Client ID (EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID)');
+        console.log('   2) Android OAuth client not matching this app signing certificate (SHA-1/SHA-256)');
+        console.log('   3) Package name mismatch (should be com.oussamaaaaa.finex)');
+        console.log('📝 If it works in `expo run:android` but fails in EAS preview/release:');
+        console.log('   - Your preview/release APK is signed with a different key than debug.');
+        console.log('   - Add that key\'s SHA-1/SHA-256 to your Firebase/Google Cloud Android app, then rebuild.');
       } else if (error.message) {
         errorMessage = error.message;
       }

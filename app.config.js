@@ -30,6 +30,11 @@ export default ({ config }) => {
           ...(rest.extra?.eas ?? {}),
           projectId: 'c3f94c58-e5f4-4e50-b25d-f2b00bd99d2f',
         },
+        google: {
+          webClientId: process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID,
+          iosClientId: process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID,
+          androidClientId: process.env.EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID,
+        },
         firebase: {
           apiKey: process.env.FIREBASE_API_KEY,
           authDomain: process.env.FIREBASE_AUTH_DOMAIN,
@@ -41,6 +46,12 @@ export default ({ config }) => {
         ads: {
           androidAppId: process.env.ADMOB_ANDROID_APP_ID ?? 'ca-app-pub-3940256099942544~3347511713',
           iosAppId: process.env.ADMOB_IOS_APP_ID ?? 'ca-app-pub-3940256099942544~1458002511',
+          androidBannerUnitId: process.env.EXPO_PUBLIC_ADMOB_ANDROID_BANNER_UNIT_ID,
+          androidInterstitialUnitId: process.env.EXPO_PUBLIC_ADMOB_ANDROID_INTERSTITIAL_UNIT_ID,
+          androidAppOpenUnitId: process.env.EXPO_PUBLIC_ADMOB_ANDROID_APP_OPEN_UNIT_ID,
+          iosBannerUnitId: process.env.EXPO_PUBLIC_ADMOB_IOS_BANNER_UNIT_ID,
+          iosInterstitialUnitId: process.env.EXPO_PUBLIC_ADMOB_IOS_INTERSTITIAL_UNIT_ID,
+          iosAppOpenUnitId: process.env.EXPO_PUBLIC_ADMOB_IOS_APP_OPEN_UNIT_ID,
           iosUserTrackingUsageDescription:
             process.env.IOS_USER_TRACKING_USAGE_DESCRIPTION ??
             'This identifier will be used to deliver a better ads experience.',

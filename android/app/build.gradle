@@ -108,11 +108,22 @@ android {
     buildTypes {
         debug {
             signingConfig signingConfigs.debug
+            // Test AdMob App ID for debug builds
+            resValue "string", "google_mobile_ads_app_id", "ca-app-pub-3940256099942544~3347511713"
         }
         release {
-            // Caution! In production, you need to generate your own keystore file.
-            // see https://reactnative.dev/docs/signed-apk-android.
-            signingConfig signingConfigs.debug
+            // IMPORTANT:
+            // - For local release builds, we fall back to debug signing to keep `assembleRelease` working.
+            // - For EAS builds (preview/production), DO NOT force debug signing. EAS injects signing
+            //   credentials so the artifact can be installed/shared and later published to Play.
+            def isEasBuild = (System.getenv("EAS_BUILD") ?: "").toString().toLowerCase() in ["1", "true", "yes"]
+            if (!isEasBuild) {
+                signingConfig signingConfigs.debug
+            }
+            // AdMob App ID for release builds (set in EAS/CI env as ADMOB_ANDROID_APP_ID).
+            // Falls back to Google test app id to avoid crashing if unset.
+            def admobAppId = System.getenv("ADMOB_ANDROID_APP_ID") ?: "ca-app-pub-3940256099942544~3347511713"
+            resValue "string", "google_mobile_ads_app_id", admobAppId
             def enableShrinkResources = findProperty('android.enableShrinkResourcesInReleaseBuilds') ?: 'false'
             shrinkResources enableShrinkResources.toBoolean()
             minifyEnabled enableMinifyInReleaseBuilds

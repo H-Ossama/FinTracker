@@ -10,6 +10,30 @@
  */
 
 import { Platform } from 'react-native';
+import Constants from 'expo-constants';
+
+const extra: any = Constants.expoConfig?.extra ?? (Constants.manifest as any)?.extra ?? {};
+
+const getConfiguredUnitId = (key: string): string | null => {
+  const fromExtra = extra?.ads?.[key];
+  if (typeof fromExtra === 'string' && fromExtra.trim()) return fromExtra.trim();
+
+  // Env fallback (EAS/build-time)
+  const envMap: Record<string, string> = {
+    androidBannerUnitId: 'EXPO_PUBLIC_ADMOB_ANDROID_BANNER_UNIT_ID',
+    androidInterstitialUnitId: 'EXPO_PUBLIC_ADMOB_ANDROID_INTERSTITIAL_UNIT_ID',
+    androidAppOpenUnitId: 'EXPO_PUBLIC_ADMOB_ANDROID_APP_OPEN_UNIT_ID',
+    iosBannerUnitId: 'EXPO_PUBLIC_ADMOB_IOS_BANNER_UNIT_ID',
+    iosInterstitialUnitId: 'EXPO_PUBLIC_ADMOB_IOS_INTERSTITIAL_UNIT_ID',
+    iosAppOpenUnitId: 'EXPO_PUBLIC_ADMOB_IOS_APP_OPEN_UNIT_ID',
+  };
+
+  const envKey = envMap[key];
+  const fromEnv = envKey ? (process.env as any)?.[envKey] : undefined;
+  if (typeof fromEnv === 'string' && fromEnv.trim()) return fromEnv.trim();
+
+  return null;
+};
 
 // AdMob Unit IDs - Replace these with your actual AdMob unit IDs
 // For testing, use the test IDs provided by Google
@@ -17,24 +41,24 @@ export const AD_UNIT_IDS = {
   android: {
     banner: __DEV__ 
       ? 'ca-app-pub-3940256099942544/6300978111' // Google Test ID
-      : 'YOUR_ANDROID_BANNER_AD_UNIT_ID', // Replace with actual production ID
+      : (getConfiguredUnitId('androidBannerUnitId') ?? 'ca-app-pub-3940256099942544/6300978111'),
     interstitial: __DEV__
       ? 'ca-app-pub-3940256099942544/1033173712' // Google Test ID
-      : 'YOUR_ANDROID_INTERSTITIAL_AD_UNIT_ID', // Replace with actual production ID
+      : (getConfiguredUnitId('androidInterstitialUnitId') ?? 'ca-app-pub-3940256099942544/1033173712'),
     appOpen: __DEV__
       ? 'ca-app-pub-3940256099942544/3419835294' // Google Test ID
-      : 'YOUR_ANDROID_APP_OPEN_AD_UNIT_ID', // Replace with actual production ID
+      : (getConfiguredUnitId('androidAppOpenUnitId') ?? 'ca-app-pub-3940256099942544/3419835294'),
   },
   ios: {
     banner: __DEV__
       ? 'ca-app-pub-3940256099942544/2934735716' // Google Test ID
-      : 'YOUR_IOS_BANNER_AD_UNIT_ID', // Replace with actual production ID
+      : (getConfiguredUnitId('iosBannerUnitId') ?? 'ca-app-pub-3940256099942544/2934735716'),
     interstitial: __DEV__
       ? 'ca-app-pub-3940256099942544/4411468910' // Google Test ID
-      : 'YOUR_IOS_INTERSTITIAL_AD_UNIT_ID', // Replace with actual production ID
+      : (getConfiguredUnitId('iosInterstitialUnitId') ?? 'ca-app-pub-3940256099942544/4411468910'),
     appOpen: __DEV__
       ? 'ca-app-pub-3940256099942544/5662855259' // Google Test ID
-      : 'YOUR_IOS_APP_OPEN_AD_UNIT_ID', // Replace with actual production ID
+      : (getConfiguredUnitId('iosAppOpenUnitId') ?? 'ca-app-pub-3940256099942544/5662855259'),
   },
 };
 
